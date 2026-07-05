@@ -143,10 +143,10 @@ public class BpmProcessInstanceController {
                 processInstance.getProcessDefinitionId());
         BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService.getProcessDefinitionInfo(
                 processInstance.getProcessDefinitionId());
-        AdminUserRespDTO startUser = adminUserApi.getUser(NumberUtils.parseLong(processInstance.getStartUserId()));
+        AdminUserRespDTO startUser = adminUserApi.getUser(NumberUtils.parseLong(processInstance.getStartUserId())).getCheckedData();
         DeptRespDTO dept = null;
         if (startUser != null && startUser.getDeptId() != null) {
-            dept = deptApi.getDept(startUser.getDeptId());
+            dept = deptApi.getDept(startUser.getDeptId()).getCheckedData();
         }
         return success(BpmProcessInstanceConvert.INSTANCE.buildProcessInstance(processInstance,
                 processDefinition, processDefinitionInfo, startUser, dept));
@@ -196,6 +196,7 @@ public class BpmProcessInstanceController {
     @GetMapping("/get-bpmn-model-view")
     @Operation(summary = "获取流程实例的 BPMN 模型视图", description = "在【流程详细】界面中，进行调用")
     @Parameter(name = "id", description = "流程实例的编号", required = true)
+    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
     public CommonResult<BpmProcessInstanceBpmnModelViewRespVO> getProcessInstanceBpmnModelView(
             @RequestParam(value = "id") String id) {
         return success(processInstanceService.getProcessInstanceBpmnModelView(id));
@@ -211,8 +212,8 @@ public class BpmProcessInstanceController {
         if (historicProcessInstance == null) {
             throw exception(PROCESS_INSTANCE_NOT_EXISTS);
         }
-        AdminUserRespDTO startUser = adminUserApi.getUser(Long.valueOf(historicProcessInstance.getStartUserId()));
-        DeptRespDTO dept = deptApi.getDept(startUser.getDeptId());
+        AdminUserRespDTO startUser = adminUserApi.getUser(Long.valueOf(historicProcessInstance.getStartUserId())).getCheckedData();
+        DeptRespDTO dept = deptApi.getDept(startUser.getDeptId()).getCheckedData();
         List<HistoricTaskInstance> tasks = taskService.getFinishedTaskListByProcessInstanceIdWithoutCancel(processInstanceId);
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
                 convertSet(tasks, item -> Long.valueOf(item.getAssignee())));

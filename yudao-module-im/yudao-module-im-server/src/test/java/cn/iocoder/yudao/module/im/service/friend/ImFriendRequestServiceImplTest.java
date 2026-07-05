@@ -1,6 +1,5 @@
 package cn.iocoder.yudao.module.im.service.friend;
 
-import cn.hutool.core.collection.ListUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
@@ -12,7 +11,6 @@ import cn.iocoder.yudao.module.im.enums.friend.ImFriendRequestHandleResultEnum;
 import cn.iocoder.yudao.module.im.enums.friend.ImFriendStateEnum;
 import cn.iocoder.yudao.module.im.framework.config.ImProperties;
 import cn.iocoder.yudao.module.im.service.websocket.ImWebSocketService;
-import cn.iocoder.yudao.module.im.service.websocket.dto.ImPrivateMessageDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.junit.jupiter.api.Test;
@@ -24,6 +22,7 @@ import org.springframework.dao.DuplicateKeyException;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.module.im.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * IM 好友申请 Service 单元测试
+ * {@link ImFriendRequestServiceImpl} 的单元测试
  *
  * @author 芋道源码
  */
@@ -113,7 +112,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
         assertNull(result);
         verify(friendService).silentReAddFriend(eq(1L), eq(2L), eq("老张"), eq(1));
         verify(friendRequestMapper, never()).insert(any(ImFriendRequestDO.class));
-        verify(websocketService, never()).sendPrivateMessageAsync(anyLong(), any(ImPrivateMessageDTO.class));
+        verify(websocketService, never()).sendNotificationAsync(anyLong(), anyInt(), anyInt(), any());
     }
 
     @Test
@@ -142,7 +141,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
         when(friendService.getFriendState(1L, 2L)).thenReturn(ImFriendStateEnum.NONE.getState());
         when(friendService.getFriend(2L, 1L)).thenReturn(null);
         when(friendRequestMapper.selectByFromUserIdAndToUserId(1L, 2L)).thenReturn(null);
-        when(adminUserApi.getUser(1L)).thenReturn(new AdminUserRespDTO().setNickname("张三").setAvatar("a.png"));
+        when(adminUserApi.getUser(1L)).thenReturn(success(new AdminUserRespDTO().setNickname("张三").setAvatar("a.png")));
         when(imProperties.getFriend()).thenReturn(new ImProperties.Friend());
 
         // 调用
@@ -158,7 +157,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
         assertEquals(ImFriendRequestHandleResultEnum.UNHANDLED.getResult(), saved.getHandleResult());
         assertSame(saved, result);
         // 断言：推送给接收方
-        verify(websocketService).sendPrivateMessageAsync(eq(2L), any(ImPrivateMessageDTO.class));
+        verify(websocketService).sendNotificationAsync(eq(2L), anyInt(), anyInt(), any());
     }
 
     @Test
@@ -172,7 +171,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
                 .setHandleResult(ImFriendRequestHandleResultEnum.REFUSED.getResult())
                 .setHandleContent("旧拒绝").setApplyContent("旧内容");
         when(friendRequestMapper.selectByFromUserIdAndToUserId(1L, 2L)).thenReturn(old);
-        when(adminUserApi.getUser(1L)).thenReturn(null);
+        when(adminUserApi.getUser(1L)).thenReturn(success(null));
         when(imProperties.getFriend()).thenReturn(new ImProperties.Friend());
 
         // 调用
@@ -200,7 +199,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
                 .setHandleResult(ImFriendRequestHandleResultEnum.REFUSED.getResult());
         when(friendRequestMapper.selectByFromUserIdAndToUserId(1L, 2L)).thenReturn(null, old);
         when(friendRequestMapper.insert(any(ImFriendRequestDO.class))).thenThrow(new DuplicateKeyException("dup"));
-        when(adminUserApi.getUser(1L)).thenReturn(null);
+        when(adminUserApi.getUser(1L)).thenReturn(success(null));
         when(imProperties.getFriend()).thenReturn(new ImProperties.Friend());
 
         // 调用
@@ -211,7 +210,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
                 any(LocalDateTime.class));
         assertEquals(100L, result.getId());
         assertEquals(ImFriendRequestHandleResultEnum.UNHANDLED.getResult(), result.getHandleResult());
-        verify(websocketService).sendPrivateMessageAsync(eq(2L), any(ImPrivateMessageDTO.class));
+        verify(websocketService).sendNotificationAsync(eq(2L), anyInt(), anyInt(), any());
     }
 
     // ========== agreeFriendRequest ==========
@@ -229,9 +228,9 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
         friendRequestService.agreeFriendRequest(2L, 100L);
 
         // 断言：双向建立好友 + 推 APPROVED 给发起方
-        verify(adminUserApi).validateUserList(ListUtil.of(1L, 2L));
+        verify(adminUserApi, never()).validateUserList(any());
         verify(friendService).becomeFriends(request);
-        verify(websocketService).sendPrivateMessageAsync(eq(1L), any(ImPrivateMessageDTO.class));
+        verify(websocketService).sendNotificationAsync(eq(1L), anyInt(), anyInt(), any());
     }
 
     @Test
@@ -306,7 +305,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
                 eq(ImFriendRequestHandleResultEnum.UNHANDLED.getResult()), captor.capture());
         assertEquals(ImFriendRequestHandleResultEnum.REFUSED.getResult(), captor.getValue().getHandleResult());
         assertEquals("不认识", captor.getValue().getHandleContent());
-        verify(websocketService).sendPrivateMessageAsync(eq(1L), any(ImPrivateMessageDTO.class));
+        verify(websocketService).sendNotificationAsync(eq(1L), anyInt(), anyInt(), any());
     }
 
     @Test
@@ -321,7 +320,7 @@ public class ImFriendRequestServiceImplTest extends BaseMockitoUnitTest {
         ServiceException exception = assertThrows(ServiceException.class,
                 () -> friendRequestService.refuseFriendRequest(2L, 100L, "x"));
         assertEquals(FRIEND_REQUEST_HANDLED.getCode(), exception.getCode());
-        verify(websocketService, never()).sendPrivateMessageAsync(anyLong(), any(ImPrivateMessageDTO.class));
+        verify(websocketService, never()).sendNotificationAsync(anyLong(), anyInt(), anyInt(), any());
     }
 
     // ========== getMyFriendRequestList ==========
