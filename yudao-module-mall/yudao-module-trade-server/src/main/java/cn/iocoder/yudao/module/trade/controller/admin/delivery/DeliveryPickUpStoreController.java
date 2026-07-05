@@ -72,8 +72,8 @@ public class DeliveryPickUpStoreController {
             return success(null);
         }
         List<AdminUserRespDTO> verifyUsers = CollUtil.isNotEmpty(deliveryPickUpStore.getVerifyUserIds()) ?
-                adminUserApi.getUserList(deliveryPickUpStore.getVerifyUserIds()) : null;
-        return success(BeanUtils.toBean(deliveryPickUpStore, DeliveryPickUpStoreRespVO.class)
+                adminUserApi.getUserList(deliveryPickUpStore.getVerifyUserIds()).getCheckedData() : null;
+        return success(DeliveryPickUpStoreConvert.INSTANCE.convert01(deliveryPickUpStore)
                 .setVerifyUsers(BeanUtils.toBean(verifyUsers, UserSimpleBaseVO.class)));
     }
 
