@@ -69,10 +69,10 @@ spring:
 
 xxl:
   job:
-    enabled: false # 是否开启调度中心，默认为 true 开启
-    accessToken: GaoXiang_098 # 执行器通讯TOKEN
+    enabled: true # 是否开启调度中心，默认为 true 开启
+    accessToken: GaoXiang_token # 执行器通讯TOKEN
     admin:
-      addresses: http://47.103.53.216:8080 # 调度中心部署跟地址
+      addresses: http://47.103.53.216:8080/xxl-job-admin # 调度中心部署跟地址
 
 --- #################### 消息队列相关 ####################
 
