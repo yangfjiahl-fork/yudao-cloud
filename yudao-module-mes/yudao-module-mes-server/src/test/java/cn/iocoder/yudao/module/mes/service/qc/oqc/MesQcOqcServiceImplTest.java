@@ -13,10 +13,11 @@ import cn.iocoder.yudao.module.mes.service.wm.productsales.MesWmProductSalesLine
 import cn.iocoder.yudao.module.mes.service.wm.productsales.MesWmProductSalesService;
 import cn.iocoder.yudao.module.mes.service.qc.indicatorresult.MesQcIndicatorResultService;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
-import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import javax.annotation.Resource;
 
 import static cn.iocoder.yudao.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.randomLongId;
@@ -40,23 +41,23 @@ public class MesQcOqcServiceImplTest extends BaseDbUnitTest {
     @Resource
     private MesQcOqcMapper oqcMapper;
 
-    @MockitoBean
+    @MockBean
     private MesWmProductSalesLineService productSalesLineService;
-    @MockitoBean
+    @MockBean
     private MesWmProductSalesService productSalesService;
-    @MockitoBean
+    @MockBean
     private MesQcOqcLineService oqcLineService;
-    @MockitoBean
+    @MockBean
     private MesMdClientService clientService;
-    @MockitoBean
+    @MockBean
     private MesMdItemService itemService;
-    @MockitoBean
+    @MockBean
     private MesQcTemplateItemService templateItemService;
-    @MockitoBean
+    @MockBean
     private MesQcDefectRecordService defectRecordService;
-    @MockitoBean
+    @MockBean
     private AdminUserApi adminUserApi;
-    @MockitoBean
+    @MockBean
     private MesQcIndicatorResultService indicatorResultService;
 
     @Test
