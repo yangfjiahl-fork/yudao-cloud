@@ -21,6 +21,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.annotation.Order;
 import org.springframework.util.AntPathMatcher;
@@ -86,7 +87,7 @@ public class YudaoWebAutoConfiguration {
 
     @Bean
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
-    public GlobalExceptionHandler globalExceptionHandler(ApiErrorLogCommonApi apiErrorLogApi) {
+    public GlobalExceptionHandler globalExceptionHandler(@Lazy ApiErrorLogCommonApi apiErrorLogApi) {
         return new GlobalExceptionHandler(applicationName, apiErrorLogApi);
     }
 

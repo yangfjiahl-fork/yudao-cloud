@@ -26,6 +26,7 @@ import java.util.List;
 public class LogRecordServiceImpl implements ILogRecordService {
 
     @Resource
+    @Qualifier("operateLogApiImpl")
     private OperateLogCommonApi operateLogApi;
 
     @Override

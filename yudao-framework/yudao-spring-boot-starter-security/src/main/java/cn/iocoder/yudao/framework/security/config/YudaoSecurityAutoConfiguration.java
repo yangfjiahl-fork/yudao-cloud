@@ -15,6 +15,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureOrder;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -69,12 +70,12 @@ public class YudaoSecurityAutoConfiguration {
      */
     @Bean
     public TokenAuthenticationFilter authenticationTokenFilter(GlobalExceptionHandler globalExceptionHandler,
-                                                               OAuth2TokenCommonApi oauth2TokenApi) {
+                                                               @Lazy OAuth2TokenCommonApi oauth2TokenApi) {
         return new TokenAuthenticationFilter(securityProperties, globalExceptionHandler, oauth2TokenApi);
     }
 
     @Bean("ss") // 使用 Spring Security 的缩写，方便使用
-    public SecurityFrameworkService securityFrameworkService(PermissionCommonApi permissionApi) {
+    public SecurityFrameworkService securityFrameworkService(@Lazy PermissionCommonApi permissionApi) {
         return new SecurityFrameworkServiceImpl(permissionApi);
     }
 

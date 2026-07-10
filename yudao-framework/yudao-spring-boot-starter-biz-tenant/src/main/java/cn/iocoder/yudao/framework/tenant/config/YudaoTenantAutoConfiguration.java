@@ -31,6 +31,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.cache.BatchStrategies;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -58,7 +59,7 @@ public class YudaoTenantAutoConfiguration {
     private ApplicationContext applicationContext;
 
     @Bean
-    public TenantFrameworkService tenantFrameworkService(TenantCommonApi tenantApi) {
+    public TenantFrameworkService tenantFrameworkService(@Lazy TenantCommonApi tenantApi) {
         return new TenantFrameworkServiceImpl(tenantApi);
     }
 
