@@ -14,16 +14,16 @@ import cn.iocoder.yudao.module.mes.service.wm.outsourcereceipt.MesWmOutsourceRec
 import cn.iocoder.yudao.module.mes.service.qc.indicatorresult.MesQcIndicatorResultService;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import jakarta.annotation.Resource;
-
+import javax.annotation.Resource;
 import java.math.BigDecimal;
 
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.randomLongId;
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.randomPojo;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 /**
@@ -40,23 +40,23 @@ public class MesQcIqcServiceImplTest extends BaseDbUnitTest {
     @Resource
     private MesQcIqcMapper iqcMapper;
 
-    @MockitoBean
+    @MockBean
     private MesWmArrivalNoticeService arrivalNoticeService;
-    @MockitoBean
+    @MockBean
     private MesWmOutsourceReceiptService outsourceReceiptService;
-    @MockitoBean
+    @MockBean
     private MesQcIqcLineService iqcLineService;
-    @MockitoBean
+    @MockBean
     private MesQcDefectRecordService defectRecordService;
-    @MockitoBean
+    @MockBean
     private MesMdVendorService vendorService;
-    @MockitoBean
+    @MockBean
     private MesMdItemService itemService;
-    @MockitoBean
+    @MockBean
     private MesQcTemplateItemService templateItemService;
-    @MockitoBean
+    @MockBean
     private AdminUserApi adminUserApi;
-    @MockitoBean
+    @MockBean
     private MesQcIndicatorResultService indicatorResultService;
 
     @Test
