@@ -71,12 +71,12 @@ public class YudaoSecurityAutoConfiguration {
      */
     @Bean
     public TokenAuthenticationFilter authenticationTokenFilter(GlobalExceptionHandler globalExceptionHandler,
-                                                               @Lazy OAuth2TokenCommonApi oauth2TokenApi) {
+                                                               OAuth2TokenCommonApi oauth2TokenApi) {
         return new TokenAuthenticationFilter(securityProperties, globalExceptionHandler, oauth2TokenApi);
     }
 
     @Bean("ss") // 使用 Spring Security 的缩写，方便使用
-    public SecurityFrameworkService securityFrameworkService(@Lazy PermissionCommonApi permissionApi) {
+    public SecurityFrameworkService securityFrameworkService(PermissionCommonApi permissionApi) {
         return new SecurityFrameworkServiceImpl(permissionApi);
     }
 

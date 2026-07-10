@@ -59,7 +59,7 @@ public class YudaoTenantAutoConfiguration {
     private ApplicationContext applicationContext;
 
     @Bean
-    public TenantFrameworkService tenantFrameworkService(@Lazy TenantCommonApi tenantApi) {
+    public TenantFrameworkService tenantFrameworkService(TenantCommonApi tenantApi) {
         return new TenantFrameworkServiceImpl(tenantApi);
     }
 

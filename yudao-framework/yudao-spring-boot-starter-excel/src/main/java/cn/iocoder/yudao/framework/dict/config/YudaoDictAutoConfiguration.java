@@ -11,7 +11,7 @@ public class YudaoDictAutoConfiguration {
 
     @Bean
     @SuppressWarnings("InstantiationOfUtilityClass")
-    public DictFrameworkUtils dictUtils(@Lazy DictDataCommonApi dictDataApi) {
+    public DictFrameworkUtils dictUtils(DictDataCommonApi dictDataApi) {
         DictFrameworkUtils.init(dictDataApi);
         return new DictFrameworkUtils();
     }

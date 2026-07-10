@@ -87,7 +87,7 @@ public class YudaoWebAutoConfiguration {
 
     @Bean
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
-    public GlobalExceptionHandler globalExceptionHandler(@Lazy ApiErrorLogCommonApi apiErrorLogApi) {
+    public GlobalExceptionHandler globalExceptionHandler(ApiErrorLogCommonApi apiErrorLogApi) {
         return new GlobalExceptionHandler(applicationName, apiErrorLogApi);
     }
 

@@ -9,7 +9,6 @@ import cn.iocoder.yudao.framework.common.biz.system.logger.dto.OperateLogCreateR
 import com.mzt.logapi.beans.LogRecord;
 import com.mzt.logapi.service.ILogRecordService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -26,7 +25,6 @@ import java.util.List;
 public class LogRecordServiceImpl implements ILogRecordService {
 
     @Resource
-    @Qualifier("operateLogApiImpl")
     private OperateLogCommonApi operateLogApi;
 
     @Override
