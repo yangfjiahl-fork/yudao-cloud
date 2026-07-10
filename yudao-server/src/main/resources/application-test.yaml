@@ -72,13 +72,13 @@ xxl:
     enabled: true # 是否开启调度中心，默认为 true 开启
     accessToken: GaoXiang_token # 执行器通讯TOKEN
     admin:
-      addresses: http://47.103.53.216:8080/xxl-job-admin # 调度中心部署跟地址
+      addresses: http://47.103.53.216:8080 # 调度中心部署跟地址
 
 --- #################### 消息队列相关 ####################
 
 # rocketmq 配置项，对应 RocketMQProperties 配置类
 rocketmq:
-  name-server: 127.0.0.1:9876 # RocketMQ Namesrv
+  name-server: 47.103.53.216:9876 # RocketMQ Namesrv
 
 spring:
   # RabbitMQ 配置项，对应 RabbitProperties 配置类
