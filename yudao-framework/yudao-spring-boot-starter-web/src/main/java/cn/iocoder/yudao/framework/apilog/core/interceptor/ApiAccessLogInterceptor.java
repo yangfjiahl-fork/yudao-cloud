@@ -56,7 +56,7 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
             stopWatch.start();
             request.setAttribute(ATTRIBUTE_STOP_WATCH, stopWatch);
             // 打印 Controller 路径
-            printHandlerMethodPosition(handlerMethod);
+//            printHandlerMethodPosition(handlerMethod);
         }
         return true;
     }

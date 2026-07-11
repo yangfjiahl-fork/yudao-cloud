@@ -1,0 +1,62 @@
+package cn.iocoder.yudao.module.gift.service.wool;
+
+import java.util.*;
+import jakarta.validation.*;
+import cn.iocoder.yudao.module.gift.controller.admin.wool.vo.*;
+import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+
+/**
+ * 羊毛 Service 接口
+ *
+ * @author calvin
+ */
+public interface WoolService {
+
+    /**
+     * 创建羊毛
+     *
+     * @param createReqVO 创建信息
+     * @return 编号
+     */
+    Long createWool(@Valid WoolSaveReqVO createReqVO);
+
+    /**
+     * 更新羊毛
+     *
+     * @param updateReqVO 更新信息
+     */
+    void updateWool(@Valid WoolSaveReqVO updateReqVO);
+
+    /**
+     * 删除羊毛
+     *
+     * @param id 编号
+     */
+    void deleteWool(Long id);
+
+    /**
+    * 批量删除羊毛
+    *
+    * @param ids 编号
+    */
+    void deleteWoolListByIds(List<Long> ids);
+
+    /**
+     * 获得羊毛
+     *
+     * @param id 编号
+     * @return 羊毛
+     */
+    WoolDO getWool(Long id);
+
+    /**
+     * 获得羊毛分页
+     *
+     * @param pageReqVO 分页查询
+     * @return 羊毛分页
+     */
+    PageResult<WoolDO> getWoolPage(WoolPageReqVO pageReqVO);
+
+}
