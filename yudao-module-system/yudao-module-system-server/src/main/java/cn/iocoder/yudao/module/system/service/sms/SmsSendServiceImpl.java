@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.system.service.sms;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.exceptions.ExceptionUtil;
 import cn.hutool.core.lang.Assert;
+import cn.hutool.core.util.DesensitizedUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.core.KeyValue;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
@@ -80,49 +81,73 @@ public class SmsSendServiceImpl implements SmsSendService {
     @Override
     public Long sendSingleSms(String mobile, Long userId, Integer userType,
                               String templateCode, Map<String, Object> templateParams) {
+        log.info("[sendSingleSms][准备发送短信，手机号({})，用户编号({})，用户类型({})，模板编码({})]",
+                DesensitizedUtil.mobilePhone(mobile), userId, userType, templateCode);
         // 校验短信模板是否合法
         SmsTemplateDO template = validateSmsTemplate(templateCode);
+        log.info("[sendSingleSms][短信模板校验通过，模板编号({})，模板编码({})，渠道编号({})，模板状态({})]",
+                template.getId(), template.getCode(), template.getChannelId(), template.getStatus());
         // 校验短信渠道是否合法
         SmsChannelDO smsChannel = validateSmsChannel(template.getChannelId());
+        log.info("[sendSingleSms][短信渠道校验通过，渠道编号({})，渠道编码({})，渠道状态({})]",
+                smsChannel.getId(), smsChannel.getCode(), smsChannel.getStatus());
 
         // 校验手机号码是否存在
         mobile = validateMobile(mobile);
         // 构建有序的模板参数。为什么放在这个位置，是提前保证模板参数的正确性，而不是到了插入发送日志
         List<KeyValue<String, Object>> newTemplateParams = buildTemplateParams(template, templateParams);
+        log.info("[sendSingleSms][短信模板参数构建完成，模板编号({})，参数名({})]",
+                template.getId(), newTemplateParams.stream().map(KeyValue::getKey).collect(Collectors.toList()));
 
         // 创建发送日志。如果模板被禁用，则不发送短信，只记录日志
         Boolean isSend = CommonStatusEnum.ENABLE.getStatus().equals(template.getStatus())
                 && CommonStatusEnum.ENABLE.getStatus().equals(smsChannel.getStatus());
         String content = smsTemplateService.formatSmsTemplateContent(template.getContent(), templateParams);
         Long sendLogId = smsLogService.createSmsLog(mobile, userId, userType, isSend, template, content, templateParams);
+        log.info("[sendSingleSms][短信发送日志已创建，日志编号({})，是否发送({})，模板编号({})，渠道编号({})]",
+                sendLogId, isSend, template.getId(), smsChannel.getId());
 
         // 发送 MQ 消息，异步执行发送短信
         if (isSend) {
             smsProducer.sendSmsSendMessage(sendLogId, mobile, template.getChannelId(),
                     template.getApiTemplateId(), newTemplateParams);
+            log.info("[sendSingleSms][短信发送 MQ 已投递，日志编号({})，手机号({})，渠道编号({})，API 模板编号({})]",
+                    sendLogId, DesensitizedUtil.mobilePhone(mobile), template.getChannelId(),
+                    template.getApiTemplateId());
+        } else {
+            log.warn("[sendSingleSms][短信未投递，日志编号({})，模板状态({})，渠道状态({})]",
+                    sendLogId, template.getStatus(), smsChannel.getStatus());
         }
         return sendLogId;
     }
 
     @VisibleForTesting
     SmsChannelDO validateSmsChannel(Long channelId) {
+        log.info("[validateSmsChannel][开始校验短信渠道，渠道编号({})]", channelId);
         // 获得短信模板。考虑到效率，从缓存中获取
         SmsChannelDO channelDO = smsChannelService.getSmsChannel(channelId);
         // 短信模板不存在
         if (channelDO == null) {
+            log.warn("[validateSmsChannel][短信渠道不存在，渠道编号({})]", channelId);
             throw exception(SMS_CHANNEL_NOT_EXISTS);
         }
+        log.info("[validateSmsChannel][短信渠道校验完成，渠道编号({})，渠道编码({})，渠道状态({})]",
+                channelDO.getId(), channelDO.getCode(), channelDO.getStatus());
         return channelDO;
     }
 
     @VisibleForTesting
     SmsTemplateDO validateSmsTemplate(String templateCode) {
+        log.info("[validateSmsTemplate][开始校验短信模板，模板编码({})]", templateCode);
         // 获得短信模板。考虑到效率，从缓存中获取
         SmsTemplateDO template = smsTemplateService.getSmsTemplateByCodeFromCache(templateCode);
         // 短信模板不存在
         if (template == null) {
+            log.warn("[validateSmsTemplate][短信模板不存在，模板编码({})]", templateCode);
             throw exception(SMS_SEND_TEMPLATE_NOT_EXISTS);
         }
+        log.info("[validateSmsTemplate][短信模板校验完成，模板编号({})，模板编码({})，渠道编号({})，模板状态({})]",
+                template.getId(), template.getCode(), template.getChannelId(), template.getStatus());
         return template;
     }
 
@@ -137,9 +162,14 @@ public class SmsSendServiceImpl implements SmsSendService {
      */
     @VisibleForTesting
     List<KeyValue<String, Object>> buildTemplateParams(SmsTemplateDO template, Map<String, Object> templateParams) {
+        log.info("[buildTemplateParams][开始构建短信模板参数，模板编号({})，模板编码({})，模板参数名({})，入参名({})]",
+                template.getId(), template.getCode(), template.getParams(),
+                templateParams != null ? templateParams.keySet() : null);
         return template.getParams().stream().map(key -> {
             Object value = templateParams.get(key);
             if (value == null) {
+                log.warn("[buildTemplateParams][短信模板参数缺失，模板编号({})，模板编码({})，缺失参数名({})]",
+                        template.getId(), template.getCode(), key);
                 throw exception(SMS_SEND_MOBILE_TEMPLATE_PARAM_MISS, key);
             }
             return new KeyValue<>(key, value);
@@ -148,9 +178,12 @@ public class SmsSendServiceImpl implements SmsSendService {
 
     @VisibleForTesting
     public String validateMobile(String mobile) {
+        log.info("[validateMobile][开始校验短信手机号，手机号({})]", DesensitizedUtil.mobilePhone(mobile));
         if (StrUtil.isEmpty(mobile)) {
+            log.warn("[validateMobile][短信手机号为空]");
             throw exception(SMS_SEND_MOBILE_NOT_EXISTS);
         }
+        log.info("[validateMobile][短信手机号校验完成，手机号({})]", DesensitizedUtil.mobilePhone(mobile));
         return mobile;
     }
 
