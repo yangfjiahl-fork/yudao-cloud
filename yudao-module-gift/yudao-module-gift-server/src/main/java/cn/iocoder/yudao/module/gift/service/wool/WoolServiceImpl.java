@@ -41,7 +41,7 @@ public class WoolServiceImpl implements WoolService {
 
     private static final String NEW_USER_WOOL_AMOUNT_CONFIG_KEY = "wool.amount.for.new.user";
     private static final String REGISTER_WOOL_REMARK = "新用户注册赠送羊毛";
-    private static final String SIGN_IN_WOOL_REMARK = "签到奖励羊毛";
+    private static final String SIGN_IN_WOOL_REMARK = "签到第%s天奖励羊毛";
     private static final String DEFAULT_WOOL_POINT_REMARK = "收取羊毛";
 
     @Resource
@@ -183,7 +183,7 @@ public class WoolServiceImpl implements WoolService {
         MemberSignInRecordRespDTO signInRecord = memberSignInRecordApi.createSignRecordForWool(memberId).getCheckedData();
         Long woolId = null;
         if (!equalsAny(signInRecord.getPoint(), null, 0)) {
-            woolId = grantWoolBySignIn(memberId, signInRecord.getId(), signInRecord.getPoint());
+            woolId = grantWoolBySignIn(memberId, signInRecord.getId(), signInRecord.getPoint(), signInRecord.getDay());
         }
         return new SignInWoolResultBO()
                 .setSignInRecordId(signInRecord.getId())
@@ -194,7 +194,7 @@ public class WoolServiceImpl implements WoolService {
                 .setCreateTime(signInRecord.getCreateTime());
     }
 
-    private Long grantWoolBySignIn(Long memberId, Long signInRecordId, Integer amount) {
+    private Long grantWoolBySignIn(Long memberId, Long signInRecordId, Integer amount, Integer day) {
         MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.SIGN;
         String bizId = String.valueOf(signInRecordId);
         WoolDO existsWool = woolMapper.selectByBizTypeAndBizId(bizTypeEnum.getType(), bizId);
@@ -208,7 +208,7 @@ public class WoolServiceImpl implements WoolService {
                 .bizType(bizTypeEnum.getType())
                 .bizId(bizId)
                 .amount(amount)
-                .remark(SIGN_IN_WOOL_REMARK)
+                .remark(String.format(SIGN_IN_WOOL_REMARK, day))
                 .status(WoolStatusEnum.INIT.getType())
                 .memberId(memberId)
                 .build();
