@@ -1,6 +1,10 @@
 server:
   port: 48080
 
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
 --- #################### 数据库相关配置 ####################
 
 spring:
