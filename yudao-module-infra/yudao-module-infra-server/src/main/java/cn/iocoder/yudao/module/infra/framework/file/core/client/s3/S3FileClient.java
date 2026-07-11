@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
 import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.module.infra.framework.file.core.client.AbstractFileClient;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -16,6 +17,8 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
@@ -29,6 +32,7 @@ import java.time.Duration;
  *
  * @author 芋道源码
  */
+@Slf4j
 public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
 
     private static final Duration EXPIRATION_DEFAULT = Duration.ofHours(24);
@@ -58,6 +62,9 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .pathStyleAccessEnabled(Boolean.TRUE.equals(config.getEnablePathStyleAccess()))
                 .chunkedEncodingEnabled(false) // 禁用分块编码，参见 https://t.zsxq.com/kBy57
                 .build();
+        log.info("[doInit][S3 文件客户端初始化，clientId={}, bucket={}, endpoint={}, presignerEndpoint={}, domain={}, region={}, pathStyle={}, publicAccess={}]",
+                getId(), config.getBucket(), endpoint, presignerEndpoint, config.getDomain(), regionStr,
+                config.getEnablePathStyleAccess(), config.getEnablePublicAccess());
         client = S3Client.builder()
                 .credentialsProvider(credentialsProvider)
                 .region(region)
@@ -82,9 +89,39 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .contentLength((long) content.length)
                 .build();
         // 上传文件
-        client.putObject(putRequest, RequestBody.fromBytes(content));
+        log.info("[upload][S3 文件上传开始，clientId={}, bucket={}, endpoint={}, domain={}, path={}, type={}, size={}, pathStyle={}, publicAccess={}]",
+                getId(), config.getBucket(), config.getEndpoint(), config.getDomain(), path, type, content.length,
+                config.getEnablePathStyleAccess(), config.getEnablePublicAccess());
+        long uploadBeginTime = System.currentTimeMillis();
+        PutObjectResponse response;
+        try {
+            response = client.putObject(putRequest, RequestBody.fromBytes(content));
+        } catch (S3Exception ex) {
+            log.error("[upload][S3 文件上传失败，clientId={}, bucket={}, endpoint={}, path={}, type={}, size={}, statusCode={}, requestId={}, extendedRequestId={}, errorCode={}, errorMessage={}]",
+                    getId(), config.getBucket(), config.getEndpoint(), path, type, content.length,
+                    ex.statusCode(), ex.requestId(), ex.extendedRequestId(),
+                    ex.awsErrorDetails() != null ? ex.awsErrorDetails().errorCode() : null,
+                    ex.awsErrorDetails() != null ? ex.awsErrorDetails().errorMessage() : null, ex);
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.error("[upload][S3 文件上传异常，clientId={}, bucket={}, endpoint={}, path={}, type={}, size={}]",
+                    getId(), config.getBucket(), config.getEndpoint(), path, type, content.length, ex);
+            throw ex;
+        }
+        log.info("[upload][S3 文件上传成功，clientId={}, bucket={}, path={}, eTag={}, versionId={}, requestId={}, cost={}ms]",
+                getId(), config.getBucket(), path, response.eTag(), response.versionId(),
+                response.responseMetadata().requestId(), System.currentTimeMillis() - uploadBeginTime);
         // 拼接返回路径
-        return presignGetUrl(path, null);
+        try {
+            String url = presignGetUrl(path, null);
+            log.info("[upload][S3 文件访问地址生成完成，clientId={}, bucket={}, path={}, url={}]",
+                    getId(), config.getBucket(), path, HttpUtils.removeUrlQuery(url));
+            return url;
+        } catch (RuntimeException ex) {
+            log.error("[upload][S3 文件已上传但访问地址生成失败，clientId={}, bucket={}, endpoint={}, domain={}, path={}]",
+                    getId(), config.getBucket(), config.getEndpoint(), config.getDomain(), path, ex);
+            throw ex;
+        }
     }
 
     @Override

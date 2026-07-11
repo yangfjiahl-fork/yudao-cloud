@@ -20,6 +20,7 @@ import cn.iocoder.yudao.module.infra.framework.file.core.utils.FileTypeUtils;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -34,6 +35,7 @@ import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_NOT_EX
  * @author 芋道源码
  */
 @Service
+@Slf4j
 public class FileServiceImpl implements FileService {
 
     /**
@@ -71,6 +73,9 @@ public class FileServiceImpl implements FileService {
     @Override
     @SneakyThrows
     public String createFile(byte[] content, String name, String directory, String type) {
+        String originalName = name;
+        log.info("[createFile][文件创建开始，name={}, directory={}, type={}, size={}]",
+                originalName, directory, type, content.length);
         // 1.1 处理 name 的合法性，禁止携带目录路径
         name = FilePathUtils.validateFileName(name);
 
@@ -89,18 +94,36 @@ public class FileServiceImpl implements FileService {
                 name = name + extension;
             }
         }
+        log.info("[createFile][文件参数处理完成，originalName={}, finalName={}, directory={}, type={}]",
+                originalName, name, directory, type);
 
         // 2.1 生成上传的 path，需要保证唯一
         String path = generateUploadPath(name, directory);
         // 2.2 上传到文件存储器
         FileClient client = fileConfigService.getMasterFileClient();
         Assert.notNull(client, "客户端(master) 不能为空");
-        String url = client.upload(content, path, type);
+        log.info("[createFile][准备上传文件，clientId={}, clientClass={}, path={}, type={}, size={}]",
+                client.getId(), client.getClass().getSimpleName(), path, type, content.length);
+        long uploadBeginTime = System.currentTimeMillis();
+        String url;
+        try {
+            url = client.upload(content, path, type);
+        } catch (Exception ex) {
+            log.error("[createFile][上传文件到存储失败，clientId={}, clientClass={}, path={}, type={}, size={}]",
+                    client.getId(), client.getClass().getSimpleName(), path, type, content.length, ex);
+            throw ex;
+        }
+        log.info("[createFile][文件上传成功，clientId={}, clientClass={}, path={}, cost={}ms, url={}]",
+                client.getId(), client.getClass().getSimpleName(), path,
+                System.currentTimeMillis() - uploadBeginTime, HttpUtils.removeUrlQuery(url));
 
         // 3. 保存到数据库
-        fileMapper.insert(new FileDO().setConfigId(client.getId())
+        FileDO file = new FileDO().setConfigId(client.getId())
                 .setName(name).setPath(path).setUrl(url)
-                .setType(type).setSize((long) content.length));
+                .setType(type).setSize((long) content.length);
+        fileMapper.insert(file);
+        log.info("[createFile][文件记录保存成功，fileId={}, configId={}, path={}, name={}]",
+                file.getId(), client.getId(), path, name);
         return url;
     }
 

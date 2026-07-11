@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.infra.controller.app.file;
 
 import cn.hutool.core.io.IoUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import cn.iocoder.yudao.module.infra.controller.app.file.vo.AppFileUploadReqVO;
@@ -38,9 +39,25 @@ public class AppFileController {
     @PermitAll
     public CommonResult<String> uploadFile(@Valid AppFileUploadReqVO uploadReqVO) throws Exception {
         MultipartFile file = uploadReqVO.getFile();
-        byte[] content = IoUtil.readBytes(file.getInputStream());
-        return success(fileService.createFile(content, file.getOriginalFilename(),
-                uploadReqVO.getDirectory(), file.getContentType()));
+        String originalFilename = file.getOriginalFilename();
+        String directory = uploadReqVO.getDirectory();
+        String contentType = file.getContentType();
+        long size = file.getSize();
+        log.info("[uploadFile][App 文件上传开始，name={}, directory={}, contentType={}, size={}]",
+                originalFilename, directory, contentType, size);
+        try {
+            byte[] content = IoUtil.readBytes(file.getInputStream());
+            log.info("[uploadFile][App 文件读取完成，name={}, directory={}, readSize={}]",
+                    originalFilename, directory, content.length);
+            String url = fileService.createFile(content, originalFilename, directory, contentType);
+            log.info("[uploadFile][App 文件上传完成，name={}, directory={}, url={}]",
+                    originalFilename, directory, HttpUtils.removeUrlQuery(url));
+            return success(url);
+        } catch (Exception ex) {
+            log.error("[uploadFile][App 文件上传失败，name={}, directory={}, contentType={}, size={}]",
+                    originalFilename, directory, contentType, size, ex);
+            throw ex;
+        }
     }
 
     @GetMapping("/presigned-url")

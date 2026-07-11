@@ -59,9 +59,19 @@ public class FileConfigServiceImpl implements FileConfigService {
                     FileConfigDO config = Objects.equals(CACHE_MASTER_ID, id) ?
                             fileConfigMapper.selectByMaster() : fileConfigMapper.selectById(id);
                     if (config != null) {
+                        log.info("[clientCache.load][加载文件客户端配置，requestId={}, configId={}, name={}, storage={}, master={}, configClass={}]",
+                                id, config.getId(), config.getName(), getStorageName(config.getStorage()),
+                                config.getMaster(), config.getConfig() != null ? config.getConfig().getClass().getSimpleName() : null);
                         fileClientFactory.createOrUpdateFileClient(config.getId(), config.getStorage(), config.getConfig());
+                    } else {
+                        log.warn("[clientCache.load][未找到文件客户端配置，requestId={}, masterRequest={}]",
+                                id, Objects.equals(CACHE_MASTER_ID, id));
                     }
-                    return fileClientFactory.getFileClient(null == config ? id : config.getId());
+                    FileClient client = fileClientFactory.getFileClient(null == config ? id : config.getId());
+                    log.info("[clientCache.load][文件客户端加载完成，requestId={}, clientId={}, clientClass={}]",
+                            id, client != null ? client.getId() : null,
+                            client != null ? client.getClass().getSimpleName() : null);
+                    return client;
                 }
 
             });
@@ -197,12 +207,25 @@ public class FileConfigServiceImpl implements FileConfigService {
 
     @Override
     public FileClient getFileClient(Long id) {
-        return clientCache.getUnchecked(id);
+        FileClient client = clientCache.getUnchecked(id);
+        log.info("[getFileClient][获取文件客户端完成，configId={}, clientId={}, clientClass={}]",
+                id, client != null ? client.getId() : null,
+                client != null ? client.getClass().getSimpleName() : null);
+        return client;
     }
 
     @Override
     public FileClient getMasterFileClient() {
-        return clientCache.getUnchecked(CACHE_MASTER_ID);
+        FileClient client = clientCache.getUnchecked(CACHE_MASTER_ID);
+        log.info("[getMasterFileClient][获取主文件客户端完成，clientId={}, clientClass={}]",
+                client != null ? client.getId() : null,
+                client != null ? client.getClass().getSimpleName() : null);
+        return client;
+    }
+
+    private static String getStorageName(Integer storage) {
+        FileStorageEnum storageEnum = FileStorageEnum.getByStorage(storage);
+        return storageEnum != null ? storageEnum.name() : String.valueOf(storage);
     }
 
 }
