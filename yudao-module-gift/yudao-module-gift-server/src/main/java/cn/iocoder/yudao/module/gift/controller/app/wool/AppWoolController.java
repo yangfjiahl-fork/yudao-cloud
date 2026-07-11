@@ -2,9 +2,11 @@ package cn.iocoder.yudao.module.gift.controller.app.wool;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppSignInWoolRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolSummaryRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
+import cn.iocoder.yudao.module.gift.service.wool.bo.SignInWoolResultBO;
 import cn.iocoder.yudao.module.gift.service.wool.WoolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +45,13 @@ public class AppWoolController {
     @Parameter(name = "id", description = "羊毛编号", required = true, example = "1024")
     public CommonResult<Integer> receiveWool(@RequestParam("id") Long id) {
         return success(woolService.receiveWool(getLoginUserId(), id));
+    }
+
+    @PostMapping("/create-by-sign-in")
+    @Operation(summary = "签到并生成待收取羊毛")
+    public CommonResult<AppSignInWoolRespVO> createWoolBySignIn() {
+        SignInWoolResultBO result = woolService.createWoolBySignIn(getLoginUserId());
+        return success(BeanUtils.toBean(result, AppSignInWoolRespVO.class));
     }
 
     @GetMapping("/summary")

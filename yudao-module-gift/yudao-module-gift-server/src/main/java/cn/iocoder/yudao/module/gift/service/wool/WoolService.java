@@ -4,6 +4,7 @@ import java.util.*;
 import jakarta.validation.*;
 import cn.iocoder.yudao.module.gift.controller.admin.wool.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
+import cn.iocoder.yudao.module.gift.service.wool.bo.SignInWoolResultBO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 
@@ -105,5 +106,13 @@ public interface WoolService {
      * @param memberId 会员编号
      */
     void grantWoolByRegister(Long memberId);
+
+    /**
+     * 用户签到时，生成待收取羊毛
+     *
+     * @param memberId 会员编号
+     * @return 签到生成羊毛结果
+     */
+    SignInWoolResultBO createWoolBySignIn(Long memberId);
 
 }

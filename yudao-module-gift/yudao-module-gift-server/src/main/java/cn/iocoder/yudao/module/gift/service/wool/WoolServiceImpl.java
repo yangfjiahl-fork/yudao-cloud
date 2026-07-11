@@ -9,8 +9,11 @@ import cn.iocoder.yudao.module.gift.controller.admin.wool.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.wool.WoolMapper;
 import cn.iocoder.yudao.module.gift.enums.WoolStatusEnum;
+import cn.iocoder.yudao.module.gift.service.wool.bo.SignInWoolResultBO;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.member.api.point.MemberPointApi;
+import cn.iocoder.yudao.module.member.api.signin.MemberSignInRecordApi;
+import cn.iocoder.yudao.module.member.api.signin.dto.MemberSignInRecordRespDTO;
 import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +27,7 @@ import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
+import static cn.iocoder.yudao.framework.common.util.object.ObjectUtils.equalsAny;
 
 /**
  * 羊毛 Service 实现类
@@ -37,6 +41,7 @@ public class WoolServiceImpl implements WoolService {
 
     private static final String NEW_USER_WOOL_AMOUNT_CONFIG_KEY = "wool.amount.for.new.user";
     private static final String REGISTER_WOOL_REMARK = "新用户注册赠送羊毛";
+    private static final String SIGN_IN_WOOL_REMARK = "签到奖励羊毛";
     private static final String DEFAULT_WOOL_POINT_REMARK = "收取羊毛";
 
     @Resource
@@ -45,6 +50,8 @@ public class WoolServiceImpl implements WoolService {
     private ConfigApi configApi;
     @Resource
     private MemberPointApi memberPointApi;
+    @Resource
+    private MemberSignInRecordApi memberSignInRecordApi;
 
     @Override
     public Long createWool(WoolSaveReqVO createReqVO) {
@@ -168,6 +175,47 @@ public class WoolServiceImpl implements WoolService {
         woolMapper.insert(wool);
         log.info("[grantWoolByRegister][会员({}) 注册羊毛({}) 发放成功，数量({})]",
                 memberId, wool.getId(), wool.getAmount());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SignInWoolResultBO createWoolBySignIn(Long memberId) {
+        MemberSignInRecordRespDTO signInRecord = memberSignInRecordApi.createSignRecordForWool(memberId).getCheckedData();
+        Long woolId = null;
+        if (!equalsAny(signInRecord.getPoint(), null, 0)) {
+            woolId = grantWoolBySignIn(memberId, signInRecord.getId(), signInRecord.getPoint());
+        }
+        return new SignInWoolResultBO()
+                .setSignInRecordId(signInRecord.getId())
+                .setWoolId(woolId)
+                .setDay(signInRecord.getDay())
+                .setAmount(signInRecord.getPoint())
+                .setExperience(signInRecord.getExperience())
+                .setCreateTime(signInRecord.getCreateTime());
+    }
+
+    private Long grantWoolBySignIn(Long memberId, Long signInRecordId, Integer amount) {
+        MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.SIGN;
+        String bizId = String.valueOf(signInRecordId);
+        WoolDO existsWool = woolMapper.selectByBizTypeAndBizId(bizTypeEnum.getType(), bizId);
+        if (existsWool != null) {
+            log.info("[grantWoolBySignIn][会员({}) 已存在签到羊毛({})，签到记录({})，跳过发放]",
+                    memberId, existsWool.getId(), signInRecordId);
+            return existsWool.getId();
+        }
+
+        WoolDO wool = WoolDO.builder()
+                .bizType(bizTypeEnum.getType())
+                .bizId(bizId)
+                .amount(amount)
+                .remark(SIGN_IN_WOOL_REMARK)
+                .status(WoolStatusEnum.INIT.getType())
+                .memberId(memberId)
+                .build();
+        woolMapper.insert(wool);
+        log.info("[grantWoolBySignIn][会员({}) 签到羊毛({}) 发放成功，签到记录({})，数量({})]",
+                memberId, wool.getId(), signInRecordId, wool.getAmount());
+        return wool.getId();
     }
 
     private int getNewUserWoolAmount() {

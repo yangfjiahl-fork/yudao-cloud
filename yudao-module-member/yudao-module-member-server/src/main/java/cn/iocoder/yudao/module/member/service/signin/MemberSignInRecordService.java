@@ -39,6 +39,16 @@ public interface MemberSignInRecordService {
     MemberSignInRecordDO createSignRecord(Long userId);
 
     /**
+     * 为羊毛流程创建签到记录
+     *
+     * <p>只保存签到记录并增加经验，不直接增加积分。积分由 gift 羊毛收取后发放。</p>
+     *
+     * @param userId 用户编号
+     * @return 签到记录
+     */
+    MemberSignInRecordDO createSignRecordForWool(Long userId);
+
+    /**
      * 根据用户编号，获得个人签到统计信息
      *
      * @param userId 用户编号

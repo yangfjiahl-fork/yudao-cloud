@@ -109,6 +109,27 @@ public class MemberSignInRecordServiceImpl implements MemberSignInRecordService 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public MemberSignInRecordDO createSignRecord(Long userId) {
+        MemberSignInRecordDO record = createSignRecordOnly(userId);
+
+        // 增加积分
+        if (!ObjectUtils.equalsAny(record.getPoint(), null, 0)) {
+            pointRecordService.createPointRecord(userId, record.getPoint(), MemberPointBizTypeEnum.SIGN, String.valueOf(record.getId()));
+        }
+        addSignInExperience(userId, record);
+        return record;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MemberSignInRecordDO createSignRecordForWool(Long userId) {
+        MemberSignInRecordDO record = createSignRecordOnly(userId);
+
+        // 增加经验。积分由 gift 羊毛收取后发放
+        addSignInExperience(userId, record);
+        return record;
+    }
+
+    private MemberSignInRecordDO createSignRecordOnly(Long userId) {
         // 1. 获取当前用户最近的签到
         MemberSignInRecordDO lastRecord = signInRecordMapper.selectLastRecordByUserId(userId);
         // 1.1. 判断是否重复签到
@@ -122,15 +143,13 @@ public class MemberSignInRecordServiceImpl implements MemberSignInRecordService 
         // 3. 插入签到记录
         signInRecordMapper.insert(record);
 
-        // 4. 增加积分
-        if (!ObjectUtils.equalsAny(record.getPoint(), null, 0)) {
-            pointRecordService.createPointRecord(userId, record.getPoint(), MemberPointBizTypeEnum.SIGN, String.valueOf(record.getId()));
-        }
-        // 5. 增加经验
+        return record;
+    }
+
+    private void addSignInExperience(Long userId, MemberSignInRecordDO record) {
         if (!ObjectUtils.equalsAny(record.getExperience(), null, 0)) {
             memberLevelService.addExperience(userId, record.getExperience(), MemberExperienceBizTypeEnum.SIGN_IN, String.valueOf(record.getId()));
         }
-        return record;
     }
 
     private void validateSigned(MemberSignInRecordDO signInRecordDO) {
