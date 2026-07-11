@@ -242,11 +242,9 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
         // 准备参数
         String accessToken = refreshTokenDO.getRefreshToken();
 
-        // 调研，并断言
-        OAuth2AccessTokenDO result = oauth2TokenService.getAccessToken(accessToken);
-        // 断言
-        assertPojoEquals(refreshTokenDO, result, "expiresTime", "createTime", "updateTime", "deleted",
-                "creator", "updater");
+        // 调用，并断言
+        assertServiceException(() -> oauth2TokenService.checkAccessToken(accessToken),
+                new ErrorCode(401, "访问令牌不存在"));
     }
 
     @Test
