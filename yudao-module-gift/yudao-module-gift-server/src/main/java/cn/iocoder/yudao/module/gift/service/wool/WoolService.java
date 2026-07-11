@@ -68,6 +68,14 @@ public interface WoolService {
     List<WoolDO> getWaitReceiveWoolList(Long memberId);
 
     /**
+     * 收取羊毛
+     *
+     * @param memberId 会员编号
+     * @param id 羊毛编号
+     */
+    Integer receiveWool(Long memberId, Long id);
+
+    /**
      * 用户注册时，发放羊毛
      *
      * @param memberId 会员编号

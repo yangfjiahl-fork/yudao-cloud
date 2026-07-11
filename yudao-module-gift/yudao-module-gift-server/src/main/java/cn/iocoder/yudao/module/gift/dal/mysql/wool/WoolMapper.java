@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import org.apache.ibatis.annotations.Mapper;
 import cn.iocoder.yudao.module.gift.controller.admin.wool.vo.*;
 
@@ -36,6 +37,15 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
                 .eq(WoolDO::getMemberId, memberId)
                 .eq(WoolDO::getStatus, status)
                 .orderByDesc(WoolDO::getId));
+    }
+
+    default int updateStatusByIdAndMemberIdAndStatus(Long id, Long memberId, String oldStatus, String newStatus) {
+        WoolDO updateObj = new WoolDO();
+        updateObj.setStatus(newStatus);
+        return update(updateObj, Wrappers.<WoolDO>lambdaUpdate()
+                .eq(WoolDO::getId, id)
+                .eq(WoolDO::getMemberId, memberId)
+                .eq(WoolDO::getStatus, oldStatus));
     }
 
 }

@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.wool.WoolMapper;
 import cn.iocoder.yudao.module.gift.enums.GiftWoolStatusEnum;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
+import cn.iocoder.yudao.module.member.api.point.MemberPointApi;
 import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
+import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
@@ -37,6 +39,8 @@ public class WoolServiceImpl implements WoolService {
     private WoolMapper woolMapper;
     @Resource
     private ConfigApi configApi;
+    @Resource
+    private MemberPointApi memberPointApi;
 
     @Override
     public Long createWool(WoolSaveReqVO createReqVO) {
@@ -91,6 +95,29 @@ public class WoolServiceImpl implements WoolService {
     @Override
     public List<WoolDO> getWaitReceiveWoolList(Long memberId) {
         return woolMapper.selectListByMemberIdAndStatus(memberId, GiftWoolStatusEnum.INIT.name());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Integer receiveWool(Long memberId, Long id) {
+        WoolDO wool = woolMapper.selectById(id);
+        if (wool == null || !Objects.equals(wool.getMemberId(), memberId)) {
+            throw exception(WOOL_NOT_EXISTS);
+        }
+        if (!Objects.equals(wool.getStatus(), GiftWoolStatusEnum.INIT.name())) {
+            throw exception(WOOL_NOT_WAIT_RECEIVE);
+        }
+
+        int updateCount = woolMapper.updateStatusByIdAndMemberIdAndStatus(id, memberId,
+                GiftWoolStatusEnum.INIT.name(), GiftWoolStatusEnum.SUCCESS.name());
+        if (updateCount == 0) {
+            throw exception(WOOL_NOT_WAIT_RECEIVE);
+        }
+
+        memberPointApi.addPoint(memberId, wool.getAmount(), Integer.valueOf(wool.getBizType()),
+                String.valueOf(wool.getId())).getCheckedData();
+        log.info("[receiveWool][会员({}) 收取羊毛({}) 成功，增加积分({})]", memberId, id, wool.getAmount());
+        return wool.getAmount();
     }
 
     @Override

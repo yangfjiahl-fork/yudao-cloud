@@ -6,11 +6,14 @@ import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
 import cn.iocoder.yudao.module.gift.service.wool.WoolService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -32,6 +35,13 @@ public class AppWoolController {
     public CommonResult<List<AppWoolRespVO>> getWaitReceiveWoolList() {
         List<WoolDO> list = woolService.getWaitReceiveWoolList(getLoginUserId());
         return success(BeanUtils.toBean(list, AppWoolRespVO.class));
+    }
+
+    @PostMapping("/receive")
+    @Operation(summary = "收取羊毛")
+    @Parameter(name = "id", description = "羊毛编号", required = true, example = "1024")
+    public CommonResult<Integer> receiveWool(@RequestParam("id") Long id) {
+        return success(woolService.receiveWool(getLoginUserId(), id));
     }
 
 }
