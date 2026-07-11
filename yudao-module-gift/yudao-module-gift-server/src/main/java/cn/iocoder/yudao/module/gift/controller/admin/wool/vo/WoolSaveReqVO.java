@@ -15,7 +15,7 @@ public class WoolSaveReqVO {
     private Long id;
 
     @Schema(description = "业务场景", requiredMode = Schema.RequiredMode.REQUIRED, example = "REGISTER")
-    @NotEmpty(message = "业务场景不能为空")
+    @NotNull(message = "业务场景不能为空")
     @InEnum(MemberPointBizTypeEnum.class)
     private Integer bizType;
 
@@ -32,7 +32,7 @@ public class WoolSaveReqVO {
     private String remark;
 
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "INIT")
-    @NotEmpty(message = "状态不能为空")
+    @NotNull(message = "状态不能为空")
     @InEnum(WoolStatusEnum.class)
     private Integer status;
 

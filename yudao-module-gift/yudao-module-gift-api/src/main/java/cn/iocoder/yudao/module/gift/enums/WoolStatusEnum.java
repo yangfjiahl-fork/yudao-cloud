@@ -9,6 +9,7 @@ import cn.iocoder.yudao.framework.common.core.ArrayValuable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -29,6 +30,7 @@ public enum WoolStatusEnum implements ArrayValuable<Integer> {
     EXPIRE(6, "已过期", "用户未收取（过期失效）"),
     ;
 
+    public static final Integer[] ARRAYS = Arrays.stream(values()).map(WoolStatusEnum::getType).toArray(Integer[]::new);
 
     /**
      * 类型
@@ -50,6 +52,6 @@ public enum WoolStatusEnum implements ArrayValuable<Integer> {
 
     @Override
     public Integer[] array() {
-        return new Integer[0];
+        return ARRAYS;
     }
 }

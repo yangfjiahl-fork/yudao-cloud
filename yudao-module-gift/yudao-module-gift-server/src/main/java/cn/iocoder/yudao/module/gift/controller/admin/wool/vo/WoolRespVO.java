@@ -21,7 +21,7 @@ public class WoolRespVO {
     @Schema(description = "业务场景", requiredMode = Schema.RequiredMode.REQUIRED, example = "REGISTER")
     @ExcelProperty(value = "业务场景", converter = DictConvert.class)
     @DictFormat("member_point_biz_type") // TODO 代码优化：建议设置到对应的 DictTypeConstants 枚举类中
-    private String bizType;
+    private Integer bizType;
 
     @Schema(description = "业务编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "27723")
     @ExcelProperty("业务编号")
@@ -37,8 +37,8 @@ public class WoolRespVO {
 
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "INIT")
     @ExcelProperty(value = "状态", converter = DictConvert.class)
-    @DictFormat("git_wool_status") // TODO 代码优化：建议设置到对应的 DictTypeConstants 枚举类中
-    private String status;
+    @DictFormat("gift_wool_status") // TODO 代码优化：建议设置到对应的 DictTypeConstants 枚举类中
+    private Integer status;
 
     @Schema(description = "会员编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "289")
     @ExcelProperty("会员编号")

@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.core.ArrayValuable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -30,6 +31,8 @@ public enum MemberPointBizTypeEnum implements ArrayValuable<Integer> {
     REGISTER(31, "会员注册", "注册会员，赠送 {} 积分", true),
     ;
 
+    public static final Integer[] ARRAYS = Arrays.stream(values()).map(MemberPointBizTypeEnum::getType).toArray(Integer[]::new);
+
     /**
      * 类型
      */
@@ -49,7 +52,7 @@ public enum MemberPointBizTypeEnum implements ArrayValuable<Integer> {
 
     @Override
     public Integer[] array() {
-        return new Integer[0];
+        return ARRAYS;
     }
 
     public static MemberPointBizTypeEnum getByType(Integer type) {
