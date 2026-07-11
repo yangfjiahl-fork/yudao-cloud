@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.wool;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.gift.controller.admin.wool.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -96,7 +98,7 @@ public class WoolServiceImpl implements WoolService {
 
     @Override
     public List<WoolDO> getWaitReceiveWoolList(Long memberId) {
-        return woolMapper.selectListByMemberIdAndStatus(memberId, WoolStatusEnum.INIT.name());
+        return woolMapper.selectListByMemberIdAndStatus(memberId, WoolStatusEnum.INIT.getType());
     }
 
     @Override
@@ -121,6 +123,13 @@ public class WoolServiceImpl implements WoolService {
                 StrUtil.blankToDefault(wool.getRemark(), DEFAULT_WOOL_POINT_REMARK)).getCheckedData();
         log.info("[receiveWool][会员({}) 收取羊毛({}) 成功，增加积分({})]", memberId, id, wool.getAmount());
         return wool.getAmount();
+    }
+
+    @Override
+    public Integer getTodayReceivedWoolAmount(Long memberId) {
+        LocalDateTime today = LocalDateTimeUtils.getToday();
+        return woolMapper.selectSumAmountByMemberIdAndStatusAndUpdateTimeBetween(memberId,
+                WoolStatusEnum.SUCCESS.getType(), today, today.plusDays(1));
     }
 
     @Override
