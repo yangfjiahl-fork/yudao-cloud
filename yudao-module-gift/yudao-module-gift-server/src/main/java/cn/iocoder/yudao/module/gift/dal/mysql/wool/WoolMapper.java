@@ -29,7 +29,7 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
                 .orderByDesc(WoolDO::getId));
     }
 
-    default WoolDO selectByBizTypeAndBizId(String bizType, String bizId) {
+    default WoolDO selectByBizTypeAndBizId(Integer bizType, String bizId) {
         return selectFirstOne(WoolDO::getBizType, bizType, WoolDO::getBizId, bizId);
     }
 
@@ -40,7 +40,7 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
                 .orderByDesc(WoolDO::getId));
     }
 
-    default int updateStatusByIdAndMemberIdAndStatus(Long id, Long memberId, String oldStatus, String newStatus) {
+    default int updateStatusByIdAndMemberIdAndStatus(Long id, Long memberId, Integer oldStatus, Integer newStatus) {
         WoolDO updateObj = new WoolDO();
         updateObj.setStatus(newStatus);
         return update(updateObj, Wrappers.<WoolDO>lambdaUpdate()

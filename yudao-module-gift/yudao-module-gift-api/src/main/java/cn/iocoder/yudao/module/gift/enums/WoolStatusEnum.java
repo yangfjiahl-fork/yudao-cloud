@@ -5,6 +5,7 @@
 package cn.iocoder.yudao.module.gift.enums;
 
 import cn.hutool.core.util.EnumUtil;
+import cn.iocoder.yudao.framework.common.core.ArrayValuable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -19,7 +20,7 @@ import java.util.Objects;
  */
 @AllArgsConstructor
 @Getter
-public enum GiftWoolStatusEnum {
+public enum WoolStatusEnum implements ArrayValuable<Integer> {
 
     INIT(1, "等待收取", "等待用户收取"),
 
@@ -42,8 +43,13 @@ public enum GiftWoolStatusEnum {
      */
     private final String description;
 
-    public static GiftWoolStatusEnum getByType(Integer type) {
-        return EnumUtil.getBy(GiftWoolStatusEnum.class,
+    public static WoolStatusEnum getByType(Integer type) {
+        return EnumUtil.getBy(WoolStatusEnum.class,
                 e -> Objects.equals(type, e.getType()));
+    }
+
+    @Override
+    public Integer[] array() {
+        return new Integer[0];
     }
 }

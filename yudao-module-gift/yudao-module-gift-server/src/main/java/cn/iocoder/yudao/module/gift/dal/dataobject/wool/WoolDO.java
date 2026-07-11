@@ -1,7 +1,7 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.wool;
 
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
-import cn.iocoder.yudao.module.gift.enums.GiftWoolStatusEnum;
+import cn.iocoder.yudao.module.gift.enums.WoolStatusEnum;
 import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -33,7 +33,7 @@ public class WoolDO extends BaseDO {
      *
      * 枚举 {@link MemberPointBizTypeEnum}
      */
-    private String bizType;
+    private Integer bizType;
     /**
      * 业务编号
      */
@@ -49,9 +49,9 @@ public class WoolDO extends BaseDO {
     /**
      * 状态
      *
-     * 枚举 {@link GiftWoolStatusEnum}
+     * 枚举 {@link WoolStatusEnum}
      */
-    private String status;
+    private Integer status;
     /**
      * 会员编号
      */
