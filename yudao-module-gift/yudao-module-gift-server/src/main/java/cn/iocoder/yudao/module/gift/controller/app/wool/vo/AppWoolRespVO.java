@@ -21,6 +21,9 @@ public class AppWoolRespVO {
     @Schema(description = "数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "10")
     private Integer amount;
 
+    @Schema(description = "备注", example = "新用户注册赠送羊毛")
+    private String remark;
+
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "INIT")
     private String status;
 

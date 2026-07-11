@@ -38,5 +38,18 @@ public interface MemberPointRecordService {
      * @param bizType 业务类型
      * @param bizId   业务编号
      */
-    void createPointRecord(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId);
+    default void createPointRecord(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId) {
+        createPointRecord(userId, point, bizType, bizId, null);
+    }
+
+    /**
+     * 创建用户积分记录
+     *
+     * @param userId  用户ID
+     * @param point   变动积分
+     * @param bizType 业务类型
+     * @param bizId   业务编号
+     * @param remark  备注
+     */
+    void createPointRecord(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId, String remark);
 }

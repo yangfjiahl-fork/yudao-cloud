@@ -31,6 +31,10 @@ public class WoolRespVO {
     @ExcelProperty("数量")
     private Integer amount;
 
+    @Schema(description = "备注", example = "新用户注册赠送羊毛")
+    @ExcelProperty("备注")
+    private String remark;
+
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "INIT")
     @ExcelProperty(value = "状态", converter = DictConvert.class)
     @DictFormat("git_wool_status") // TODO 代码优化：建议设置到对应的 DictTypeConstants 枚举类中

@@ -34,6 +34,8 @@ import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
 public class WoolServiceImpl implements WoolService {
 
     private static final String NEW_USER_WOOL_AMOUNT_CONFIG_KEY = "wool.amount.for.new.user";
+    private static final String REGISTER_WOOL_REMARK = "新用户注册赠送羊毛";
+    private static final String DEFAULT_WOOL_POINT_REMARK = "收取羊毛";
 
     @Resource
     private WoolMapper woolMapper;
@@ -115,7 +117,8 @@ public class WoolServiceImpl implements WoolService {
         }
 
         memberPointApi.addPoint(memberId, wool.getAmount(), Integer.valueOf(wool.getBizType()),
-                String.valueOf(wool.getId())).getCheckedData();
+                String.valueOf(wool.getId()),
+                StrUtil.blankToDefault(wool.getRemark(), DEFAULT_WOOL_POINT_REMARK)).getCheckedData();
         log.info("[receiveWool][会员({}) 收取羊毛({}) 成功，增加积分({})]", memberId, id, wool.getAmount());
         return wool.getAmount();
     }
@@ -135,6 +138,7 @@ public class WoolServiceImpl implements WoolService {
                 .bizType(bizType)
                 .bizId(bizId)
                 .amount(getNewUserWoolAmount())
+                .remark(REGISTER_WOOL_REMARK)
                 .status(GiftWoolStatusEnum.INIT.name())
                 .memberId(memberId)
                 .build();

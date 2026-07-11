@@ -24,6 +24,9 @@ public class WoolSaveReqVO {
     @NotNull(message = "数量不能为空")
     private Integer amount;
 
+    @Schema(description = "备注", example = "新用户注册赠送羊毛")
+    private String remark;
+
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "INIT")
     @NotEmpty(message = "状态不能为空")
     private String status;

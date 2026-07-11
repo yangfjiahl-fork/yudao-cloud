@@ -22,6 +22,7 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
         return selectPage(reqVO, new LambdaQueryWrapperX<WoolDO>()
                 .eqIfPresent(WoolDO::getBizType, reqVO.getBizType())
                 .eqIfPresent(WoolDO::getBizId, reqVO.getBizId())
+                .likeIfPresent(WoolDO::getRemark, reqVO.getRemark())
                 .eqIfPresent(WoolDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(WoolDO::getMemberId, reqVO.getMemberId())
                 .betweenIfPresent(WoolDO::getCreateTime, reqVO.getCreateTime())

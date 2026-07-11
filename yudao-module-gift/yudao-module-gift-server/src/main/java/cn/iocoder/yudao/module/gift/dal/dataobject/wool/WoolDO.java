@@ -1,11 +1,12 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.wool;
 
-import lombok.*;
-import java.util.*;
-import java.time.LocalDateTime;
-import java.time.LocalDateTime;
-import com.baomidou.mybatisplus.annotation.*;
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.module.gift.enums.GiftWoolStatusEnum;
+import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
+import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.*;
 
 /**
  * 羊毛 DO
@@ -30,7 +31,7 @@ public class WoolDO extends BaseDO {
     /**
      * 业务场景
      *
-     * 枚举 {@link TODO member_point_biz_type 对应的类}
+     * 枚举 {@link MemberPointBizTypeEnum}
      */
     private String bizType;
     /**
@@ -42,9 +43,13 @@ public class WoolDO extends BaseDO {
      */
     private Integer amount;
     /**
+     * 备注
+     */
+    private String remark;
+    /**
      * 状态
      *
-     * 枚举 {@link TODO git_wool_status 对应的类}
+     * 枚举 {@link GiftWoolStatusEnum}
      */
     private String status;
     /**

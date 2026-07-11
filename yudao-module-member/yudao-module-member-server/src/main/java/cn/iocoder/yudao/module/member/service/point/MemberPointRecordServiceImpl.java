@@ -65,7 +65,7 @@ public class MemberPointRecordServiceImpl implements MemberPointRecordService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createPointRecord(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId) {
+    public void createPointRecord(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId, String remark) {
         if (point == 0) {
             return;
         }
@@ -89,7 +89,7 @@ public class MemberPointRecordServiceImpl implements MemberPointRecordService {
         MemberPointRecordDO record = new MemberPointRecordDO()
                 .setUserId(userId).setBizId(bizId).setBizType(bizType.getType())
                 .setTitle(bizType.getName()).setDescription(StrUtil.format(bizType.getDescription(), point))
-                .setPoint(point).setTotalPoint(totalPoint);
+                .setRemark(remark).setPoint(point).setTotalPoint(totalPoint);
         memberPointRecordMapper.insert(record);
     }
 

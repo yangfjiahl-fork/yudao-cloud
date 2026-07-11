@@ -24,12 +24,18 @@ public interface MemberPointApi {
             @Parameter(name = "userId", description = "会员编号", required = true, example = "1024"),
             @Parameter(name = "point", description = "积分", required = true, example = "100"),
             @Parameter(name = "bizType", description = "业务类型", required = true, example = "1"),
-            @Parameter(name = "bizId", description = "业务编号", required = true, example = "1")
+            @Parameter(name = "bizId", description = "业务编号", required = true, example = "1"),
+            @Parameter(name = "remark", description = "备注", example = "收取羊毛")
     })
     CommonResult<Boolean> addPoint(@RequestParam("userId") Long userId,
                                    @RequestParam("point") @Min(value = 1L, message = "积分必须是正数") Integer point,
                                    @RequestParam("bizType") Integer bizType,
-                                   @RequestParam("bizId") String bizId);
+                                   @RequestParam("bizId") String bizId,
+                                   @RequestParam(value = "remark", required = false) String remark);
+
+    default CommonResult<Boolean> addPoint(Long userId, Integer point, Integer bizType, String bizId) {
+        return addPoint(userId, point, bizType, bizId, null);
+    }
 
     @PostMapping(PREFIX + "/reducePoint")
     @Operation(summary = "减少用户积分")
@@ -37,11 +43,17 @@ public interface MemberPointApi {
             @Parameter(name = "userId", description = "会员编号", required = true, example = "1024"),
             @Parameter(name = "point", description = "积分", required = true, example = "100"),
             @Parameter(name = "bizType", description = "业务类型", required = true, example = "1"),
-            @Parameter(name = "bizId", description = "业务编号", required = true, example = "1")
+            @Parameter(name = "bizId", description = "业务编号", required = true, example = "1"),
+            @Parameter(name = "remark", description = "备注", example = "撤销发放")
     })
     CommonResult<Boolean> reducePoint(@RequestParam("userId") Long userId,
                                       @RequestParam("point") @Min(value = 1L, message = "积分必须是正数") Integer point,
                                       @RequestParam("bizType") Integer bizType,
-                                      @RequestParam("bizId") String bizId);
+                                      @RequestParam("bizId") String bizId,
+                                      @RequestParam(value = "remark", required = false) String remark);
+
+    default CommonResult<Boolean> reducePoint(Long userId, Integer point, Integer bizType, String bizId) {
+        return reducePoint(userId, point, bizType, bizId, null);
+    }
 
 }

@@ -30,6 +30,9 @@ public class MemberPointRecordRespVO {
     @Schema(description = "积分描述", example = "你猜")
     private String description;
 
+    @Schema(description = "备注", example = "收取羊毛")
+    private String remark;
+
     @Schema(description = "积分", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
     private Integer point;
 

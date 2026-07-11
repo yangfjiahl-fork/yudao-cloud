@@ -19,6 +19,9 @@ public class WoolPageReqVO extends PageParam {
     @Schema(description = "业务编号", example = "27723")
     private String bizId;
 
+    @Schema(description = "备注", example = "新用户注册赠送羊毛")
+    private String remark;
+
     @Schema(description = "状态", example = "INIT")
     private String status;
 

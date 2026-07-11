@@ -26,24 +26,24 @@ public class MemberPointApiImpl implements MemberPointApi {
     private MemberPointRecordService memberPointRecordService;
 
     @Override
-    public CommonResult<Boolean> addPoint(Long userId, Integer point, Integer bizType, String bizId) {
+    public CommonResult<Boolean> addPoint(Long userId, Integer point, Integer bizType, String bizId, String remark) {
         Assert.isTrue(point > 0);
         MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.getByType(bizType);
         if (bizTypeEnum == null) {
             throw exception(POINT_RECORD_BIZ_NOT_SUPPORT);
         }
-        memberPointRecordService.createPointRecord(userId, point, bizTypeEnum, bizId);
+        memberPointRecordService.createPointRecord(userId, point, bizTypeEnum, bizId, remark);
         return success(true);
     }
 
     @Override
-    public CommonResult<Boolean> reducePoint(Long userId, Integer point, Integer bizType, String bizId) {
+    public CommonResult<Boolean> reducePoint(Long userId, Integer point, Integer bizType, String bizId, String remark) {
         Assert.isTrue(point > 0);
         MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.getByType(bizType);
         if (bizTypeEnum == null) {
             throw exception(POINT_RECORD_BIZ_NOT_SUPPORT);
         }
-        memberPointRecordService.createPointRecord(userId, -point, bizTypeEnum, bizId);
+        memberPointRecordService.createPointRecord(userId, -point, bizTypeEnum, bizId, remark);
         return success(true);
     }
 

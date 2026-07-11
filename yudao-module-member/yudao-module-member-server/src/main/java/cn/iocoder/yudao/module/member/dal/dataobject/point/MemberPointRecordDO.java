@@ -53,6 +53,10 @@ public class MemberPointRecordDO extends BaseDO {
      * 积分描述
      */
     private String description;
+    /**
+     * 备注
+     */
+    private String remark;
 
     /**
      * 变动积分
