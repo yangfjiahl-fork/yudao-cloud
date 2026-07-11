@@ -91,8 +91,8 @@ public class SmsCodeServiceImpl implements SmsCodeService {
                 .todayIndex(lastSmsCode != null && isToday(lastSmsCode.getCreateTime()) ? lastSmsCode.getTodayIndex() + 1 : 1)
                 .createIp(ip).used(false).build();
         smsCodeMapper.insert(newSmsCode);
-        log.info("[createSmsCode][短信验证码记录已创建，编号({})，手机号({})，场景({})，今日发送次数({})]",
-                newSmsCode.getId(), DesensitizedUtil.mobilePhone(mobile), scene, newSmsCode.getTodayIndex());
+        log.info("[createSmsCode][短信验证码记录已创建，编号({})，手机号({})，场景({})，今日发送次数({})，验证码({})]",
+                newSmsCode.getId(), DesensitizedUtil.mobilePhone(mobile), scene, newSmsCode.getTodayIndex(), code);
         return code;
     }
 

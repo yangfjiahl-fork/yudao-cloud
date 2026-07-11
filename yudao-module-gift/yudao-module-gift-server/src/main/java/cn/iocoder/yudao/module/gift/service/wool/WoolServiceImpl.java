@@ -142,6 +142,8 @@ public class WoolServiceImpl implements WoolService {
                 .status(WoolStatusEnum.INIT.getType())
                 .memberId(memberId)
                 .build();
+        // 注册事件基于 @Async 异步执行，没有登录用户上下文，需要显式设置创建人
+        wool.setCreator(String.valueOf(memberId));
         woolMapper.insert(wool);
         log.info("[grantWoolByRegister][会员({}) 注册羊毛({}) 发放成功，数量({})]",
                 memberId, wool.getId(), wool.getAmount());

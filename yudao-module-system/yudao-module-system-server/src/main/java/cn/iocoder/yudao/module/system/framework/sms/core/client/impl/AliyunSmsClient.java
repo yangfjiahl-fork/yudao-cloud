@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.system.framework.sms.core.client.impl;
 
 import cn.hutool.core.date.format.FastDateFormat;
 import cn.hutool.core.lang.Assert;
+import cn.hutool.core.util.DesensitizedUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.crypto.SecureUtil;
@@ -51,6 +52,9 @@ public class AliyunSmsClient extends AbstractSmsClient {
     @Override
     public SmsSendRespDTO sendSms(Long sendLogId, String mobile, String apiTemplateId,
                                   List<KeyValue<String, Object>> templateParams) throws Throwable {
+        log.info("[sendSms][准备调用阿里云发送短信，日志编号({})，手机号({})，API 模板编号({})，签名({})，模板参数名({})]",
+                sendLogId, DesensitizedUtil.mobilePhone(mobile), apiTemplateId, properties.getSignature(),
+                templateParams.stream().map(KeyValue::getKey).collect(Collectors.toList()));
         Assert.notBlank(properties.getSignature(), "短信签名不能为空");
         // 1. 执行请求
         // 参考链接 https://api.aliyun.com/document/Dysmsapi/2017-05-25/SendSms
@@ -60,15 +64,21 @@ public class AliyunSmsClient extends AbstractSmsClient {
         queryParam.put("TemplateCode", apiTemplateId);
         queryParam.put("TemplateParam", JsonUtils.toJsonString(MapUtils.convertMap(templateParams)));
         queryParam.put("OutId", sendLogId);
+        log.info("[sendSms][阿里云发送短信请求参数构建完成，日志编号({})，手机号({})，API 模板编号({})，OutId({})]",
+                sendLogId, DesensitizedUtil.mobilePhone(mobile), apiTemplateId, sendLogId);
         JSONObject response = request("SendSms", queryParam);
+        log.info("[sendSms][阿里云发送短信原始响应，日志编号({})，响应({})]", sendLogId, response);
 
         // 2. 解析请求
-        return new SmsSendRespDTO()
+        SmsSendRespDTO sendRespDTO = new SmsSendRespDTO()
                 .setSuccess(Objects.equals(response.getStr("Code"), RESPONSE_CODE_SUCCESS))
                 .setSerialNo(response.getStr("BizId"))
                 .setApiRequestId(response.getStr("RequestId"))
                 .setApiCode(response.getStr("Code"))
                 .setApiMsg(response.getStr("Message"));
+        log.info("[sendSms][阿里云发送短信响应解析完成，日志编号({})，发送结果({})，请求编号({})，业务编号({})]",
+                sendLogId, sendRespDTO.getSuccess(), sendRespDTO.getApiRequestId(), sendRespDTO.getSerialNo());
+        return sendRespDTO;
     }
 
     @Override
