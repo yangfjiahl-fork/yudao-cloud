@@ -25,7 +25,7 @@ public enum GiftWoolStatusEnum {
 
     SUCCESS(3, "已收取", "用户已收取"),
 
-    EXPIRE(6, "已过期", "用户未收取，过期失效"),
+    EXPIRE(6, "已过期", "用户未收取（过期失效）"),
     ;
 
 
