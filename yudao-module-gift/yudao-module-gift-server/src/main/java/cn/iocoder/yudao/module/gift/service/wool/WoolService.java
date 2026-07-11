@@ -59,4 +59,11 @@ public interface WoolService {
      */
     PageResult<WoolDO> getWoolPage(WoolPageReqVO pageReqVO);
 
+    /**
+     * 用户注册时，发放羊毛
+     *
+     * @param memberId 会员编号
+     */
+    void grantWoolByRegister(Long memberId);
+
 }

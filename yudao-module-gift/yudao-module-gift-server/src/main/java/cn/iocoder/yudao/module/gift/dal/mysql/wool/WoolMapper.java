@@ -27,4 +27,8 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
                 .orderByDesc(WoolDO::getId));
     }
 
+    default WoolDO selectByBizTypeAndBizId(String bizType, String bizId) {
+        return selectFirstOne(WoolDO::getBizType, bizType, WoolDO::getBizId, bizId);
+    }
+
 }

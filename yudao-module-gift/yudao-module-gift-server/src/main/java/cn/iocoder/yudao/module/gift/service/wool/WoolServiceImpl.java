@@ -1,23 +1,24 @@
 package cn.iocoder.yudao.module.gift.service.wool;
 
-import cn.hutool.core.collection.CollUtil;
-import org.springframework.stereotype.Service;
-import jakarta.annotation.Resource;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.*;
+import cn.hutool.core.util.NumberUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.gift.controller.admin.wool.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
-import cn.iocoder.yudao.framework.common.pojo.PageResult;
-import cn.iocoder.yudao.framework.common.pojo.PageParam;
-import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
-
 import cn.iocoder.yudao.module.gift.dal.mysql.wool.WoolMapper;
+import cn.iocoder.yudao.module.gift.enums.GiftWoolStatusEnum;
+import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
+import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+
+import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertList;
-import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.diffList;
 import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
 
 /**
@@ -27,10 +28,15 @@ import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class WoolServiceImpl implements WoolService {
+
+    private static final String NEW_USER_WOOL_AMOUNT_CONFIG_KEY = "wool.amount.for.new.user";
 
     @Resource
     private WoolMapper woolMapper;
+    @Resource
+    private ConfigApi configApi;
 
     @Override
     public Long createWool(WoolSaveReqVO createReqVO) {
@@ -60,10 +66,10 @@ public class WoolServiceImpl implements WoolService {
     }
 
     @Override
-        public void deleteWoolListByIds(List<Long> ids) {
+    public void deleteWoolListByIds(List<Long> ids) {
         // 删除
         woolMapper.deleteByIds(ids);
-        }
+    }
 
 
     private void validateWoolExists(Long id) {
@@ -80,6 +86,45 @@ public class WoolServiceImpl implements WoolService {
     @Override
     public PageResult<WoolDO> getWoolPage(WoolPageReqVO pageReqVO) {
         return woolMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void grantWoolByRegister(Long memberId) {
+        String bizType = String.valueOf(MemberPointBizTypeEnum.REGISTER.getType());
+        String bizId = String.valueOf(memberId);
+        WoolDO existsWool = woolMapper.selectByBizTypeAndBizId(bizType, bizId);
+        if (existsWool != null) {
+            log.info("[grantWoolByRegister][会员({}) 已存在注册羊毛({})，跳过发放]", memberId, existsWool.getId());
+            return;
+        }
+
+        WoolDO wool = WoolDO.builder()
+                .bizType(bizType)
+                .bizId(bizId)
+                .amount(getNewUserWoolAmount())
+                .status(GiftWoolStatusEnum.INIT.name())
+                .memberId(memberId)
+                .build();
+        woolMapper.insert(wool);
+        log.info("[grantWoolByRegister][会员({}) 注册羊毛({}) 发放成功，数量({})]",
+                memberId, wool.getId(), wool.getAmount());
+    }
+
+    private Integer getNewUserWoolAmount() {
+        String value = configApi.getConfigValueByKey(NEW_USER_WOOL_AMOUNT_CONFIG_KEY).getCheckedData();
+        if (StrUtil.isBlank(value) || !NumberUtil.isInteger(value.trim())) {
+            log.warn("[getNewUserWoolAmount][新用户羊毛数量配置无效，key({}) value({})]",
+                    NEW_USER_WOOL_AMOUNT_CONFIG_KEY, value);
+            throw exception(WOOL_NEW_USER_AMOUNT_CONFIG_INVALID);
+        }
+        Integer amount = Integer.valueOf(value.trim());
+        if (amount <= 0) {
+            log.warn("[getNewUserWoolAmount][新用户羊毛数量配置必须大于 0，key({}) value({})]",
+                    NEW_USER_WOOL_AMOUNT_CONFIG_KEY, value);
+            throw exception(WOOL_NEW_USER_AMOUNT_CONFIG_INVALID);
+        }
+        return amount;
     }
 
 }
