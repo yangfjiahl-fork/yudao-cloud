@@ -133,6 +133,18 @@ public class WoolServiceImpl implements WoolService {
     }
 
     @Override
+    public Integer getThisMonthReceivedWoolAmount(Long memberId) {
+        LocalDateTime month = LocalDateTimeUtils.getMonth();
+        return woolMapper.selectSumAmountByMemberIdAndStatusAndUpdateTimeBetween(memberId,
+                WoolStatusEnum.SUCCESS.getType(), month, month.plusMonths(1));
+    }
+
+    @Override
+    public Integer getHistoryTotalReceivedWoolAmount(Long memberId) {
+        return woolMapper.selectSumAmountByMemberIdAndStatus(memberId, WoolStatusEnum.SUCCESS.getType());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void grantWoolByRegister(Long memberId) {
         MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.REGISTER;

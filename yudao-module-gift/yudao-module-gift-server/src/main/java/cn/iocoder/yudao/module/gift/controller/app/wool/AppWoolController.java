@@ -47,9 +47,21 @@ public class AppWoolController {
 
     @GetMapping("/summary")
     @Operation(summary = "获得当前用户羊毛汇总信息")
-    public CommonResult<AppWoolSummaryRespVO> getWoolSummary() {
-        return success(new AppWoolSummaryRespVO()
-                .setTodayReceivedAmount(woolService.getTodayReceivedWoolAmount(getLoginUserId())));
+    public CommonResult<AppWoolSummaryRespVO> getWoolSummary(
+            @Parameter(description = "是否需要统计本月获取羊毛总量", example = "true")
+            @RequestParam(value = "needThisMonth", required = false, defaultValue = "false") Boolean needThisMonth,
+            @Parameter(description = "是否需要统计历史获取羊毛总量", example = "true")
+            @RequestParam(value = "needHistoryTotal", required = false, defaultValue = "false") Boolean needHistoryTotal) {
+        Long memberId = getLoginUserId();
+        AppWoolSummaryRespVO respVO = new AppWoolSummaryRespVO()
+                .setTodayReceivedAmount(woolService.getTodayReceivedWoolAmount(memberId));
+        if (Boolean.TRUE.equals(needThisMonth)) {
+            respVO.setThisMonthReceivedAmount(woolService.getThisMonthReceivedWoolAmount(memberId));
+        }
+        if (Boolean.TRUE.equals(needHistoryTotal)) {
+            respVO.setHistoryTotalReceivedAmount(woolService.getHistoryTotalReceivedWoolAmount(memberId));
+        }
+        return success(respVO);
     }
 
 }

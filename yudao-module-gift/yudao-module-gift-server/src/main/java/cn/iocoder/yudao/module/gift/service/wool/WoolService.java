@@ -84,6 +84,22 @@ public interface WoolService {
     Integer getTodayReceivedWoolAmount(Long memberId);
 
     /**
+     * 获得会员本月获取羊毛总量
+     *
+     * @param memberId 会员编号
+     * @return 本月获取羊毛总量
+     */
+    Integer getThisMonthReceivedWoolAmount(Long memberId);
+
+    /**
+     * 获得会员历史获取羊毛总量
+     *
+     * @param memberId 会员编号
+     * @return 历史获取羊毛总量
+     */
+    Integer getHistoryTotalReceivedWoolAmount(Long memberId);
+
+    /**
      * 用户注册时，发放羊毛
      *
      * @param memberId 会员编号

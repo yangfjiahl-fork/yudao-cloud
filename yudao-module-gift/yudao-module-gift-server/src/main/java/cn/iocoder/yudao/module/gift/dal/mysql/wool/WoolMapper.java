@@ -55,7 +55,27 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
         if (result.isEmpty()) {
             return 0;
         }
-        Number amountSum = (Number) result.get(0).get("amount_sum");
+        Map<String, Object> row = result.get(0);
+        if (row == null) {
+            return 0;
+        }
+        Number amountSum = (Number) row.get("amount_sum");
+        return amountSum == null ? 0 : amountSum.intValue();
+    }
+
+    default Integer selectSumAmountByMemberIdAndStatus(Long memberId, Integer status) {
+        List<Map<String, Object>> result = selectMaps(new QueryWrapper<WoolDO>()
+                .select("SUM(amount) AS amount_sum")
+                .eq("member_id", memberId)
+                .eq("status", status));
+        if (result.isEmpty()) {
+            return 0;
+        }
+        Map<String, Object> row = result.get(0);
+        if (row == null) {
+            return 0;
+        }
+        Number amountSum = (Number) row.get("amount_sum");
         return amountSum == null ? 0 : amountSum.intValue();
     }
 
