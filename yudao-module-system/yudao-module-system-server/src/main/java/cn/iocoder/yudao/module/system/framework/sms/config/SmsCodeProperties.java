@@ -38,4 +38,11 @@ public class SmsCodeProperties {
     @NotNull(message = "验证码最大值不能为空")
     private Integer endCode;
 
+    /**
+     * 是否测试模拟发送短信
+     *
+     * <p>开启后，模拟短信发送，验证码按手机号后四位和当前小时生成。</p>
+     */
+    private boolean testMockSend = false;
+
 }

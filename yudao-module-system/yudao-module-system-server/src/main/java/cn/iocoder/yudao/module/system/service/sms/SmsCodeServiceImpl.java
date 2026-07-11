@@ -45,9 +45,11 @@ public class SmsCodeServiceImpl implements SmsCodeService {
         Assert.notNull(sceneEnum, "验证码场景({}) 查找不到配置", reqDTO.getScene());
         // 创建验证码
         String code = createSmsCode(reqDTO.getMobile(), reqDTO.getScene(), reqDTO.getCreateIp());
-        // 发送验证码
-        smsSendService.sendSingleSms(reqDTO.getMobile(), null, null,
-                sceneEnum.getTemplateCode(), MapUtil.of("code", code));
+        // 非测试模拟发送模式时，发送验证码
+        if (!smsCodeProperties.isTestMockSend()) {
+            smsSendService.sendSingleSms(reqDTO.getMobile(), null, null,
+                    sceneEnum.getTemplateCode(), MapUtil.of("code", code));
+        }
     }
 
     private String createSmsCode(String mobile, Integer scene, String ip) {
@@ -67,7 +69,9 @@ public class SmsCodeServiceImpl implements SmsCodeService {
         }
 
         // 创建验证码记录
-        String code = String.format("%0" + smsCodeProperties.getEndCode().toString().length() + "d",
+        String code = smsCodeProperties.isTestMockSend()
+                ? mobile.substring(mobile.length() - 4) + String.format("%02d", LocalDateTime.now().getHour())
+                : String.format("%0" + smsCodeProperties.getEndCode().toString().length() + "d",
                 randomInt(smsCodeProperties.getBeginCode(), smsCodeProperties.getEndCode() + 1));
         SmsCodeDO newSmsCode = SmsCodeDO.builder().mobile(mobile).code(code).scene(scene)
                 .todayIndex(lastSmsCode != null && isToday(lastSmsCode.getCreateTime()) ? lastSmsCode.getTodayIndex() + 1 : 1)
