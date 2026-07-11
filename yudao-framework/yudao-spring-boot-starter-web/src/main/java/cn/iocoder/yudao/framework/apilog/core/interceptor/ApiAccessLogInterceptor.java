@@ -48,9 +48,9 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
             Map<String, String> queryString = ServletUtils.getParamMap(request);
             String requestBody = ServletUtils.getBody(request);
             if (CollUtil.isEmpty(queryString) && StrUtil.isEmpty(requestBody)) {
-                log.info("[preHandle][开始请求 URL({}) 用户编号({}) 无参数]", request.getRequestURI(), userId);
+                log.info("[preHandle][开始请求 URL({}) userId={} 无参数]", request.getRequestURI(), userId);
             } else {
-                log.info("[preHandle][开始请求 URL({}) 用户编号({}) 参数({})]", request.getRequestURI(), userId,
+                log.info("[preHandle][开始请求 URL({}) userId={} 参数({})]", request.getRequestURI(), userId,
                         StrUtil.blankToDefault(requestBody, queryString.toString()));
             }
             // 计时
