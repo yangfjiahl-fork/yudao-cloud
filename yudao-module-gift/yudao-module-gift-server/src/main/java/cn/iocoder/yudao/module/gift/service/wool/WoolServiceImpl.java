@@ -89,6 +89,11 @@ public class WoolServiceImpl implements WoolService {
     }
 
     @Override
+    public List<WoolDO> getWaitReceiveWoolList(Long memberId) {
+        return woolMapper.selectListByMemberIdAndStatus(memberId, GiftWoolStatusEnum.INIT.name());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void grantWoolByRegister(Long memberId) {
         String bizType = String.valueOf(MemberPointBizTypeEnum.REGISTER.getType());

@@ -1,0 +1,37 @@
+package cn.iocoder.yudao.module.gift.controller.app.wool;
+
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolRespVO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
+import cn.iocoder.yudao.module.gift.service.wool.WoolService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Resource;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+
+@Tag(name = "用户 APP - 羊毛")
+@RestController
+@RequestMapping("/gift/wool")
+@Validated
+public class AppWoolController {
+
+    @Resource
+    private WoolService woolService;
+
+    @GetMapping("/list-init")
+    @Operation(summary = "获得当前用户待收取羊毛列表")
+    public CommonResult<List<AppWoolRespVO>> getWaitReceiveWoolList() {
+        List<WoolDO> list = woolService.getWaitReceiveWoolList(getLoginUserId());
+        return success(BeanUtils.toBean(list, AppWoolRespVO.class));
+    }
+
+}

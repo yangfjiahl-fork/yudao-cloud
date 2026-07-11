@@ -60,6 +60,14 @@ public interface WoolService {
     PageResult<WoolDO> getWoolPage(WoolPageReqVO pageReqVO);
 
     /**
+     * 获得会员待收取羊毛列表
+     *
+     * @param memberId 会员编号
+     * @return 羊毛列表
+     */
+    List<WoolDO> getWaitReceiveWoolList(Long memberId);
+
+    /**
      * 用户注册时，发放羊毛
      *
      * @param memberId 会员编号

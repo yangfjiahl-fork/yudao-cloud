@@ -31,4 +31,11 @@ public interface WoolMapper extends BaseMapperX<WoolDO> {
         return selectFirstOne(WoolDO::getBizType, bizType, WoolDO::getBizId, bizId);
     }
 
+    default List<WoolDO> selectListByMemberIdAndStatus(Long memberId, String status) {
+        return selectList(new LambdaQueryWrapperX<WoolDO>()
+                .eq(WoolDO::getMemberId, memberId)
+                .eq(WoolDO::getStatus, status)
+                .orderByDesc(WoolDO::getId));
+    }
+
 }
