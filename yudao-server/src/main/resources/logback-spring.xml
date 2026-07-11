@@ -46,6 +46,7 @@
     -->
 
     <root level="INFO">
+        <appender-ref ref="STDOUT"/>
         <!-- 本地环境下，如果不想【FILE】打印日志，可以注释掉本行 -->
         <appender-ref ref="ASYNC"/>
         <!-- 如果想接入【SkyWalking 日志服务】，可以取消注释掉本行 -->
