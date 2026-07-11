@@ -168,6 +168,7 @@ public class SocialClientServiceImpl implements SocialClientService {
 
     @Override
     public String getAuthorizeUrl(Integer socialType, Integer userType, String redirectUri) {
+        log.info("[getAuthorizeUrl][生成社交授权地址，社交类型({})，用户类型({})]", socialType, userType);
         // 获得对应的 AuthRequest 实现
         AuthRequest authRequest = buildAuthRequest(socialType, userType);
         // 生成跳转地址
@@ -230,8 +231,11 @@ public class SocialClientServiceImpl implements SocialClientService {
     @Override
     @SneakyThrows
     public WxJsapiSignature createWxMpJsapiSignature(Integer userType, String url) {
+        log.info("[createWxMpJsapiSignature][生成微信 JSAPI 签名，用户类型({})]", userType);
         WxMpService service = getWxMpService(userType);
-        return service.createJsapiSignature(url);
+        WxJsapiSignature signature = service.createJsapiSignature(url);
+        log.info("[createWxMpJsapiSignature][微信 JSAPI 签名生成成功，用户类型({})]", userType);
+        return signature;
     }
 
     /**
@@ -277,11 +281,14 @@ public class SocialClientServiceImpl implements SocialClientService {
 
     @Override
     public WxMaPhoneNumberInfo getWxMaPhoneNumberInfo(Integer userType, String phoneCode) {
+        log.info("[getWxMaPhoneNumberInfo][获取微信小程序手机号，用户类型({})]", userType);
         WxMaService service = getWxMaService(userType);
         try {
-            return service.getUserService().getPhoneNumber(phoneCode);
+            WxMaPhoneNumberInfo phoneNumberInfo = service.getUserService().getPhoneNumber(phoneCode);
+            log.info("[getWxMaPhoneNumberInfo][微信小程序手机号获取成功，用户类型({})]", userType);
+            return phoneNumberInfo;
         } catch (WxErrorException e) {
-            log.error("[getPhoneNumber][userType({}) phoneCode({}) 获得手机号失败]", userType, phoneCode, e);
+            log.error("[getWxMaPhoneNumberInfo][获取微信小程序手机号失败，用户类型({})]", userType, e);
             throw exception(SOCIAL_CLIENT_WEIXIN_MINI_APP_PHONE_CODE_ERROR);
         }
     }
