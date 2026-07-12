@@ -35,14 +35,15 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
     @Override
     public void afterOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
         // 扣减用户积分（订单抵扣）。不在前置扣减的原因，是因为积分扣减时，需要记录关联业务
-        reducePoint(order.getUserId(), order.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE, order.getId());
+        reducePoint(order.getUserId(), order.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE,
+                "trade-order-use:" + order.getId());
     }
 
     @Override
     public void afterPayOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
         // 增加用户积分（订单赠送）
         addPoint(order.getUserId(), order.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE,
-                order.getId());
+                "trade-order-give:" + order.getId());
 
         // 增加用户经验
         memberLevelApi.addExperience(order.getUserId(), order.getPayPrice(),
@@ -60,7 +61,7 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
         // 增加（回滚）用户积分（订单抵扣）
         Integer usePoint = getSumValue(orderItems, TradeOrderItemDO::getUsePoint, Integer::sum);
         addPoint(order.getUserId(), usePoint, MemberPointBizTypeEnum.ORDER_USE_CANCEL,
-                order.getId());
+                "trade-order-use-cancel:" + order.getId());
 
         // 如下的返还，需要经过支持，也就是经历 afterPayOrder 流程
         if (!order.getPayStatus()) {
@@ -69,7 +70,7 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
         // 扣减（回滚）积分（订单赠送）
         Integer givePoint = getSumValue(orderItems, TradeOrderItemDO::getGivePoint, Integer::sum);
         reducePoint(order.getUserId(), givePoint, MemberPointBizTypeEnum.ORDER_GIVE_CANCEL,
-                order.getId());
+                "trade-order-give-cancel:" + order.getId());
         // 扣减（回滚）用户经验
         int payPrice = order.getPayPrice() - order.getRefundPrice();
         memberLevelApi.addExperience(order.getUserId(), payPrice,
@@ -79,9 +80,11 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
     @Override
     public void afterCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {
         // 增加（回滚）积分（订单抵扣）
-        addPoint(order.getUserId(), orderItem.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE_CANCEL_ITEM, orderItem.getId());
+        addPoint(order.getUserId(), orderItem.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE_CANCEL_ITEM,
+                "trade-order-item-use-cancel:" + orderItem.getId());
         // 扣减（回滚）积分（订单赠送）
-        reducePoint(order.getUserId(), orderItem.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE_CANCEL_ITEM, orderItem.getId());
+        reducePoint(order.getUserId(), orderItem.getGivePoint(), MemberPointBizTypeEnum.ORDER_GIVE_CANCEL_ITEM,
+                "trade-order-item-give-cancel:" + orderItem.getId());
 
         // 扣减（回滚）用户经验
         AfterSaleDO afterSale = afterSaleService.getAfterSale(orderItem.getAfterSaleId());
@@ -101,17 +104,17 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
      * @param userId  用户编号
      * @param point   增加积分数量
      * @param bizType 业务编号
-     * @param bizId   业务编号
+     * @param bizId   全局唯一业务编号
      */
-    protected void addPoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, Long bizId) {
+    protected void addPoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId) {
         if (point != null && point > 0) {
-            memberPointApi.addPoint(userId, point, bizType.getType(), String.valueOf(bizId));
+            memberPointApi.addPoint(userId, point, bizType.getType(), bizId);
         }
     }
 
-    protected void reducePoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, Long bizId) {
+    protected void reducePoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId) {
         if (point != null && point > 0) {
-            memberPointApi.reducePoint(userId, point, bizType.getType(), String.valueOf(bizId)).checkError();
+            memberPointApi.reducePoint(userId, point, bizType.getType(), bizId).checkError();
         }
     }
 

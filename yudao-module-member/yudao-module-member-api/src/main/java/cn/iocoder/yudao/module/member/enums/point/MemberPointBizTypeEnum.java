@@ -29,6 +29,9 @@ public enum MemberPointBizTypeEnum implements ArrayValuable<Integer> {
     ORDER_GIVE_CANCEL_ITEM(23, "订单积分奖励（单个退款）", "订单退款，扣除赠送的 {} 积分", false), // ORDER_GIVE 的取消
 
     REGISTER(31, "会员注册", "注册会员，赠送 {} 积分", true),
+
+    POINT_PAY(41, "积分支付", "积分支付，扣除 {} 积分", false),
+    POINT_PAY_REFUND(42, "积分支付退款", "积分支付退款，退还 {} 积分", true),
     ;
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(MemberPointBizTypeEnum::getType).toArray(Integer[]::new);

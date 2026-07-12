@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.member.controller.admin.user;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.member.controller.admin.user.vo.*;
@@ -72,7 +73,7 @@ public class MemberUserController {
     @PreAuthorize("@ss.hasPermission('member:user:update-point')")
     public CommonResult<Boolean> updateUserPoint(@Valid @RequestBody MemberUserUpdatePointReqVO updateReqVO) {
         memberPointRecordService.createPointRecord(updateReqVO.getId(), updateReqVO.getPoint(),
-                MemberPointBizTypeEnum.ADMIN, String.valueOf(getLoginUserId()));
+                MemberPointBizTypeEnum.ADMIN, "admin:" + getLoginUserId() + ":" + IdUtil.fastSimpleUUID());
         return success(true);
     }
 

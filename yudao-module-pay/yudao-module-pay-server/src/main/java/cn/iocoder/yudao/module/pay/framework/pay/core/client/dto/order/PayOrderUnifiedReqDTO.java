@@ -60,6 +60,11 @@ public class PayOrderUnifiedReqDTO {
     // ========== 订单相关字段 ==========
 
     /**
+     * 支付单编号
+     */
+    private Long orderId;
+
+    /**
      * 支付金额，单位：分
      */
     @NotNull(message = "支付金额不能为空")
@@ -71,6 +76,15 @@ public class PayOrderUnifiedReqDTO {
      */
     @NotNull(message = "支付过期时间不能为空")
     private LocalDateTime expireTime;
+
+    /**
+     * 用户编号
+     */
+    private Long userId;
+    /**
+     * 用户类型
+     */
+    private Integer userType;
 
     // ========== 拓展参数 ==========
     /**

@@ -19,6 +19,10 @@ import java.util.Set;
 @Mapper
 public interface MemberPointRecordMapper extends BaseMapperX<MemberPointRecordDO> {
 
+    default MemberPointRecordDO selectByBizId(String bizId) {
+        return selectOne(MemberPointRecordDO::getBizId, bizId);
+    }
+
     default PageResult<MemberPointRecordDO> selectPage(MemberPointRecordPageReqVO reqVO, Set<Long> userIds) {
         return selectPage(reqVO, new LambdaQueryWrapperX<MemberPointRecordDO>()
                 .inIfPresent(MemberPointRecordDO::getUserId, userIds)

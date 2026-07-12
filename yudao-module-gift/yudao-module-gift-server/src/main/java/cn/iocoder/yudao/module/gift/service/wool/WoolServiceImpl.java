@@ -126,7 +126,7 @@ public class WoolServiceImpl implements WoolService {
         }
 
         memberPointApi.addPoint(memberId, wool.getAmount(), wool.getBizType(),
-                String.valueOf(wool.getId()),
+                "wool:" + wool.getId(),
                 StrUtil.blankToDefault(wool.getRemark(), DEFAULT_WOOL_POINT_REMARK)).getCheckedData();
         log.info("[receiveWool][会员({}) 收取羊毛({}) 成功，增加积分({})]", memberId, id, wool.getAmount());
         return wool.getAmount();

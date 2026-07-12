@@ -12,6 +12,7 @@ import cn.iocoder.yudao.module.pay.dal.dataobject.order.PayOrderDO;
 import cn.iocoder.yudao.module.pay.dal.dataobject.wallet.PayWalletDO;
 import cn.iocoder.yudao.module.pay.enums.PayChannelEnum;
 import cn.iocoder.yudao.module.pay.enums.order.PayOrderStatusEnum;
+import cn.iocoder.yudao.module.pay.framework.pay.core.client.impl.point.PointPayClient;
 import cn.iocoder.yudao.module.pay.framework.pay.core.client.impl.wallet.WalletPayClient;
 import cn.iocoder.yudao.module.pay.service.order.PayOrderService;
 import cn.iocoder.yudao.module.pay.service.wallet.PayWalletService;
@@ -27,6 +28,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Objects;
 
+import static cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants.FORBIDDEN;
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.common.util.servlet.ServletUtils.getClientIP;
 import static cn.iocoder.yudao.framework.web.core.util.WebFrameworkUtils.getLoginUserId;
@@ -82,7 +85,14 @@ public class AppPayOrderController {
     @PostMapping("/submit")
     @Operation(summary = "提交支付订单")
     public CommonResult<AppPayOrderSubmitRespVO> submitPayOrder(@RequestBody AppPayOrderSubmitReqVO reqVO) {
-        // 1. 钱包支付事，需要额外传 user_id 和 user_type
+        if (reqVO.getId() != null) {
+            PayOrderDO order = payOrderService.getOrder(reqVO.getId());
+            if (order != null && order.getUserId() != null && ObjUtil.notEqual(order.getUserId(), getLoginUserId())) {
+                throw exception(FORBIDDEN);
+            }
+        }
+
+        // 1. 钱包支付时，需要额外传钱包编号
         if (Objects.equals(reqVO.getChannelCode(), PayChannelEnum.WALLET.getCode())) {
             if (reqVO.getChannelExtras() == null) {
                 reqVO.setChannelExtras(Maps.newHashMapWithExpectedSize(1));
@@ -91,7 +101,16 @@ public class AppPayOrderController {
             reqVO.getChannelExtras().put(WalletPayClient.WALLET_ID_KEY, String.valueOf(wallet.getId()));
         }
 
-        // 2. 提交支付
+        // 2. 积分支付时，补充当前登录会员信息
+        if (Objects.equals(reqVO.getChannelCode(), PayChannelEnum.POINT.getCode())) {
+            if (reqVO.getChannelExtras() == null) {
+                reqVO.setChannelExtras(Maps.newHashMapWithExpectedSize(2));
+            }
+            reqVO.getChannelExtras().put(PointPayClient.USER_ID_KEY, String.valueOf(getLoginUserId()));
+            reqVO.getChannelExtras().put(PointPayClient.USER_TYPE_KEY, String.valueOf(getLoginUserType()));
+        }
+
+        // 3. 提交支付
         PayOrderSubmitRespVO respVO = payOrderService.submitOrder(reqVO, getClientIP());
         return success(BeanUtils.toBean(respVO, AppPayOrderSubmitRespVO.class));
     }

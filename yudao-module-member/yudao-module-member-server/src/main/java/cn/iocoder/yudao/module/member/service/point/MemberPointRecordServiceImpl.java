@@ -69,6 +69,11 @@ public class MemberPointRecordServiceImpl implements MemberPointRecordService {
         if (point == 0) {
             return;
         }
+        if (memberPointRecordMapper.selectByBizId(bizId) != null) {
+            log.info("[createPointRecord][userId({}) point({}) bizType({}) bizId({}) 已存在，跳过重复积分变动]",
+                    userId, point, bizType, bizId);
+            return;
+        }
         // 1. 校验用户积分余额
         MemberUserDO user = memberUserService.getUser(userId);
         Integer userPoint = ObjectUtil.defaultIfNull(user.getPoint(), 0);
@@ -76,7 +81,7 @@ public class MemberPointRecordServiceImpl implements MemberPointRecordService {
         if (totalPoint < 0) {
             log.error("[createPointRecord][userId({}) point({}) bizType({}) bizId({}) {}]", userId, point, bizType, bizId,
                     USER_POINT_NOT_ENOUGH);
-            return;
+            throw exception(USER_POINT_NOT_ENOUGH);
         }
 
         // 2. 更新用户积分

@@ -162,7 +162,9 @@ public class PayOrderServiceImpl implements PayOrderService {
                 .setNotifyUrl(genChannelOrderNotifyUrl(channel))
                 .setReturnUrl(reqVO.getReturnUrl())
                 // 订单相关字段
-                .setPrice(order.getPrice()).setExpireTime(order.getExpireTime());
+                .setOrderId(order.getId())
+                .setPrice(order.getPrice()).setExpireTime(order.getExpireTime())
+                .setUserId(order.getUserId()).setUserType(order.getUserType());
         PayOrderRespDTO unifiedOrderResp = client.unifiedOrder(unifiedOrderReqDTO);
 
         // 4. 如果调用直接支付成功，则直接更新支付单状态为成功。例如说：付款码支付，免密支付时，就直接验证支付成功
