@@ -33,11 +33,15 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
+import static cn.iocoder.yudao.module.system.dal.dataobject.permission.MenuDO.ID_ROOT;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - 认证")
@@ -110,11 +114,36 @@ public class AuthController {
 
         // 1.3 获得菜单列表
         Set<Long> menuIds = permissionService.getRoleMenuListByRoleId(convertSet(roles, RoleDO::getId));
-        List<MenuDO> menuList = menuService.getMenuList(menuIds);
+        List<MenuDO> menuList = getMenuListWithParents(menuIds);
         menuList = menuService.filterDisableMenus(menuList);
 
         // 2. 拼接结果返回
         return success(AuthConvert.INSTANCE.convert(user, roles, menuList));
+    }
+
+    private List<MenuDO> getMenuListWithParents(Set<Long> menuIds) {
+        if (CollUtil.isEmpty(menuIds)) {
+            return Collections.emptyList();
+        }
+        List<MenuDO> allMenus = menuService.getMenuList();
+        Map<Long, MenuDO> menuMap = allMenus.stream()
+                .collect(Collectors.toMap(MenuDO::getId, menu -> menu, (oldValue, newValue) -> oldValue));
+        Set<Long> menuIdsWithParents = new HashSet<>(menuIds);
+        for (Long menuId : menuIds) {
+            MenuDO menu = menuMap.get(menuId);
+            Set<Long> visitedParentIds = new HashSet<>();
+            while (menu != null && !ID_ROOT.equals(menu.getParentId())) {
+                Long parentId = menu.getParentId();
+                if (!visitedParentIds.add(parentId)) {
+                    break;
+                }
+                menuIdsWithParents.add(parentId);
+                menu = menuMap.get(parentId);
+            }
+        }
+        return allMenus.stream()
+                .filter(menu -> menuIdsWithParents.contains(menu.getId()))
+                .collect(Collectors.toList());
     }
 
     @PostMapping("/register")
