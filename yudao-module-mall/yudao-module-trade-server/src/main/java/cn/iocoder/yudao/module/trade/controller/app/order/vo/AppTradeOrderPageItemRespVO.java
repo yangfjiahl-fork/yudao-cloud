@@ -40,6 +40,9 @@ public class AppTradeOrderPageItemRespVO {
     @Schema(description = "应付金额，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "1000")
     private Integer payPrice;
 
+    @Schema(description = "使用的积分", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
+    private Integer usePoint;
+
     // ========== 收件 + 物流基本信息 ==========
 
     @Schema(description = "配送方式", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")

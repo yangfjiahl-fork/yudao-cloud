@@ -33,6 +33,9 @@ public class AppProductSpuDetailRespVO {
     @Schema(description = "商品轮播图", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<String> sliderPicUrls;
 
+    @Schema(description = "配送方式数组", requiredMode = Schema.RequiredMode.REQUIRED, example = "[1, 2]")
+    private List<Integer> deliveryTypes;
+
     // ========== 营销相关字段 =========
 
     // ========== SKU 相关字段 =========
