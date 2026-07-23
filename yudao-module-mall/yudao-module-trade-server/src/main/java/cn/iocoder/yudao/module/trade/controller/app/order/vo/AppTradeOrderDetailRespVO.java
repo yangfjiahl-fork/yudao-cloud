@@ -134,6 +134,9 @@ public class AppTradeOrderDetailRespVO {
     @Schema(description = "优惠劵减免金额", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
     private Integer couponPrice;
 
+    @Schema(description = "使用的积分", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
+    private Integer usePoint;
+
     @Schema(description = "积分抵扣的金额", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
     private Integer pointPrice;
 
