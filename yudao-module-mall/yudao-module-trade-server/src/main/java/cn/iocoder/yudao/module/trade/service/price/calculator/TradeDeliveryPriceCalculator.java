@@ -65,6 +65,9 @@ public class TradeDeliveryPriceCalculator implements TradePriceCalculator {
             calculateByPickUp(param);
         } else if (DeliveryTypeEnum.EXPRESS.getType().equals(param.getDeliveryType())) {
             calculateExpress(param, result);
+        } else if (DeliveryTypeEnum.VIRTUAL.getType().equals(param.getDeliveryType())) {
+            // 虚拟商品无需计算运费
+            return;
         }
     }
 

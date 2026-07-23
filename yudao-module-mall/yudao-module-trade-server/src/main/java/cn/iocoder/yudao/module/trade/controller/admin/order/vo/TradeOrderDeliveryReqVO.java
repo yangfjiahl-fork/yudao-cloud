@@ -13,7 +13,7 @@ public class TradeOrderDeliveryReqVO {
     @NotNull(message = "订单编号不能为空")
     private Long id;
 
-    @Schema(description = "发货物流公司编号", example = "1")
+    @Schema(description = "发货物流公司编号；虚拟商品传 0", example = "1")
     @NotNull(message = "发货物流公司不能为空")
     private Long logisticsId;
 

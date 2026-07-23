@@ -227,6 +227,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         } else if (Objects.equals(createReqVO.getDeliveryType(), DeliveryTypeEnum.PICK_UP.getType())) {
             order.setReceiverName(createReqVO.getReceiverName()).setReceiverMobile(createReqVO.getReceiverMobile());
             order.setPickUpVerifyCode(RandomUtil.randomNumbers(8)); // 随机一个核销码，长度为 8 位
+        } else if (Objects.equals(createReqVO.getDeliveryType(), DeliveryTypeEnum.VIRTUAL.getType())) {
+            order.setReceiverName(createReqVO.getReceiverName()).setReceiverMobile(createReqVO.getReceiverMobile());
         }
         return order;
     }
@@ -375,16 +377,18 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     public void deliveryOrder(TradeOrderDeliveryReqVO deliveryReqVO) {
         // 1.1 校验并获得交易订单（可发货）
         TradeOrderDO order = validateOrderDeliverable(deliveryReqVO.getId());
-        // 1.2 校验 deliveryType 是否为快递，是快递才可以发货
-        if (ObjectUtil.notEqual(order.getDeliveryType(), DeliveryTypeEnum.EXPRESS.getType())) {
+        // 1.2 校验 deliveryType 是否为快递或虚拟商品
+        if (ObjectUtil.notEqual(order.getDeliveryType(), DeliveryTypeEnum.EXPRESS.getType())
+                && ObjectUtil.notEqual(order.getDeliveryType(), DeliveryTypeEnum.VIRTUAL.getType())) {
             throw exception(ORDER_DELIVERY_FAIL_DELIVERY_TYPE_NOT_EXPRESS);
         }
 
         // 2. 更新订单为已发货
         TradeOrderDO updateOrderObj = new TradeOrderDO();
-        // 2.1 快递发货
+        // 2.1 快递发货；虚拟商品无需物流信息
         DeliveryExpressDO express = null;
-        if (ObjectUtil.notEqual(deliveryReqVO.getLogisticsId(), TradeOrderDO.LOGISTICS_ID_NULL)) {
+        if (ObjectUtil.equal(order.getDeliveryType(), DeliveryTypeEnum.EXPRESS.getType())
+                && ObjectUtil.notEqual(deliveryReqVO.getLogisticsId(), TradeOrderDO.LOGISTICS_ID_NULL)) {
             express = deliveryExpressService.validateDeliveryExpress(deliveryReqVO.getLogisticsId());
             updateOrderObj.setLogisticsId(deliveryReqVO.getLogisticsId()).setLogisticsNo(deliveryReqVO.getLogisticsNo());
         } else {
