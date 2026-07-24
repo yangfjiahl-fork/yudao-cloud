@@ -77,6 +77,7 @@ public class VideoServiceImpl implements VideoService {
         VideoDO updateObj = new VideoDO();
         updateObj.setId(video.getId());
         fillTranscodeFields(updateObj, streamInfo);
+        updateObj.setStatus(VideoStatusEnum.ONLINE.getType());
         videoMapper.updateById(updateObj);
         return true;
     }
@@ -94,6 +95,7 @@ public class VideoServiceImpl implements VideoService {
         VideoDO updateObj = new VideoDO();
         updateObj.setId(video.getId());
         updateObj.setCoverUrl(callbackReqVO.getCoverUrl());
+        updateObj.setStatus(VideoStatusEnum.ONLINE.getType());
         videoMapper.updateById(updateObj);
         return true;
     }
@@ -117,6 +119,7 @@ public class VideoServiceImpl implements VideoService {
         if (streamInfo != null) {
             fillTranscodeFields(video, streamInfo);
         }
+        video.setCreator("admin");
         return video;
     }
 

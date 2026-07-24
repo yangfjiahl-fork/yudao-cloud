@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.video;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.controller.admin.video.vo.AliyunVideoCallbackReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.video.VideoDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.video.VideoMapper;
@@ -28,6 +29,25 @@ public class VideoServiceImplTest extends BaseMockitoUnitTest {
     private VideoServiceImpl videoService;
     @Mock
     private VideoMapper videoMapper;
+
+    @Test
+    public void testAliyunVideoCallbackReqVO_parsePascalCase() {
+        String body = """
+                {"Status":"success","VideoId":"10405a82876771f18d7b5017f0f80102","EventType":"TranscodeComplete",
+                "StreamInfos":[{"Status":"success","Definition":"SD","Size":440310,"Duration":6.13,
+                "FileUrl":"https://example.com/video.mp4","Height":960,"Width":444}]}""";
+
+        AliyunVideoCallbackReqVO callback = JsonUtils.parseObject(body, AliyunVideoCallbackReqVO.class);
+
+        assertEquals("success", callback.getStatus());
+        assertEquals("10405a82876771f18d7b5017f0f80102", callback.getVideoId());
+        assertEquals(AliyunVideoCallbackReqVO.EVENT_TYPE_TRANSCODE_COMPLETE, callback.getEventType());
+        AliyunVideoCallbackReqVO.StreamInfo streamInfo = callback.getStreamInfos().get(0);
+        assertEquals("https://example.com/video.mp4", streamInfo.getFileUrl());
+        assertEquals(6.13D, streamInfo.getDuration());
+        assertEquals(444, streamInfo.getWidth());
+        assertEquals(960, streamInfo.getHeight());
+    }
 
     @Test
     public void testGetRandomVideoList() {
