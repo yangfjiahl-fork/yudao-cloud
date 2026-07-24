@@ -32,7 +32,9 @@ import cn.iocoder.yudao.module.gift.controller.admin.video.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.video.VideoDO;
 import cn.iocoder.yudao.module.gift.service.video.VideoService;
 import jakarta.annotation.security.PermitAll;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Tag(name = "管理后台 - 视频")
 @RestController
 @RequestMapping("/gift/video")
@@ -48,6 +50,7 @@ public class VideoController {
     @TenantIgnore
     @Lock4j(keys = {"#callbackReqVO.videoId"}, expire = 10000, acquireTimeout = 3000)
     public CommonResult<Boolean> receiveAliyunVideoCallback(@RequestBody AliyunVideoCallbackReqVO callbackReqVO) {
+        log.info("callbackReqVO={}", callbackReqVO);
         return success(videoService.receiveAliyunVideoCallback(callbackReqVO));
     }
 
