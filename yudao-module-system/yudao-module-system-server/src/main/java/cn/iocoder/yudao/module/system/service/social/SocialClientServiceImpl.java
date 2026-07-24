@@ -285,7 +285,7 @@ public class SocialClientServiceImpl implements SocialClientService {
         WxMaService service = getWxMaService(userType);
         try {
             WxMaPhoneNumberInfo phoneNumberInfo = service.getUserService().getPhoneNumber(phoneCode);
-            log.info("[getWxMaPhoneNumberInfo][微信小程序手机号获取成功，用户类型({})]", userType);
+            log.info("[getWxMaPhoneNumberInfo][微信小程序手机号获取成功，用户类型({})，phoneNumberInfo={}]", userType, phoneNumberInfo);
             return phoneNumberInfo;
         } catch (WxErrorException e) {
             log.error("[getWxMaPhoneNumberInfo][获取微信小程序手机号失败，用户类型({})]", userType, e);
