@@ -53,8 +53,8 @@ public class AliyunVideoCallbackReqVO {
         if (StringUtils.isBlank(coverUrl)) {
             return "";
         }
-        int index = coverUrl.indexOf(',');
-        return index <= 0 ? coverUrl : coverUrl.substring(index + 1);
+        int index = coverUrl.indexOf('?');
+        return index <= 0 ? coverUrl : coverUrl.substring(0, index);
     }
 
     @Data
@@ -101,8 +101,8 @@ public class AliyunVideoCallbackReqVO {
             if (StringUtils.isBlank(fileUrl)) {
                 return "";
             }
-            int index = fileUrl.indexOf(',');
-            return index <= 0 ? fileUrl : fileUrl.substring(index + 1);
+            int index = fileUrl.indexOf('?');
+            return index <= 0 ? fileUrl : fileUrl.substring(0, index);
         }
     }
 
