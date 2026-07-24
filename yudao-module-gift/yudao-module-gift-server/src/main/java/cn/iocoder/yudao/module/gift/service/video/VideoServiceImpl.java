@@ -89,12 +89,12 @@ public class VideoServiceImpl implements VideoService {
 
         VideoDO video = videoMapper.selectByVodVideoId(callbackReqVO.getVideoId());
         if (video == null) {
-            videoMapper.insert(buildDefaultVideo(callbackReqVO.getVideoId(), null, callbackReqVO.getCoverUrl()));
+            videoMapper.insert(buildDefaultVideo(callbackReqVO.getVideoId(), null, callbackReqVO.getCleanedCoverUrl()));
             return true;
         }
         VideoDO updateObj = new VideoDO();
         updateObj.setId(video.getId());
-        updateObj.setCoverUrl(callbackReqVO.getCoverUrl());
+        updateObj.setCoverUrl(callbackReqVO.getCleanedCoverUrl());
         updateObj.setStatus(VideoStatusEnum.ONLINE.getType());
         videoMapper.updateById(updateObj);
         return true;
@@ -124,7 +124,7 @@ public class VideoServiceImpl implements VideoService {
     }
 
     private void fillTranscodeFields(VideoDO video, AliyunVideoCallbackReqVO.StreamInfo streamInfo) {
-        video.setPlayUrl(StrUtil.nullToDefault(streamInfo.getFileUrl(), ""));
+        video.setPlayUrl(StrUtil.nullToDefault(streamInfo.getCleanedFileUrl(), ""));
         video.setDuration(streamInfo.getDuration() == null ? 0 : (int) Math.round(streamInfo.getDuration() * 1000));
         video.setWidth(streamInfo.getWidth() == null ? 0 : streamInfo.getWidth());
         video.setHeight(streamInfo.getHeight() == null ? 0 : streamInfo.getHeight());
