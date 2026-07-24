@@ -17,6 +17,10 @@ import cn.iocoder.yudao.module.gift.controller.admin.video.vo.*;
 @Mapper
 public interface VideoMapper extends BaseMapperX<VideoDO> {
 
+    default VideoDO selectByVodVideoId(String vodVideoId) {
+        return selectOne(VideoDO::getVodVideoId, vodVideoId);
+    }
+
     default PageResult<VideoDO> selectPage(VideoPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<VideoDO>()
                 .eqIfPresent(VideoDO::getVodVideoId, reqVO.getVodVideoId())

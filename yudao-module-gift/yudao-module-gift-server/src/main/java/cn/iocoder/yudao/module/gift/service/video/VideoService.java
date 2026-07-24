@@ -15,6 +15,14 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 public interface VideoService {
 
     /**
+     * 处理阿里云 VOD 转码或截图完成回调。
+     *
+     * @param callbackReqVO 回调数据
+     * @return 是否已处理
+     */
+    boolean receiveAliyunVideoCallback(AliyunVideoCallbackReqVO callbackReqVO);
+
+    /**
      * 创建视频
      *
      * @param createReqVO 创建信息

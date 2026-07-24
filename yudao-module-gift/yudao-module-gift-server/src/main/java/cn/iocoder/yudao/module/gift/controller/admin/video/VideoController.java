@@ -23,11 +23,15 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 
 import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
+import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.*;
+
+import com.baomidou.lock.annotation.Lock4j;
 
 import cn.iocoder.yudao.module.gift.controller.admin.video.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.video.VideoDO;
 import cn.iocoder.yudao.module.gift.service.video.VideoService;
+import jakarta.annotation.security.PermitAll;
 
 @Tag(name = "管理后台 - 视频")
 @RestController
@@ -37,6 +41,15 @@ public class VideoController {
 
     @Resource
     private VideoService videoService;
+
+    @PostMapping("/aliyun/callback")
+    @Operation(summary = "阿里云 VOD 回调")
+    @PermitAll
+    @TenantIgnore
+    @Lock4j(keys = {"#callbackReqVO.videoId"}, expire = 10000, acquireTimeout = 3000)
+    public CommonResult<Boolean> receiveAliyunVideoCallback(@RequestBody AliyunVideoCallbackReqVO callbackReqVO) {
+        return success(videoService.receiveAliyunVideoCallback(callbackReqVO));
+    }
 
     @PostMapping("/create")
     @Operation(summary = "创建视频")

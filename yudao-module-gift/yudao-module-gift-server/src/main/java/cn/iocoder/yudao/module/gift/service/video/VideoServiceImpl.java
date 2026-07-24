@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.video;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import org.springframework.stereotype.Service;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
@@ -14,6 +15,8 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 
 import cn.iocoder.yudao.module.gift.dal.mysql.video.VideoMapper;
+import cn.iocoder.yudao.module.gift.enums.VideoQualityEnum;
+import cn.iocoder.yudao.module.gift.enums.VideoStatusEnum;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertList;
@@ -31,6 +34,100 @@ public class VideoServiceImpl implements VideoService {
 
     @Resource
     private VideoMapper videoMapper;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean receiveAliyunVideoCallback(AliyunVideoCallbackReqVO callbackReqVO) {
+        if (callbackReqVO == null || StrUtil.isBlank(callbackReqVO.getVideoId())
+                || !StrUtil.equalsIgnoreCase("success", callbackReqVO.getStatus())) {
+            return false;
+        }
+        if (AliyunVideoCallbackReqVO.EVENT_TYPE_TRANSCODE_COMPLETE.equals(callbackReqVO.getEventType())) {
+            return handleTranscodeComplete(callbackReqVO);
+        }
+        if (AliyunVideoCallbackReqVO.EVENT_TYPE_SNAPSHOT_COMPLETE.equals(callbackReqVO.getEventType())) {
+            return handleSnapshotComplete(callbackReqVO);
+        }
+        return false;
+    }
+
+    private boolean handleTranscodeComplete(AliyunVideoCallbackReqVO callbackReqVO) {
+        AliyunVideoCallbackReqVO.StreamInfo streamInfo = CollUtil.emptyIfNull(callbackReqVO.getStreamInfos()).stream()
+                .filter(info -> StrUtil.equalsIgnoreCase("success", info.getStatus()))
+                .findFirst().orElse(null);
+        if (streamInfo == null) {
+            return false;
+        }
+
+        VideoDO video = videoMapper.selectByVodVideoId(callbackReqVO.getVideoId());
+        if (video == null) {
+            videoMapper.insert(buildDefaultVideo(callbackReqVO.getVideoId(), streamInfo, null));
+            return true;
+        }
+        VideoDO updateObj = new VideoDO();
+        updateObj.setId(video.getId());
+        fillTranscodeFields(updateObj, streamInfo);
+        videoMapper.updateById(updateObj);
+        return true;
+    }
+
+    private boolean handleSnapshotComplete(AliyunVideoCallbackReqVO callbackReqVO) {
+        if (StrUtil.isBlank(callbackReqVO.getCoverUrl())) {
+            return false;
+        }
+
+        VideoDO video = videoMapper.selectByVodVideoId(callbackReqVO.getVideoId());
+        if (video == null) {
+            videoMapper.insert(buildDefaultVideo(callbackReqVO.getVideoId(), null, callbackReqVO.getCoverUrl()));
+            return true;
+        }
+        VideoDO updateObj = new VideoDO();
+        updateObj.setId(video.getId());
+        updateObj.setCoverUrl(callbackReqVO.getCoverUrl());
+        videoMapper.updateById(updateObj);
+        return true;
+    }
+
+    /**
+     * 截图和转码回调会异步到达，因此首次入库时补全全部必填字段。
+     */
+    private VideoDO buildDefaultVideo(String vodVideoId, AliyunVideoCallbackReqVO.StreamInfo streamInfo, String coverUrl) {
+        VideoDO video = VideoDO.builder()
+                .vodVideoId(vodVideoId)
+                .title(vodVideoId)
+                .status(VideoStatusEnum.OFFLINE.getType())
+                .coverUrl(StrUtil.nullToDefault(coverUrl, ""))
+                .playUrl("")
+                .duration(0)
+                .width(0)
+                .height(0)
+                .fileSize(0L)
+                .quality(VideoQualityEnum.SD.getType())
+                .build();
+        if (streamInfo != null) {
+            fillTranscodeFields(video, streamInfo);
+        }
+        return video;
+    }
+
+    private void fillTranscodeFields(VideoDO video, AliyunVideoCallbackReqVO.StreamInfo streamInfo) {
+        video.setPlayUrl(StrUtil.nullToDefault(streamInfo.getFileUrl(), ""));
+        video.setDuration(streamInfo.getDuration() == null ? 0 : (int) Math.round(streamInfo.getDuration() * 1000));
+        video.setWidth(streamInfo.getWidth() == null ? 0 : streamInfo.getWidth());
+        video.setHeight(streamInfo.getHeight() == null ? 0 : streamInfo.getHeight());
+        video.setFileSize(streamInfo.getSize() == null ? 0L : streamInfo.getSize());
+        video.setQuality(getVideoQuality(streamInfo.getDefinition()));
+    }
+
+    private Integer getVideoQuality(String definition) {
+        if (StrUtil.equalsIgnoreCase("LD", definition)) {
+            return VideoQualityEnum.LD.getType();
+        }
+        if (StrUtil.equalsIgnoreCase("HD", definition)) {
+            return VideoQualityEnum.HD.getType();
+        }
+        return VideoQualityEnum.SD.getType();
+    }
 
     @Override
     public Long createVideo(VideoSaveReqVO createReqVO) {
