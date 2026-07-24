@@ -32,8 +32,18 @@ import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
 @Validated
 public class VideoServiceImpl implements VideoService {
 
+    private static final int RANDOM_VIDEO_CANDIDATE_SIZE = 50;
+    private static final int RANDOM_VIDEO_RESULT_SIZE = 20;
+
     @Resource
     private VideoMapper videoMapper;
+
+    @Override
+    public List<VideoDO> getRandomVideoList() {
+        List<VideoDO> videos = new ArrayList<>(videoMapper.selectRecentOnlineList(RANDOM_VIDEO_CANDIDATE_SIZE));
+        Collections.shuffle(videos);
+        return new ArrayList<>(videos.subList(0, Math.min(videos.size(), RANDOM_VIDEO_RESULT_SIZE)));
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)

@@ -38,4 +38,11 @@ public class AppVideoController {
     @Resource
     private VideoService videoService;
 
+    @GetMapping("/random-list")
+    @Operation(summary = "随机获得视频列表")
+    public CommonResult<List<AppVideoRespVO>> getRandomVideoList() {
+        List<VideoDO> videos = videoService.getRandomVideoList();
+        return success(BeanUtils.toBean(videos, AppVideoRespVO.class));
+    }
+
 }

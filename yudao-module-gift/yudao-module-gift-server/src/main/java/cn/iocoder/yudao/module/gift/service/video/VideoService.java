@@ -15,6 +15,13 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 public interface VideoService {
 
     /**
+     * 随机获得可播放视频列表。
+     *
+     * @return 视频列表，最多 20 条
+     */
+    List<VideoDO> getRandomVideoList();
+
+    /**
      * 处理阿里云 VOD 转码或截图完成回调。
      *
      * @param callbackReqVO 回调数据

@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 import java.util.List;
+import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -27,6 +28,19 @@ public class VideoServiceImplTest extends BaseMockitoUnitTest {
     private VideoServiceImpl videoService;
     @Mock
     private VideoMapper videoMapper;
+
+    @Test
+    public void testGetRandomVideoList() {
+        List<VideoDO> videos = LongStream.rangeClosed(1, 25)
+                .mapToObj(id -> VideoDO.builder().id(id).build()).toList();
+        when(videoMapper.selectRecentOnlineList(50)).thenReturn(videos);
+
+        List<VideoDO> result = videoService.getRandomVideoList();
+
+        assertEquals(20, result.size());
+        assertEquals(20, result.stream().map(VideoDO::getId).distinct().count());
+        verify(videoMapper).selectRecentOnlineList(50);
+    }
 
     @Test
     public void testReceiveAliyunVideoCallback_snapshotFirst() {
