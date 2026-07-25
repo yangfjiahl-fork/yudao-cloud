@@ -1,6 +1,10 @@
 package cn.iocoder.yudao.module.gift.controller.admin.video;
 
+import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
+
+import cn.iocoder.yudao.module.gift.convert.AliyunAuthUtil;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,6 +47,9 @@ public class VideoController {
 
     @Resource
     private VideoService videoService;
+
+    @Value("${vod.privateKey}")
+    private String privateKey;
 
     @PostMapping("/aliyun/callback")
     @Operation(summary = "阿里云 VOD 回调")
@@ -101,7 +108,14 @@ public class VideoController {
     @PreAuthorize("@ss.hasPermission('gift:video:query')")
     public CommonResult<PageResult<VideoRespVO>> getVideoPage(@Valid VideoPageReqVO pageReqVO) {
         PageResult<VideoDO> pageResult = videoService.getVideoPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, VideoRespVO.class));
+        PageResult<VideoRespVO> list = BeanUtils.toBean(pageResult, VideoRespVO.class);
+        if (CollectionUtils.isNotEmpty(list.getList())) {
+            list.getList().forEach(item -> {
+                item.setCoverUrl(AliyunAuthUtil.generateAuthUrl(item.getCoverUrl(), privateKey, 60 * 60));
+                item.setPlayUrl(AliyunAuthUtil.generateAuthUrl(item.getPlayUrl(), privateKey, 60 * 60));
+            });
+        }
+        return success(list);
     }
 
     @GetMapping("/export-excel")
