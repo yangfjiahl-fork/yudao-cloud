@@ -48,16 +48,12 @@ public class VideoController {
     @Resource
     private VideoService videoService;
 
-    @Value("${vod.privateKey}")
-    private String privateKey;
-
     @PostMapping("/aliyun/callback")
     @Operation(summary = "阿里云 VOD 回调")
     @PermitAll
     @TenantIgnore
     @Lock4j(keys = {"#callbackReqVO.videoId"}, expire = 10000, acquireTimeout = 3000)
     public CommonResult<Boolean> receiveAliyunVideoCallback(@RequestBody AliyunVideoCallbackReqVO callbackReqVO) {
-        log.info("callbackReqVO={}", callbackReqVO);
         return success(videoService.receiveAliyunVideoCallback(callbackReqVO));
     }
 
@@ -108,13 +104,8 @@ public class VideoController {
     @PreAuthorize("@ss.hasPermission('gift:video:query')")
     public CommonResult<PageResult<VideoRespVO>> getVideoPage(@Valid VideoPageReqVO pageReqVO) {
         PageResult<VideoDO> pageResult = videoService.getVideoPage(pageReqVO);
+        videoService.authUrl(pageResult.getList());
         PageResult<VideoRespVO> list = BeanUtils.toBean(pageResult, VideoRespVO.class);
-        if (CollectionUtils.isNotEmpty(list.getList())) {
-            list.getList().forEach(item -> {
-                item.setCoverUrl(AliyunAuthUtil.generateAuthUrl(item.getCoverUrl(), privateKey, 60 * 60));
-                item.setPlayUrl(AliyunAuthUtil.generateAuthUrl(item.getPlayUrl(), privateKey, 60 * 60));
-            });
-        }
         return success(list);
     }
 

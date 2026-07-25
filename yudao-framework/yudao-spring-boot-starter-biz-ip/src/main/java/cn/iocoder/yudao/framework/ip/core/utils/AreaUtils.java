@@ -34,6 +34,8 @@ public class AreaUtils {
      */
     private static Map<Integer, Area> areas;
 
+    private static Map<String, Integer> name2Id;
+
     static {
         init();
     }
@@ -45,6 +47,8 @@ public class AreaUtils {
         try {
             long now = System.currentTimeMillis();
             areas = new HashMap<>();
+            name2Id = new HashMap<>();
+
             areas.put(Area.ID_GLOBAL, new Area(Area.ID_GLOBAL, "全球", 0, null, new ArrayList<>()));
             // 从 csv 中加载数据
             List<CsvRow> rows = CsvUtil.getReader().read(ResourceUtil.getUtf8Reader("area.csv")).getRows();
@@ -52,6 +56,8 @@ public class AreaUtils {
             for (CsvRow row : rows) {
                 Area area = new Area(Integer.valueOf(row.get(0)), row.get(1), Integer.valueOf(row.get(2)), null, new ArrayList<>());
                 areas.put(area.getId(), area);
+
+                name2Id.put(area.getName(), area.getId());
             }
 
             // 构建父子关系：因为 Area 中没有 parentId 字段,所以需要重复读取
@@ -76,6 +82,17 @@ public class AreaUtils {
      */
     public static Area getArea(Integer id) {
         return areas.get(id);
+    }
+
+    /**
+     * 根据名称获取ID，同名的就会覆盖
+     *
+     * @param name
+     * @return
+     */
+    public static Area getArea(String name) {
+        Integer id = name2Id.get(name);
+        return getArea(id);
     }
 
     /**

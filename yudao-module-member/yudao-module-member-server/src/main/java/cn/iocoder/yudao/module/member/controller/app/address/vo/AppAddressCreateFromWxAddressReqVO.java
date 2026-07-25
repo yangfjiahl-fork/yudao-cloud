@@ -13,11 +13,11 @@ import lombok.ToString;
 public class AppAddressCreateFromWxAddressReqVO extends AppAddressBaseVO {
 
     @Schema(description = "省名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "北京市")
-    @NotBlank(message = "省名称不能为空")
+//    @NotBlank(message = "省名称不能为空")
     private String provinceName;
 
     @Schema(description = "市名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "北京市")
-    @NotBlank(message = "市名称不能为空")
+//    @NotBlank(message = "市名称不能为空")
     private String cityName;
 
     @Schema(description = "区名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "朝阳区")

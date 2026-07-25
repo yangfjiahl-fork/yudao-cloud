@@ -22,6 +22,13 @@ public interface VideoService {
     List<VideoDO> getRandomVideoList();
 
     /**
+     * 将URL授权
+     *
+     * @param list
+     */
+    void authUrl(List<VideoDO> list);
+
+    /**
      * 处理阿里云 VOD 转码或截图完成回调。
      *
      * @param callbackReqVO 回调数据

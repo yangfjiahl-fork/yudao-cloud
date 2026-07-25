@@ -2,7 +2,12 @@ package cn.iocoder.yudao.module.gift.service.video;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import cn.iocoder.yudao.module.gift.convert.AliyunAuthUtil;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,8 +40,23 @@ public class VideoServiceImpl implements VideoService {
     private static final int RANDOM_VIDEO_CANDIDATE_SIZE = 50;
     private static final int RANDOM_VIDEO_RESULT_SIZE = 20;
 
+    @Value("${vod.privateKey}")
+    private String privateKey;
+
     @Resource
     private VideoMapper videoMapper;
+
+    @Override
+    public void authUrl(List<VideoDO> list) {
+        if (CollectionUtils.isEmpty(list)) {
+            return;
+        }
+
+        list.forEach(item -> {
+            item.setCoverUrl(AliyunAuthUtil.generateAuthUrl(item.getCoverUrl(), privateKey, 60 * 60));
+            item.setPlayUrl(AliyunAuthUtil.generateAuthUrl(item.getPlayUrl(), privateKey, 60 * 60));
+        });
+    }
 
     @Override
     public List<VideoDO> getRandomVideoList() {

@@ -42,6 +42,7 @@ public class AppVideoController {
     @Operation(summary = "随机获得视频列表")
     public CommonResult<List<AppVideoRespVO>> getRandomVideoList() {
         List<VideoDO> videos = videoService.getRandomVideoList();
+        videoService.authUrl(videos);
         return success(BeanUtils.toBean(videos, AppVideoRespVO.class));
     }
 
