@@ -1,5 +1,8 @@
 package cn.iocoder.yudao.module.product.controller.app.spu.vo;
 
+import org.apache.commons.collections4.CollectionUtils;
+
+import cn.iocoder.yudao.module.trade.enums.delivery.DeliveryTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -53,4 +56,12 @@ public class AppProductSpuRespVO {
     @Schema(description = "配送方式数组", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private List<Integer> deliveryTypes;
 
+    /**
+     * 是否虚拟商品
+     *
+     * @return
+     */
+    public boolean isVirtualSpu() {
+        return CollectionUtils.containsAny(deliveryTypes, DeliveryTypeEnum.VIRTUAL.getType());
+    }
 }

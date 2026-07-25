@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -21,6 +23,7 @@ import static cn.iocoder.yudao.module.member.enums.ErrorCodeConstants.ADDRESS_NO
  *
  * @author 芋道源码
  */
+@Slf4j
 @Service
 @Validated
 public class AddressServiceImpl implements AddressService {
@@ -35,6 +38,7 @@ public class AddressServiceImpl implements AddressService {
         MemberAddressDO existAddress = memberAddressMapper.selectByUserIdAndAreaIdAndDetailAddressAndMobileAndName(userId,
                 createReqVO.getAreaId(), createReqVO.getDetailAddress(), createReqVO.getMobile(), createReqVO.getName());
         if (existAddress != null) {
+            log.info("address exist={}", existAddress);
             return existAddress.getId();
         }
 

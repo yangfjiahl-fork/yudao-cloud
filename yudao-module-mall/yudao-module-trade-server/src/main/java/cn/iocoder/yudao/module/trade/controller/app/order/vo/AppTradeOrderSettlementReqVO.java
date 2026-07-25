@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.trade.controller.app.order.vo;
 import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.yudao.framework.common.validation.InEnum;
 import cn.iocoder.yudao.framework.common.validation.Mobile;
+import cn.iocoder.yudao.framework.common.validation.Telephone;
 import cn.iocoder.yudao.module.trade.enums.delivery.DeliveryTypeEnum;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,10 +42,12 @@ public class AppTradeOrderSettlementReqVO {
 
     @Schema(description = "自提门店编号", example = "1088")
     private Long pickUpStoreId;
+
     @Schema(description = "收件人名称", example = "芋艿") // 选择门店自提或虚拟商品时，该字段为联系人名
     private String receiverName;
+
     @Schema(description = "收件人手机", example = "15601691300") // 选择门店自提或虚拟商品时，该字段为联系人手机
-    @Mobile(message = "收件人手机格式不正确")
+    @Telephone(message = "收件人手机格式不正确")
     private String receiverMobile;
 
     // ========== 秒杀活动相关字段 ==========
