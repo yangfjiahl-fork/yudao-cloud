@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppSignInWoolRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolSummaryRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.BannerRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.wool.vo.ProgressIconRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
 import cn.iocoder.yudao.module.gift.service.wool.bo.SignInWoolResultBO;
 import cn.iocoder.yudao.module.gift.service.wool.WoolService;
@@ -36,6 +37,7 @@ public class AppWoolController {
 
     private static final String MAIN_BANNER_CONFIG_KEY = "main.swipper.list";
     private static final String MALL_BANNER_CONFIG_KEY = "mall.swipper.list";
+    private static final String MAIN_PROGRESS_ICON_CONFIG_KEY = "main.progress.icon";
 
     @Resource
     private WoolService woolService;
@@ -54,6 +56,14 @@ public class AppWoolController {
     @PermitAll
     public CommonResult<List<BannerRespVO>> getMallBannerList() {
         return success(getBannerList(MALL_BANNER_CONFIG_KEY));
+    }
+
+    @GetMapping("/main-progress-icon")
+    @Operation(summary = "获得首页进度图标")
+    @PermitAll
+    public CommonResult<List<ProgressIconRespVO>> getMainProgressIcon() {
+        String configValue = configApi.getConfigValueByKey(MAIN_PROGRESS_ICON_CONFIG_KEY).getCheckedData();
+        return success(JsonUtils.parseArray(configValue, ProgressIconRespVO.class));
     }
 
     @GetMapping("/list-init")
