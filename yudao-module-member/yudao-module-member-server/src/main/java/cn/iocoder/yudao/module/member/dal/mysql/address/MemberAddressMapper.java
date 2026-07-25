@@ -14,6 +14,16 @@ public interface MemberAddressMapper extends BaseMapperX<MemberAddressDO> {
         return selectOne(MemberAddressDO::getId, id, MemberAddressDO::getUserId, userId);
     }
 
+    default MemberAddressDO selectByUserIdAndAreaIdAndDetailAddressAndMobileAndName(Long userId, Long areaId,
+                                                                                     String detailAddress, String mobile, String name) {
+        return selectOne(new LambdaQueryWrapperX<MemberAddressDO>()
+                .eq(MemberAddressDO::getUserId, userId)
+                .eq(MemberAddressDO::getAreaId, areaId)
+                .eq(MemberAddressDO::getDetailAddress, detailAddress)
+                .eq(MemberAddressDO::getMobile, mobile)
+                .eq(MemberAddressDO::getName, name));
+    }
+
     default List<MemberAddressDO> selectListByUserIdAndDefaulted(Long userId, Boolean defaulted) {
         return selectList(new LambdaQueryWrapperX<MemberAddressDO>().eq(MemberAddressDO::getUserId, userId)
                 .eqIfPresent(MemberAddressDO::getDefaultStatus, defaulted));

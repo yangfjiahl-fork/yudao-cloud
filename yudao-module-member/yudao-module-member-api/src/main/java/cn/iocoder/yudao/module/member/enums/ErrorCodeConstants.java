@@ -24,6 +24,7 @@ public interface ErrorCodeConstants {
 
     // ========== 用户收件地址 1-004-004-000 ==========
     ErrorCode ADDRESS_NOT_EXISTS = new ErrorCode(1_004_004_000, "用户收件地址不存在");
+    ErrorCode ADDRESS_AREA_NOT_EXISTS = new ErrorCode(1_004_004_001, "用户收件地址地区不存在");
 
     //========== 用户标签 1-004-006-000 ==========
     ErrorCode TAG_NOT_EXISTS = new ErrorCode(1_004_006_000, "用户标签不存在");

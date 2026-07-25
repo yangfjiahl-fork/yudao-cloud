@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.member.convert.address;
 import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.iocoder.yudao.module.member.controller.admin.address.vo.AddressRespVO;
+import cn.iocoder.yudao.module.member.controller.app.address.vo.AppAddressCreateFromWxAddressReqVO;
 import cn.iocoder.yudao.module.member.controller.app.address.vo.AppAddressCreateReqVO;
 import cn.iocoder.yudao.module.member.controller.app.address.vo.AppAddressRespVO;
 import cn.iocoder.yudao.module.member.controller.app.address.vo.AppAddressUpdateReqVO;
@@ -25,6 +26,8 @@ public interface AddressConvert {
     AddressConvert INSTANCE = Mappers.getMapper(AddressConvert.class);
 
     MemberAddressDO convert(AppAddressCreateReqVO bean);
+
+    AppAddressCreateReqVO convert(AppAddressCreateFromWxAddressReqVO bean);
 
     MemberAddressDO convert(AppAddressUpdateReqVO bean);
 

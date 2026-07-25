@@ -31,6 +31,13 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAddress(Long userId, AppAddressCreateReqVO createReqVO) {
+        // 去重：相同用户下，地区、详细地址、手机号和收件人相同则直接返回已有地址
+        MemberAddressDO existAddress = memberAddressMapper.selectByUserIdAndAreaIdAndDetailAddressAndMobileAndName(userId,
+                createReqVO.getAreaId(), createReqVO.getDetailAddress(), createReqVO.getMobile(), createReqVO.getName());
+        if (existAddress != null) {
+            return existAddress.getId();
+        }
+
         // 如果添加的是默认收件地址，则将原默认地址修改为非默认
         if (Boolean.TRUE.equals(createReqVO.getDefaultStatus())) {
             List<MemberAddressDO> addresses = memberAddressMapper.selectListByUserIdAndDefaulted(userId, true);

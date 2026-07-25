@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.video;
 
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.module.gift.enums.VideoQualityEnum;
 import cn.iocoder.yudao.module.gift.enums.VideoStatusEnum;
 import lombok.*;
@@ -22,7 +23,7 @@ import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class VideoDO extends BaseDO {
+public class VideoDO extends TenantBaseDO {
 
     /**
      * 编号

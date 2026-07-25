@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.wool;
 
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.module.gift.enums.WoolStatusEnum;
 import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -21,7 +22,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class WoolDO extends BaseDO {
+public class WoolDO extends TenantBaseDO {
 
     /**
      * 编号

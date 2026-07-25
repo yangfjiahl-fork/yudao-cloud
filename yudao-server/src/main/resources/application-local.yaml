@@ -258,3 +258,6 @@ justauth:
 pf4j:
 #  pluginsDir: /tmp/
   pluginsDir: ../plugins
+
+vod:
+  privateKey: a1b2c3d4-e5f6-4732-8123-456789abcdef
