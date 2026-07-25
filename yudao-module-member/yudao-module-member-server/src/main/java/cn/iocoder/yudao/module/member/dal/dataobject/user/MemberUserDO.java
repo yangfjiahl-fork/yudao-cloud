@@ -146,4 +146,9 @@ public class MemberUserDO extends TenantBaseDO {
      */
     private Long groupId;
 
+    /**
+     * 推荐人用户编号
+     */
+    private Long recommendUserId;
+
 }

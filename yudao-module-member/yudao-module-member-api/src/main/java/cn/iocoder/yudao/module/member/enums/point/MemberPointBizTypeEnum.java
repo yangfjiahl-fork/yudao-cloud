@@ -30,6 +30,8 @@ public enum MemberPointBizTypeEnum implements ArrayValuable<Integer> {
 
     REGISTER(31, "会员注册", "注册会员，赠送 {} 积分", true),
 
+    RECOMMEND(32, "会员邀请", "邀请会员，赠送 {} 积分", true),
+
     POINT_PAY(41, "积分支付", "积分支付，扣除 {} 积分", false),
     POINT_PAY_REFUND(42, "积分支付退款", "积分支付退款，退还 {} 积分", true),
     ;

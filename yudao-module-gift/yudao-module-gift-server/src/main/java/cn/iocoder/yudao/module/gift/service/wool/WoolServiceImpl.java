@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.gift.service.wool;
 
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.exception.ErrorCode;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
@@ -14,6 +15,8 @@ import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.member.api.point.MemberPointApi;
 import cn.iocoder.yudao.module.member.api.signin.MemberSignInRecordApi;
 import cn.iocoder.yudao.module.member.api.signin.dto.MemberSignInRecordRespDTO;
+import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
 import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -40,7 +43,9 @@ import static cn.iocoder.yudao.framework.common.util.object.ObjectUtils.equalsAn
 public class WoolServiceImpl implements WoolService {
 
     private static final String NEW_USER_WOOL_AMOUNT_CONFIG_KEY = "wool.amount.for.new.user";
+    private static final String RECOMMEND_USER_WOOL_AMOUNT_CONFIG_KEY = "recommend.user.wool.cnt";
     private static final String REGISTER_WOOL_REMARK = "新用户注册赠送羊毛";
+    private static final String RECOMMEND_WOOL_REMARK = "邀请新用户奖励羊毛";
     private static final String SIGN_IN_WOOL_REMARK = "签到第%s天奖励羊毛";
     private static final String DEFAULT_WOOL_POINT_REMARK = "收取羊毛";
 
@@ -52,6 +57,8 @@ public class WoolServiceImpl implements WoolService {
     private MemberPointApi memberPointApi;
     @Resource
     private MemberSignInRecordApi memberSignInRecordApi;
+    @Resource
+    private MemberUserApi memberUserApi;
 
     @Override
     public Long createWool(WoolSaveReqVO createReqVO) {
@@ -157,24 +164,54 @@ public class WoolServiceImpl implements WoolService {
         MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.REGISTER;
         String bizId = String.valueOf(memberId);
         WoolDO existsWool = woolMapper.selectByBizTypeAndBizId(bizTypeEnum.getType(), bizId);
-        if (existsWool != null) {
+        if (existsWool == null) {
+            WoolDO wool = WoolDO.builder()
+                    .bizType(bizTypeEnum.getType())
+                    .bizId(bizId)
+                    .amount(getNewUserWoolAmount())
+                    .remark(REGISTER_WOOL_REMARK)
+                    .status(WoolStatusEnum.INIT.getType())
+                    .memberId(memberId)
+                    .build();
+            // 注册事件基于 @Async 异步执行，没有登录用户上下文，需要显式设置创建人
+            wool.setCreator(String.valueOf(memberId));
+            woolMapper.insert(wool);
+            log.info("[grantWoolByRegister][会员({}) 注册羊毛({}) 发放成功，数量({})]",
+                    memberId, wool.getId(), wool.getAmount());
+        } else {
             log.info("[grantWoolByRegister][会员({}) 已存在注册羊毛({})，跳过发放]", memberId, existsWool.getId());
+        }
+
+        grantWoolByRecommend(memberId);
+    }
+
+    private void grantWoolByRecommend(Long memberId) {
+        MemberUserRespDTO member = memberUserApi.getUser(memberId).getCheckedData();
+        if (member == null || member.getRecommendUserId() == null) {
             return;
         }
 
+        MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.RECOMMEND;
+        String bizId = String.valueOf(memberId);
+        WoolDO existsWool = woolMapper.selectByBizTypeAndBizId(bizTypeEnum.getType(), bizId);
+        if (existsWool != null) {
+            log.info("[grantWoolByRecommend][会员({}) 的邀请羊毛({}) 已存在，跳过发放]", memberId, existsWool.getId());
+            return;
+        }
+
+        Long recommendUserId = member.getRecommendUserId();
         WoolDO wool = WoolDO.builder()
                 .bizType(bizTypeEnum.getType())
                 .bizId(bizId)
-                .amount(getNewUserWoolAmount())
-                .remark(REGISTER_WOOL_REMARK)
+                .amount(getRecommendUserWoolAmount())
+                .remark(RECOMMEND_WOOL_REMARK)
                 .status(WoolStatusEnum.INIT.getType())
-                .memberId(memberId)
+                .memberId(recommendUserId)
                 .build();
-        // 注册事件基于 @Async 异步执行，没有登录用户上下文，需要显式设置创建人
-        wool.setCreator(String.valueOf(memberId));
+        wool.setCreator(String.valueOf(recommendUserId));
         woolMapper.insert(wool);
-        log.info("[grantWoolByRegister][会员({}) 注册羊毛({}) 发放成功，数量({})]",
-                memberId, wool.getId(), wool.getAmount());
+        log.info("[grantWoolByRecommend][会员({}) 邀请会员({})，羊毛({}) 发放成功，数量({})]",
+                recommendUserId, memberId, wool.getId(), wool.getAmount());
     }
 
     @Override
@@ -219,17 +256,23 @@ public class WoolServiceImpl implements WoolService {
     }
 
     private int getNewUserWoolAmount() {
-        String value = configApi.getConfigValueByKey(NEW_USER_WOOL_AMOUNT_CONFIG_KEY).getCheckedData();
+        return getWoolAmount(NEW_USER_WOOL_AMOUNT_CONFIG_KEY, WOOL_NEW_USER_AMOUNT_CONFIG_INVALID);
+    }
+
+    private int getRecommendUserWoolAmount() {
+        return getWoolAmount(RECOMMEND_USER_WOOL_AMOUNT_CONFIG_KEY, WOOL_RECOMMEND_USER_AMOUNT_CONFIG_INVALID);
+    }
+
+    private int getWoolAmount(String configKey, ErrorCode errorCode) {
+        String value = configApi.getConfigValueByKey(configKey).getCheckedData();
         if (StrUtil.isBlank(value) || !NumberUtil.isInteger(value.trim())) {
-            log.warn("[getNewUserWoolAmount][新用户羊毛数量配置无效，key({}) value({})]",
-                    NEW_USER_WOOL_AMOUNT_CONFIG_KEY, value);
-            throw exception(WOOL_NEW_USER_AMOUNT_CONFIG_INVALID);
+            log.warn("[getWoolAmount][羊毛数量配置无效，key({}) value({})]", configKey, value);
+            throw exception(errorCode);
         }
         int amount = Integer.parseInt(value.trim());
         if (amount <= 0) {
-            log.warn("[getNewUserWoolAmount][新用户羊毛数量配置必须大于 0，key({}) value({})]",
-                    NEW_USER_WOOL_AMOUNT_CONFIG_KEY, value);
-            throw exception(WOOL_NEW_USER_AMOUNT_CONFIG_INVALID);
+            log.warn("[getWoolAmount][羊毛数量配置必须大于 0，key({}) value({})]", configKey, value);
+            throw exception(errorCode);
         }
         return amount;
     }

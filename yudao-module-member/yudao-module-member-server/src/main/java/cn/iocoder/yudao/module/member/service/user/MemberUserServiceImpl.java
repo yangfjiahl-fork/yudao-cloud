@@ -76,24 +76,24 @@ public class MemberUserServiceImpl implements MemberUserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public MemberUserDO createUserIfAbsent(String mobile, String registerIp, Integer terminal) {
+    public MemberUserDO createUserIfAbsent(String mobile, String registerIp, Integer terminal, Long recommendUserId) {
         // 用户已经存在
         MemberUserDO user = memberUserMapper.selectByMobile(mobile);
         if (user != null) {
             return user;
         }
         // 用户不存在，则进行创建
-        return createUser(mobile, null, null, registerIp, terminal);
+        return createUser(mobile, null, null, registerIp, terminal, recommendUserId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public MemberUserDO createUser(String nickname, String avtar, String registerIp, Integer terminal) {
-        return createUser(null, nickname, avtar, registerIp, terminal);
+        return createUser(null, nickname, avtar, registerIp, terminal, null);
     }
 
     private MemberUserDO createUser(String mobile, String nickname, String avtar,
-                                    String registerIp, Integer terminal) {
+                                    String registerIp, Integer terminal, Long recommendUserId) {
         // 生成密码
         String password = IdUtil.fastSimpleUUID();
         // 插入用户
@@ -103,6 +103,7 @@ public class MemberUserServiceImpl implements MemberUserService {
         user.setPassword(encodePassword(password)); // 加密密码
         user.setRegisterIp(registerIp).setRegisterTerminal(terminal);
         user.setNickname(nickname).setAvatar(avtar); // 基础信息
+        user.setRecommendUserId(recommendUserId);
         if (StrUtil.isEmpty(nickname)) {
             // 昵称为空时，随机一个名字，避免一些依赖 nickname 的逻辑报错，或者有点丑。例如说，短信发送有昵称时~
             user.setNickname("用户" + RandomUtil.randomNumbers(6));

@@ -89,7 +89,8 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         log.info("[smsLogin][会员短信验证码校验通过，手机号({})]", DesensitizedUtil.mobilePhone(reqVO.getMobile()));
 
         // 获得获得注册用户
-        MemberUserDO user = userService.createUserIfAbsent(reqVO.getMobile(), userIp, getTerminal());
+        MemberUserDO user = userService.createUserIfAbsent(reqVO.getMobile(), userIp, getTerminal(),
+                reqVO.getRecommendUserId());
         Assert.notNull(user, "获取用户失败，结果为空");
 
         // 校验是否禁用
@@ -154,7 +155,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
         // 获得获得注册用户
         MemberUserDO user = userService.createUserIfAbsent(phoneNumberInfo.getPurePhoneNumber(),
-                getClientIP(), TerminalEnum.WECHAT_MINI_PROGRAM.getTerminal());
+                getClientIP(), TerminalEnum.WECHAT_MINI_PROGRAM.getTerminal(), reqVO.getRecommendUserId());
         Assert.notNull(user, "获取用户失败，结果为空");
         log.info("[weixinMiniAppLogin][获取会员({})，手机号({})]", user.getId(),
                 DesensitizedUtil.mobilePhone(phoneNumberInfo.getPurePhoneNumber()));

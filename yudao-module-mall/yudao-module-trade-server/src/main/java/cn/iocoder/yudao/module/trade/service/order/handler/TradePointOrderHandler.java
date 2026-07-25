@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.Assert;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
+import cn.iocoder.yudao.module.pay.enums.PayChannelEnum;
 import cn.iocoder.yudao.module.promotion.api.point.PointActivityApi;
 import cn.iocoder.yudao.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.yudao.module.trade.dal.dataobject.order.TradeOrderItemDO;
@@ -12,6 +13,7 @@ import cn.iocoder.yudao.module.trade.enums.order.TradeOrderTypeEnum;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -36,6 +38,7 @@ public class TradePointOrderHandler implements TradeOrderHandler {
         if (!TradeOrderTypeEnum.isPoint(order.getType())) {
             return;
         }
+        order.setPayChannelCode(PayChannelEnum.POINT.getCode());
         // 明确校验一下
         Assert.isTrue(orderItems.size() == 1, "积分商城活动兑换商品兑换时，只允许选择一个商品");
         // 校验用户剩余积分是否足够兑换商品
@@ -50,7 +53,8 @@ public class TradePointOrderHandler implements TradeOrderHandler {
 
         // 如果支付金额为 0，则直接设置为已支付
         if (Objects.equals(order.getPayPrice(), 0)) {
-            order.setPayStatus(true).setStatus(TradeOrderStatusEnum.UNDELIVERED.getStatus());
+            order.setPayStatus(true).setPayTime(LocalDateTime.now())
+                    .setStatus(TradeOrderStatusEnum.UNDELIVERED.getStatus());
         }
     }
 

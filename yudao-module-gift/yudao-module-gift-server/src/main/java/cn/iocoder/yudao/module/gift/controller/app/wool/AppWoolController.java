@@ -1,17 +1,21 @@
 package cn.iocoder.yudao.module.gift.controller.app.wool;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppSignInWoolRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.wool.vo.AppWoolSummaryRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.wool.vo.BannerRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.wool.WoolDO;
 import cn.iocoder.yudao.module.gift.service.wool.bo.SignInWoolResultBO;
 import cn.iocoder.yudao.module.gift.service.wool.WoolService;
+import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.annotation.security.PermitAll;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,8 +34,27 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @Validated
 public class AppWoolController {
 
+    private static final String MAIN_BANNER_CONFIG_KEY = "main.swipper.list";
+    private static final String MALL_BANNER_CONFIG_KEY = "mall.swipper.list";
+
     @Resource
     private WoolService woolService;
+    @Resource
+    private ConfigApi configApi;
+
+    @GetMapping("/main-banner-list")
+    @Operation(summary = "获得首页 Banner 列表")
+    @PermitAll
+    public CommonResult<List<BannerRespVO>> getMainBannerList() {
+        return success(getBannerList(MAIN_BANNER_CONFIG_KEY));
+    }
+
+    @GetMapping("/mall-banner-list")
+    @Operation(summary = "获得商品页 Banner 列表")
+    @PermitAll
+    public CommonResult<List<BannerRespVO>> getMallBannerList() {
+        return success(getBannerList(MALL_BANNER_CONFIG_KEY));
+    }
 
     @GetMapping("/list-init")
     @Operation(summary = "获得当前用户待收取羊毛列表")
@@ -71,6 +94,11 @@ public class AppWoolController {
             respVO.setHistoryTotalReceivedAmount(woolService.getHistoryTotalReceivedWoolAmount(memberId));
         }
         return success(respVO);
+    }
+
+    private List<BannerRespVO> getBannerList(String configKey) {
+        String configValue = configApi.getConfigValueByKey(configKey).getCheckedData();
+        return JsonUtils.parseArray(configValue, BannerRespVO.class);
     }
 
 }

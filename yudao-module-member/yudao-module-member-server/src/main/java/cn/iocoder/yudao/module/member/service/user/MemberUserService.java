@@ -42,9 +42,10 @@ public interface MemberUserService {
      * @param mobile     手机号
      * @param registerIp 注册 IP
      * @param terminal   终端 {@link TerminalEnum}
+     * @param recommendUserId 推荐人用户编号
      * @return 用户对象
      */
-    MemberUserDO createUserIfAbsent(@Mobile String mobile, String registerIp, Integer terminal);
+    MemberUserDO createUserIfAbsent(@Mobile String mobile, String registerIp, Integer terminal, Long recommendUserId);
 
     /**
      * 创建用户

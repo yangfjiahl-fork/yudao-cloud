@@ -27,4 +27,7 @@ public class AppAuthWeixinMiniAppLoginReqVO {
     @NotEmpty(message = "state 不能为空")
     private String state;
 
+    @Schema(description = "推荐人用户编号", example = "1024")
+    private Long recommendUserId;
+
 }

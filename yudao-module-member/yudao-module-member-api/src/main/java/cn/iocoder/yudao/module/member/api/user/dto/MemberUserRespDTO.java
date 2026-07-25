@@ -35,4 +35,7 @@ public class MemberUserRespDTO {
     @Schema(description = "积分", requiredMode = Schema.RequiredMode.REQUIRED, example = "886")
     private Integer point;
 
+    @Schema(description = "推荐人用户编号", example = "1024")
+    private Long recommendUserId;
+
 }
