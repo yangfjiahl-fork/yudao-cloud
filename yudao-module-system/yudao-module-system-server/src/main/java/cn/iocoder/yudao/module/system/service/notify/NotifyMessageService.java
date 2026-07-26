@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.system.service.notify;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.module.system.controller.admin.notify.vo.message.NotifyMessageMyPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.notify.vo.message.NotifyMessagePageReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.notify.NotifyMessageDO;
@@ -47,6 +48,15 @@ public interface NotifyMessageService {
      * @return 站内信分页
      */
     PageResult<NotifyMessageDO> getMyMyNotifyMessagePage(NotifyMessageMyPageReqVO pageReqVO, Long userId, Integer userType);
+
+    /**
+     * 获得会员最近一个月的站内信分页
+     *
+     * @param userId 会员编号
+     * @param pageParam 分页参数
+     * @return 站内信分页
+     */
+    PageResult<NotifyMessageDO> getMemberNotifyMessagePage(Long userId, PageParam pageParam);
 
     /**
      * 获得站内信

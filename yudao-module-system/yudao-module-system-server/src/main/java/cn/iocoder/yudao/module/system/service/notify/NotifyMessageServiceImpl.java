@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.system.service.notify;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.module.system.controller.admin.notify.vo.message.NotifyMessageMyPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.notify.vo.message.NotifyMessagePageReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.notify.NotifyMessageDO;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +48,12 @@ public class NotifyMessageServiceImpl implements NotifyMessageService {
     @Override
     public PageResult<NotifyMessageDO> getMyMyNotifyMessagePage(NotifyMessageMyPageReqVO pageReqVO, Long userId, Integer userType) {
         return notifyMessageMapper.selectPage(pageReqVO, userId, userType);
+    }
+
+    @Override
+    public PageResult<NotifyMessageDO> getMemberNotifyMessagePage(Long userId, PageParam pageParam) {
+        return notifyMessageMapper.selectPageByUserIdAndUserType(pageParam, userId, UserTypeEnum.MEMBER.getValue(),
+                LocalDateTime.now().minusMonths(1));
     }
 
     @Override

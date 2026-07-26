@@ -4,10 +4,12 @@ import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.member.api.point.MemberPointApi;
 import cn.iocoder.yudao.module.member.api.signin.MemberSignInRecordApi;
 import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
+import cn.iocoder.yudao.module.system.api.notify.NotifyMessageSendApi;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(value = "giftRpcConfiguration", proxyBeanMethods = false)
-@EnableFeignClients(clients = {ConfigApi.class, MemberPointApi.class, MemberSignInRecordApi.class, MemberUserApi.class})
+@EnableFeignClients(clients = {ConfigApi.class, MemberPointApi.class, MemberSignInRecordApi.class, MemberUserApi.class,
+        NotifyMessageSendApi.class})
 public class RpcConfiguration {
 }

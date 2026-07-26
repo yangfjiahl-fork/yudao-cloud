@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.system.dal.mysql.notify;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.QueryWrapperX;
@@ -32,6 +33,16 @@ public interface NotifyMessageMapper extends BaseMapperX<NotifyMessageDO> {
                 .betweenIfPresent(NotifyMessageDO::getCreateTime, reqVO.getCreateTime())
                 .eq(NotifyMessageDO::getUserId, userId)
                 .eq(NotifyMessageDO::getUserType, userType)
+                .orderByDesc(NotifyMessageDO::getId));
+    }
+
+    default PageResult<NotifyMessageDO> selectPageByUserIdAndUserType(PageParam pageParam, Long userId,
+                                                                        Integer userType, LocalDateTime beginTime) {
+        return selectPage(pageParam, new LambdaQueryWrapperX<NotifyMessageDO>()
+                .eq(NotifyMessageDO::getUserId, userId)
+                .eq(NotifyMessageDO::getUserType, userType)
+                .ge(NotifyMessageDO::getCreateTime, beginTime)
+                .orderByDesc(NotifyMessageDO::getCreateTime)
                 .orderByDesc(NotifyMessageDO::getId));
     }
 

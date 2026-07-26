@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.system.service.notice;
 
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.system.controller.admin.notice.vo.NoticePageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.notice.vo.NoticeSaveReqVO;
@@ -61,8 +63,22 @@ public class NoticeServiceImpl implements NoticeService {
     }
 
     @Override
+    public PageResult<NoticeDO> getEnableNoticePage(PageParam pageParam) {
+        return noticeMapper.selectEnablePage(pageParam);
+    }
+
+    @Override
     public NoticeDO getNotice(Long id) {
         return noticeMapper.selectById(id);
+    }
+
+    @Override
+    public NoticeDO getEnableNotice(Long id) {
+        NoticeDO notice = noticeMapper.selectById(id);
+        if (notice == null || !CommonStatusEnum.isEnable(notice.getStatus())) {
+            throw exception(NOTICE_NOT_FOUND);
+        }
+        return notice;
     }
 
     @VisibleForTesting
