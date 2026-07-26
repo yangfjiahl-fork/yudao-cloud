@@ -40,8 +40,10 @@ public class AppVideoController {
 
     @GetMapping("/random-list")
     @Operation(summary = "随机获得视频列表")
-    public CommonResult<List<AppVideoRespVO>> getRandomVideoList() {
-        List<VideoDO> videos = videoService.getRandomVideoList();
+    @Parameter(name = "pageSize", description = "返回数量，默认 30，最大 50", example = "30")
+    public CommonResult<List<AppVideoRespVO>> getRandomVideoList(
+            @RequestParam(value = "pageSize", defaultValue = "30") @Min(1) @Max(50) Integer pageSize) {
+        List<VideoDO> videos = videoService.getRandomVideoList(pageSize);
         videoService.authUrl(videos);
         return success(BeanUtils.toBean(videos, AppVideoRespVO.class));
     }

@@ -17,9 +17,10 @@ public interface VideoService {
     /**
      * 随机获得可播放视频列表。
      *
-     * @return 视频列表，最多 20 条
+     * @param pageSize 返回数量
+     * @return 视频列表，最多 50 条
      */
-    List<VideoDO> getRandomVideoList();
+    List<VideoDO> getRandomVideoList(Integer pageSize);
 
     /**
      * 将URL授权

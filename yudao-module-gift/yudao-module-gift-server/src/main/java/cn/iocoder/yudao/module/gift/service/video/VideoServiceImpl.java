@@ -38,7 +38,6 @@ import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
 public class VideoServiceImpl implements VideoService {
 
     private static final int RANDOM_VIDEO_CANDIDATE_SIZE = 50;
-    private static final int RANDOM_VIDEO_RESULT_SIZE = 20;
 
     @Value("${vod.privateKey}")
     private String privateKey;
@@ -59,10 +58,10 @@ public class VideoServiceImpl implements VideoService {
     }
 
     @Override
-    public List<VideoDO> getRandomVideoList() {
+    public List<VideoDO> getRandomVideoList(Integer pageSize) {
         List<VideoDO> videos = new ArrayList<>(videoMapper.selectRecentOnlineList(RANDOM_VIDEO_CANDIDATE_SIZE));
         Collections.shuffle(videos);
-        return new ArrayList<>(videos.subList(0, Math.min(videos.size(), RANDOM_VIDEO_RESULT_SIZE)));
+        return new ArrayList<>(videos.subList(0, Math.min(videos.size(), pageSize)));
     }
 
     @Override

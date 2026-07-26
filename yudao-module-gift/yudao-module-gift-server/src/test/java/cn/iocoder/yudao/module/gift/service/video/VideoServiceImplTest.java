@@ -55,10 +55,10 @@ public class VideoServiceImplTest extends BaseMockitoUnitTest {
                 .mapToObj(id -> VideoDO.builder().id(id).build()).toList();
         when(videoMapper.selectRecentOnlineList(50)).thenReturn(videos);
 
-        List<VideoDO> result = videoService.getRandomVideoList();
+        List<VideoDO> result = videoService.getRandomVideoList(30);
 
-        assertEquals(20, result.size());
-        assertEquals(20, result.stream().map(VideoDO::getId).distinct().count());
+        assertEquals(25, result.size());
+        assertEquals(25, result.stream().map(VideoDO::getId).distinct().count());
         verify(videoMapper).selectRecentOnlineList(50);
     }
 
