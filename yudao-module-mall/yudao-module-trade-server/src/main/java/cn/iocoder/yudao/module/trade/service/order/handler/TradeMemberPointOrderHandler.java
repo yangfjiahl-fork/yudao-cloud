@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import cn.iocoder.yudao.module.trade.dal.dataobject.aftersale.AfterSaleDO;
 import cn.iocoder.yudao.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.yudao.module.trade.dal.dataobject.order.TradeOrderItemDO;
+import cn.iocoder.yudao.module.trade.enums.order.TradeOrderTypeEnum;
 import cn.iocoder.yudao.module.trade.service.aftersale.AfterSaleService;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +25,8 @@ import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.
 @Component
 public class TradeMemberPointOrderHandler implements TradeOrderHandler {
 
+    private static final String POINT_EXCHANGE_REMARK = "积分兑换商品";
+
     @Resource
     private MemberPointApi memberPointApi;
     @Resource
@@ -36,7 +39,8 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
     public void afterOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
         // 扣减用户积分（订单抵扣）。不在前置扣减的原因，是因为积分扣减时，需要记录关联业务
         reducePoint(order.getUserId(), order.getUsePoint(), MemberPointBizTypeEnum.ORDER_USE,
-                "trade-order-use:" + order.getId());
+                "trade-order-use:" + order.getId(),
+                TradeOrderTypeEnum.isPoint(order.getType()) ? POINT_EXCHANGE_REMARK : null);
     }
 
     @Override
@@ -113,8 +117,12 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
     }
 
     protected void reducePoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId) {
+        reducePoint(userId, point, bizType, bizId, null);
+    }
+
+    protected void reducePoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId, String remark) {
         if (point != null && point > 0) {
-            memberPointApi.reducePoint(userId, point, bizType.getType(), bizId).checkError();
+            memberPointApi.reducePoint(userId, point, bizType.getType(), bizId, remark).checkError();
         }
     }
 
