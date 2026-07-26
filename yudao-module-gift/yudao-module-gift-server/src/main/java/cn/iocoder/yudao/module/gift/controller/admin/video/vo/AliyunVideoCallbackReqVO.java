@@ -22,6 +22,7 @@ public class AliyunVideoCallbackReqVO {
 
     public static final String EVENT_TYPE_TRANSCODE_COMPLETE = "TranscodeComplete";
     public static final String EVENT_TYPE_SNAPSHOT_COMPLETE = "SnapshotComplete";
+    public static final String EVENT_TYPE_DELETE_MEDIA_COMPLETE = "DeleteMediaComplete";
 
     /**
      * 事件处理状态
@@ -29,9 +30,9 @@ public class AliyunVideoCallbackReqVO {
     @JsonAlias("Status")
     private String status;
     /**
-     * 阿里云 VOD VideoId
+     * 阿里云 VOD 媒体 ID。视频处理事件使用 VideoId，删除事件使用 MediaId。
      */
-    @JsonAlias("VideoId")
+    @JsonAlias({"VideoId", "MediaId"})
     private String videoId;
     /**
      * 事件类型
@@ -48,6 +49,11 @@ public class AliyunVideoCallbackReqVO {
      */
     @JsonAlias("CoverUrl")
     private String coverUrl;
+    /**
+     * 媒体类型，例如 video。
+     */
+    @JsonAlias("MediaType")
+    private String mediaType;
 
     public String getCleanedCoverUrl() {
         if (StringUtils.isBlank(coverUrl)) {

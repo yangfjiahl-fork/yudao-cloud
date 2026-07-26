@@ -78,7 +78,23 @@ public class VideoServiceImpl implements VideoService {
         if (AliyunVideoCallbackReqVO.EVENT_TYPE_SNAPSHOT_COMPLETE.equals(callbackReqVO.getEventType())) {
             return handleSnapshotComplete(callbackReqVO);
         }
+        if (AliyunVideoCallbackReqVO.EVENT_TYPE_DELETE_MEDIA_COMPLETE.equals(callbackReqVO.getEventType())
+                && StrUtil.equalsIgnoreCase("video", callbackReqVO.getMediaType())) {
+            return handleDeleteMediaComplete(callbackReqVO);
+        }
         return false;
+    }
+
+    /**
+     * 阿里云已删除媒体后，同步逻辑删除本地视频记录。
+     */
+    private boolean handleDeleteMediaComplete(AliyunVideoCallbackReqVO callbackReqVO) {
+        VideoDO video = videoMapper.selectByVodVideoId(callbackReqVO.getVideoId());
+        if (video == null) {
+            return true;
+        }
+        videoMapper.deleteById(video.getId());
+        return true;
     }
 
     private boolean handleTranscodeComplete(AliyunVideoCallbackReqVO callbackReqVO) {
