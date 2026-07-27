@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 /**
  * 会员配置 DO
  *
@@ -35,7 +37,7 @@ public class MemberConfigDO extends BaseDO {
      *
      * 1 积分抵扣多少分
      */
-    private Integer pointTradeDeductUnitPrice;
+    private BigDecimal pointTradeDeductUnitPrice;
     /**
      * 积分抵扣最大值
      */

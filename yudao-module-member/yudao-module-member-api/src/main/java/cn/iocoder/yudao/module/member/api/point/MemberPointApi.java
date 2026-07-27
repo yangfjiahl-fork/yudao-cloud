@@ -1,16 +1,25 @@
 package cn.iocoder.yudao.module.member.api.point;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.member.api.config.dto.PriceTransDTO;
+import cn.iocoder.yudao.module.member.api.user.MemberUserApi;
 import cn.iocoder.yudao.module.member.enums.ApiConstants;
+import feign.FeignIgnore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
+import org.dromara.core.trans.anno.AutoTrans;
+import org.dromara.trans.service.AutoTransable;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import jakarta.validation.constraints.Min;
+
+import java.util.Arrays;
+import java.util.List;
 
 @FeignClient(name = ApiConstants.NAME) // TODO 芋艿：fallbackFactory =
 @Tag(name = "RPC 服务 - 用户积分")
@@ -55,5 +64,4 @@ public interface MemberPointApi {
     default CommonResult<Boolean> reducePoint(Long userId, Integer point, Integer bizType, String bizId) {
         return reducePoint(userId, point, bizType, bizId, null);
     }
-
 }

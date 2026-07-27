@@ -27,6 +27,14 @@ public interface PointActivityService {
     Long createPointActivity(@Valid PointActivitySaveReqVO createReqVO);
 
     /**
+     * 根据商品创建积分商城活动
+     *
+     * @param spuId 商品 SPU 编号
+     * @return 编号
+     */
+    Long createPointActivityByProduct(Long spuId);
+
+    /**
      * 更新积分商城活动
      *
      * @param updateReqVO 更新信息

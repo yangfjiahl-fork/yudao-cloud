@@ -19,6 +19,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+
+import org.dromara.core.trans.anno.TransMethodResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,6 +54,7 @@ public class AppProductSpuController {
     @Operation(summary = "获得商品 SPU 列表")
     @Parameter(name = "ids", description = "编号列表", required = true)
     @PermitAll
+    @TransMethodResult
     public CommonResult<List<AppProductSpuRespVO>> getSpuList(@RequestParam("ids") Set<Long> ids) {
         List<ProductSpuDO> list = productSpuService.getSpuList(ids);
         if (CollUtil.isEmpty(list)) {
@@ -83,6 +86,7 @@ public class AppProductSpuController {
     @Operation(summary = "获得商品 SPU 明细")
     @Parameter(name = "id", description = "编号", required = true)
     @PermitAll
+    @TransMethodResult
     public CommonResult<AppProductSpuDetailRespVO> getSpuDetail(@RequestParam("id") Long id) {
         // 获得商品 SPU
         ProductSpuDO spu = productSpuService.getSpu(id);

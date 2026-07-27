@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.member.api.point;
 
 import cn.hutool.core.lang.Assert;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.member.api.config.dto.PriceTransDTO;
 import cn.iocoder.yudao.module.member.enums.point.MemberPointBizTypeEnum;
 import cn.iocoder.yudao.module.member.service.point.MemberPointRecordService;
 import org.springframework.validation.annotation.Validated;
@@ -12,6 +13,8 @@ import jakarta.annotation.Resource;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.module.member.enums.ErrorCodeConstants.POINT_RECORD_BIZ_NOT_SUPPORT;
+
+import java.util.List;
 
 /**
  * 用户积分的 API 实现类
@@ -46,5 +49,4 @@ public class MemberPointApiImpl implements MemberPointApi {
         memberPointRecordService.createPointRecord(userId, -point, bizTypeEnum, bizId, remark);
         return success(true);
     }
-
 }

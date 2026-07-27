@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -86,7 +87,8 @@ public class TradePointUsePriceCalculator implements TradePriceCalculator {
     private boolean isDeductPointEnable(MemberConfigRespDTO config) {
         return config != null &&
                 BooleanUtil.isTrue(config.getPointTradeDeductEnable()) &&  // 积分功能是否启用
-                config.getPointTradeDeductUnitPrice() != null && config.getPointTradeDeductUnitPrice() > 0; // 有没有配置：1 积分抵扣多少分
+                config.getPointTradeDeductUnitPrice() != null
+                && config.getPointTradeDeductUnitPrice().compareTo(BigDecimal.ZERO) > 0; // 有没有配置：1 积分抵扣多少分
     }
 
     private Integer calculatePointPrice(MemberConfigRespDTO config, Integer usePoint, TradePriceCalculateRespBO result) {
@@ -96,7 +98,7 @@ public class TradePointUsePriceCalculator implements TradePriceCalculator {
         }
         // TODO @疯狂：这里应该是，抵扣到只剩下 0.01；
         // 积分优惠金额（分）
-        int pointPrice = usePoint * config.getPointTradeDeductUnitPrice();
+        int pointPrice = new BigDecimal(usePoint).multiply(config.getPointTradeDeductUnitPrice()).intValue();
         if (result.getPrice().getPayPrice() <= pointPrice) {
             // 禁止 0 元购
             throw exception(PRICE_CALCULATE_PAY_PRICE_ILLEGAL);
@@ -109,8 +111,8 @@ public class TradePointUsePriceCalculator implements TradePriceCalculator {
 //                    .divide(NumberUtil.toBigDecimal(config.getPointTradeDeductUnitPrice()), 0, RoundingMode.HALF_UP)
 //                    .intValue();
 //        }
-        // 记录使用的积分
-        result.setUsePoint(usePoint);
+        // 记录使用的积分，必须10的整数倍
+        result.setUsePoint(usePoint / 10 * 10);
         return pointPrice;
     }
 

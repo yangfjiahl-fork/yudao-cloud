@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.member.api.config.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Schema(description = "RPC 服务 - 用户信息 Response DTO")
 @Data
 public class MemberConfigRespDTO {
@@ -11,7 +13,7 @@ public class MemberConfigRespDTO {
     private Boolean pointTradeDeductEnable;
 
     @Schema(description = "积分抵扣，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
-    private Integer pointTradeDeductUnitPrice; // 1 积分抵扣多少分
+    private BigDecimal pointTradeDeductUnitPrice; // 1 积分抵扣多少分
 
     @Schema(description = "积分抵扣最大值", requiredMode = Schema.RequiredMode.REQUIRED, example = "200")
     private Integer pointTradeDeductMaxPrice;

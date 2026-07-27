@@ -16,6 +16,7 @@ import cn.iocoder.yudao.module.product.dal.dataobject.category.ProductCategoryDO
 import cn.iocoder.yudao.module.product.dal.dataobject.spu.ProductSpuDO;
 import cn.iocoder.yudao.module.product.dal.mysql.spu.ProductSpuMapper;
 import cn.iocoder.yudao.module.product.enums.spu.ProductSpuStatusEnum;
+import cn.iocoder.yudao.module.product.mq.producer.spu.ProductSpuProducer;
 import cn.iocoder.yudao.module.product.service.brand.ProductBrandService;
 import cn.iocoder.yudao.module.product.service.category.ProductCategoryService;
 import cn.iocoder.yudao.module.product.service.sku.ProductSkuService;
@@ -24,6 +25,8 @@ import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.*;
@@ -52,6 +55,8 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     private ProductBrandService brandService;
     @Resource
     private ProductCategoryService categoryService;
+    @Resource
+    private ProductSpuProducer productSpuProducer;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -70,6 +75,15 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         productSpuMapper.insert(spu);
         // 插入 SKU
         productSkuService.createSkuList(spu.getId(), skuSaveReqList);
+        // 事务提交后发送商品创建消息
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+            @Override
+            public void afterCommit() {
+                productSpuProducer.sendSpuCreateMessage(spu.getId());
+            }
+
+        });
         // 返回
         return spu.getId();
     }

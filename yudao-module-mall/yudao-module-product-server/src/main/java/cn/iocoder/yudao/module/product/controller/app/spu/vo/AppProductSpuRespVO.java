@@ -1,7 +1,11 @@
 package cn.iocoder.yudao.module.product.controller.app.spu.vo;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.dromara.core.trans.anno.Trans;
+import org.dromara.core.trans.constant.TransType;
+import org.dromara.core.trans.vo.VO;
 
+import cn.iocoder.yudao.module.member.api.config.MemberConfigApi;
 import cn.iocoder.yudao.module.trade.enums.delivery.DeliveryTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -10,7 +14,7 @@ import java.util.List;
 
 @Schema(description = "用户 App - 商品 SPU Response VO")
 @Data
-public class AppProductSpuRespVO {
+public class AppProductSpuRespVO implements VO {
 
     @Schema(description = "商品 SPU 编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Long id;
@@ -35,8 +39,17 @@ public class AppProductSpuRespVO {
     @Schema(description = "规格类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
     private Boolean specType;
 
+    @Trans(
+            type = TransType.AUTO_TRANS,
+            key = MemberConfigApi.PREFIX,
+            fields = "woolPrice",
+            ref = "woolPrice"
+    )
     @Schema(description = "商品价格，单位使用：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Integer price;
+
+    @Schema(description = "商品价格，单位使用：羊毛", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
+    private Integer woolPrice;
 
     @Schema(description = "市场价，单位使用：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Integer marketPrice;

@@ -5,6 +5,8 @@ import lombok.Data;
 
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
+
 /**
  * 会员配置 Base VO，提供给添加、修改、详细的子 VO 使用
  * 如果子 VO 存在差异的字段，请不要添加到这里，影响 Swagger 文档生成
@@ -18,7 +20,7 @@ public class MemberConfigBaseVO {
 
     @Schema(description = "积分抵扣，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "13506")
     @NotNull(message = "积分抵扣不能为空")
-    private Integer pointTradeDeductUnitPrice;
+    private BigDecimal pointTradeDeductUnitPrice;
 
     @Schema(description = "积分抵扣最大值", requiredMode = Schema.RequiredMode.REQUIRED, example = "32428")
     @NotNull(message = "积分抵扣最大值不能为空")

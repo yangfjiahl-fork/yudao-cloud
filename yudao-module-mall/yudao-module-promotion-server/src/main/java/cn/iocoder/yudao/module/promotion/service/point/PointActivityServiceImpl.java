@@ -81,6 +81,16 @@ public class PointActivityServiceImpl implements PointActivityService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public Long createPointActivityByProduct(Long spuId) {
+        List<PointProductSaveReqVO> products = convertList(productSkuApi.getSkuListBySpuId(singletonList(spuId))
+                .getCheckedData(), sku -> new PointProductSaveReqVO().setSkuId(sku.getId())
+                .setCount(2).setPoint(Math.multiplyExact(sku.getPrice(), 10))
+                .setPrice(0).setStock(sku.getStock()));
+        return createPointActivity(new PointActivitySaveReqVO().setSpuId(spuId).setSort(0).setProducts(products));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updatePointActivity(PointActivitySaveReqVO updateReqVO) {
         // 1.1 校验存在
         PointActivityDO activity = validatePointActivityExists(updateReqVO.getId());

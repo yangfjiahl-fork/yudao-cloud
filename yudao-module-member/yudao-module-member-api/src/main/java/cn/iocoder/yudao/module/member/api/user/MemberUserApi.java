@@ -6,6 +6,9 @@ import cn.iocoder.yudao.module.member.enums.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
+import org.dromara.core.trans.anno.AutoTrans;
+import org.dromara.trans.service.AutoTransable;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
