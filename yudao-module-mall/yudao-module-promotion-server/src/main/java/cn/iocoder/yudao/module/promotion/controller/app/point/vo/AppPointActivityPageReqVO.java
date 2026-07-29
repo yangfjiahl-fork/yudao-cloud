@@ -12,4 +12,6 @@ import lombok.ToString;
 @ToString(callSuper = true)
 public class AppPointActivityPageReqVO extends PageParam {
 
+    @Schema(description = "活动状态", example = "2")
+    private Integer status = 0;
 }

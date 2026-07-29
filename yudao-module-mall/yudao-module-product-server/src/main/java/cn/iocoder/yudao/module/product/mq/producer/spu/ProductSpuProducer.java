@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.product.mq.producer.spu;
 
-import cn.iocoder.yudao.module.product.api.message.spu.ProductSpuCreateMessage;
+import cn.iocoder.yudao.module.product.api.message.spu.ProductSpuMessage;
 import jakarta.annotation.Resource;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
@@ -17,12 +17,12 @@ public class ProductSpuProducer {
     private ApplicationContext applicationContext;
 
     /**
-     * 发送 {@link ProductSpuCreateMessage} 消息
+     * 发送 {@link ProductSpuMessage} 消息
      *
      * @param spuId 商品 SPU 编号
      */
-    public void sendSpuCreateMessage(Long spuId) {
-        applicationContext.publishEvent(new ProductSpuCreateMessage().setSpuId(spuId));
+    public void sendSpuMessage(Long spuId) {
+        applicationContext.publishEvent(new ProductSpuMessage().setSpuId(spuId));
     }
 
 }

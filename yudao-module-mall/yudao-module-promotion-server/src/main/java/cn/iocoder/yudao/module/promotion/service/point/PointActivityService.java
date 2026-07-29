@@ -27,12 +27,12 @@ public interface PointActivityService {
     Long createPointActivity(@Valid PointActivitySaveReqVO createReqVO);
 
     /**
-     * 根据商品创建积分商城活动
+     * 根据商品创建、下线积分商城活动
      *
      * @param spuId 商品 SPU 编号
      * @return 编号
      */
-    Long createPointActivityByProduct(Long spuId);
+    void syncPointActivityByProduct(Long spuId);
 
     /**
      * 更新积分商城活动
@@ -65,6 +65,13 @@ public interface PointActivityService {
      * @param id 编号
      */
     void closePointActivity(Long id);
+
+    /**
+     * 开启积分商城活动
+     *
+     * @param id 编号
+     */
+    void openPointActivity(Long id);
 
     /**
      * 删除积分商城活动

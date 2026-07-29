@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.promotion.dal.mysql.point;
 import cn.hutool.core.lang.Assert;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.promotion.dal.dataobject.point.PointProductDO;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -33,6 +35,11 @@ public interface PointProductMapper extends BaseMapperX<PointProductDO> {
     default PointProductDO selectListByActivityIdAndSkuId(Long activityId, Long skuId) {
         return selectOne(PointProductDO::getActivityId, activityId,
                 PointProductDO::getSkuId, skuId);
+    }
+
+    default PointProductDO selectLastBySpuId(Long spuId) {
+        return selectOne(new LambdaQueryWrapper<PointProductDO>().eq(PointProductDO::getSpuId, spuId)
+                .orderByDesc(PointProductDO::getCreateTime));
     }
 
     /**

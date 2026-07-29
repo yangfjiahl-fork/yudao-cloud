@@ -4,12 +4,12 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 商品 SPU 创建消息
+ * 商品 SPU 消息
  *
  * @author 芋道源码
  */
 @Data
-public class ProductSpuCreateMessage {
+public class ProductSpuMessage {
 
     /**
      * 商品 SPU 编号

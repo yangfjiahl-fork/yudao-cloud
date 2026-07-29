@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.product.api.sku.ProductSkuApi;
 import cn.iocoder.yudao.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.yudao.module.product.api.spu.ProductSpuApi;
 import cn.iocoder.yudao.module.product.api.spu.dto.ProductSpuRespDTO;
+import cn.iocoder.yudao.module.product.enums.spu.ProductSpuStatusEnum;
 import cn.iocoder.yudao.module.promotion.api.point.dto.PointValidateJoinRespDTO;
 import cn.iocoder.yudao.module.promotion.controller.admin.point.vo.activity.PointActivityPageReqVO;
 import cn.iocoder.yudao.module.promotion.controller.admin.point.vo.activity.PointActivitySaveReqVO;
@@ -17,6 +18,8 @@ import cn.iocoder.yudao.module.promotion.dal.dataobject.point.PointProductDO;
 import cn.iocoder.yudao.module.promotion.dal.mysql.point.PointActivityMapper;
 import cn.iocoder.yudao.module.promotion.dal.mysql.point.PointProductMapper;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -40,6 +43,7 @@ import static java.util.Collections.singletonList;
  *
  * @author HUIHUI
  */
+@Slf4j
 @Service
 @Validated
 public class PointActivityServiceImpl implements PointActivityService {
@@ -81,12 +85,22 @@ public class PointActivityServiceImpl implements PointActivityService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long createPointActivityByProduct(Long spuId) {
-        List<PointProductSaveReqVO> products = convertList(productSkuApi.getSkuListBySpuId(singletonList(spuId))
-                .getCheckedData(), sku -> new PointProductSaveReqVO().setSkuId(sku.getId())
-                .setCount(2).setPoint(Math.multiplyExact(sku.getPrice(), 10))
-                .setPrice(0).setStock(sku.getStock()));
-        return createPointActivity(new PointActivitySaveReqVO().setSpuId(spuId).setSort(0).setProducts(products));
+    public void syncPointActivityByProduct(Long spuId) {
+        ProductSpuRespDTO productSpuRespDTO = productSpuApi.getSpu(spuId).getCheckedData();
+        if (ProductSpuStatusEnum.ENABLE.getStatus().equals(productSpuRespDTO.getStatus())) {
+            log.info("同步创建商品积分商城活动,spuId={}",  spuId);
+            List<PointProductSaveReqVO> products = convertList(productSkuApi.getSkuListBySpuId(singletonList(spuId))
+                    .getCheckedData(), sku -> new PointProductSaveReqVO().setSkuId(sku.getId())
+                    .setCount(2).setPoint(Math.multiplyExact(sku.getPrice(), 10))
+                    .setPrice(0).setStock(sku.getStock()));
+            createPointActivity(new PointActivitySaveReqVO().setSpuId(spuId).setSort(0).setProducts(products));
+        } else {
+            log.info("同步下线商品积分商城活动,spuId={}",  spuId);
+            PointProductDO pointProductDO = pointProductMapper.selectLastBySpuId(spuId);
+            if (pointProductDO != null && CommonStatusEnum.ENABLE.getStatus().equals(pointProductDO.getActivityStatus())) {
+                closePointActivity(pointProductDO.getActivityId());
+            }
+        }
     }
 
     @Override
@@ -164,6 +178,22 @@ public class PointActivityServiceImpl implements PointActivityService {
         // 更新活动商品状态
         pointProductMapper.updateByActivityId(new PointProductDO().setActivityId(id).setActivityStatus(
                 CommonStatusEnum.DISABLE.getStatus()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void openPointActivity(Long id) {
+        // 校验存在
+        PointActivityDO pointActivity = validatePointActivityExists(id);
+        if (CommonStatusEnum.ENABLE.getStatus().equals(pointActivity.getStatus())) {
+            throw exception(POINT_ACTIVITY_CLOSE_FAIL_STATUS_OPENED);
+        }
+
+        // 更新
+        pointActivityMapper.updateById(new PointActivityDO().setId(id).setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        // 更新活动商品状态
+        pointProductMapper.updateByActivityId(new PointProductDO().setActivityId(id).setActivityStatus(
+                CommonStatusEnum.ENABLE.getStatus()));
     }
 
     /**

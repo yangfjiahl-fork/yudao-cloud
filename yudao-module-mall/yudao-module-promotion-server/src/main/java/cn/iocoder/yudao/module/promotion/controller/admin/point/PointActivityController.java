@@ -61,8 +61,17 @@ public class PointActivityController {
     @Operation(summary = "关闭积分商城活动")
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('promotion:point-activity:close')")
-    public CommonResult<Boolean> closeSeckillActivity(@RequestParam("id") Long id) {
+    public CommonResult<Boolean> closePointActivity(@RequestParam("id") Long id) {
         pointActivityService.closePointActivity(id);
+        return success(true);
+    }
+
+    @PutMapping("/open")
+    @Operation(summary = "开启积分商城活动")
+    @Parameter(name = "id", description = "编号", required = true)
+    @PreAuthorize("@ss.hasPermission('promotion:point-activity:close')")
+    public CommonResult<Boolean> openPointActivity(@RequestParam("id") Long id) {
+        pointActivityService.openPointActivity(id);
         return success(true);
     }
 

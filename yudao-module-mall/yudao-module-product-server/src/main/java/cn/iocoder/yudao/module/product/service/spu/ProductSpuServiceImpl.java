@@ -80,7 +80,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
 
             @Override
             public void afterCommit() {
-                productSpuProducer.sendSpuCreateMessage(spu.getId());
+                productSpuProducer.sendSpuMessage(spu.getId());
             }
 
         });
@@ -267,6 +267,16 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         // 更新状态
         ProductSpuDO productSpuDO = productSpuMapper.selectById(updateReqVO.getId()).setStatus(updateReqVO.getStatus());
         productSpuMapper.updateById(productSpuDO);
+
+        // 事务提交后发送商品创建消息
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+            @Override
+            public void afterCommit() {
+                productSpuProducer.sendSpuMessage(updateReqVO.getId());
+            }
+
+        });
     }
 
     @Override
