@@ -227,4 +227,8 @@ public class VideoServiceImpl implements VideoService {
         return videoMapper.selectPage(pageReqVO);
     }
 
+    @Override
+    public List<VideoDO> getByIds(Set<Long> ids) {
+        return videoMapper.selectByIds(ids);
+    }
 }

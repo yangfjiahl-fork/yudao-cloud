@@ -82,4 +82,11 @@ public interface VideoService {
      */
     PageResult<VideoDO> getVideoPage(VideoPageReqVO pageReqVO);
 
+    /**
+     * 根据id获取
+     *
+     * @param ids
+     * @return
+     */
+    List<VideoDO> getByIds(Set<Long> ids);
 }

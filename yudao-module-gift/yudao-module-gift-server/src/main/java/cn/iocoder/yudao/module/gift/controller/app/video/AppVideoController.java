@@ -48,4 +48,12 @@ public class AppVideoController {
         return success(BeanUtils.toBean(videos, AppVideoRespVO.class));
     }
 
+    @GetMapping("/list-by-ids")
+    @Operation(summary = "根据id获得视频列表")
+    @Parameter(name = "ids", description = "多个id", example = "30")
+    public CommonResult<List<AppVideoRespVO>> getByIds(@RequestParam("ids") Set<Long> ids) {
+        List<VideoDO> videos = videoService.getByIds(ids);
+        videoService.authUrl(videos);
+        return success(BeanUtils.toBean(videos, AppVideoRespVO.class));
+    }
 }

@@ -29,4 +29,10 @@ public class BannerRespVO {
      */
     @Schema(description = "Image图片地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "http://")
     private String imgUrl;
+
+    /**
+     * 页面类型
+     */
+    @Schema(description = "页面类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "video")
+    private String pageType = "normal";
 }
