@@ -27,6 +27,7 @@ public interface FileMapper extends BaseMapperX<FileDO> {
         return selectLastOne(new LambdaQueryWrapperX<FileDO>()
                 .eq(FileDO::getConfigId, configId)
                 .eq(FileDO::getPath, path)
+                .eq(FileDO::getDeleted, Boolean.FALSE)
                 .orderByAsc(FileDO::getId));
     }
 
