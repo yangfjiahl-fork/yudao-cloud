@@ -49,7 +49,7 @@ public class AppFileController {
             byte[] content = IoUtil.readBytes(file.getInputStream());
             log.info("[uploadFile][App 文件读取完成，name={}, directory={}, readSize={}]",
                     originalFilename, directory, content.length);
-            String url = fileService.createFile(content, originalFilename, directory, contentType);
+            String url = fileService.createFile(content, originalFilename, directory, contentType, false);
             log.info("[uploadFile][App 文件上传完成，name={}, directory={}, url={}]",
                     originalFilename, directory, HttpUtils.removeUrlQuery(url));
             return success(url);

@@ -19,6 +19,9 @@ public class FileUploadReqVO {
     @Schema(description = "文件目录", example = "XXX/YYY")
     private String directory;
 
+    @Schema(description = "是否检查文件路径重复", example = "false")
+    private Boolean checkDuplicate = false;
+
     @AssertTrue(message = "文件目录不正确")
     @JsonIgnore
     public boolean isDirectoryValid() {

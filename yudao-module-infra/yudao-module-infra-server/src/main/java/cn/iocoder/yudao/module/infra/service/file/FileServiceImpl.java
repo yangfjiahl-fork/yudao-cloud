@@ -28,6 +28,7 @@ import java.util.List;
 import static cn.hutool.core.date.DatePattern.PURE_DATE_PATTERN;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_NOT_EXISTS;
+import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_PATH_EXISTS;
 
 /**
  * 文件 Service 实现类
@@ -72,7 +73,7 @@ public class FileServiceImpl implements FileService {
 
     @Override
     @SneakyThrows
-    public String createFile(byte[] content, String name, String directory, String type) {
+    public String createFile(byte[] content, String name, String directory, String type, boolean checkDuplicate) {
         String originalName = name;
         log.info("[createFile][文件创建开始，name={}, directory={}, type={}, size={}]",
                 originalName, directory, type, content.length);
@@ -102,6 +103,9 @@ public class FileServiceImpl implements FileService {
         // 2.2 上传到文件存储器
         FileClient client = fileConfigService.getMasterFileClient();
         Assert.notNull(client, "客户端(master) 不能为空");
+        if (checkDuplicate && fileMapper.selectLatestByConfigIdAndPath(client.getId(), path) != null) {
+            throw exception(FILE_PATH_EXISTS);
+        }
         log.info("[createFile][准备上传文件，clientId={}, clientClass={}, path={}, type={}, size={}]",
                 client.getId(), client.getClass().getSimpleName(), path, type, content.length);
         long uploadBeginTime = System.currentTimeMillis();

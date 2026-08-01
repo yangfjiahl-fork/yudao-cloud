@@ -23,6 +23,7 @@ import static cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils.bui
 import static cn.iocoder.yudao.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.*;
 import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_NOT_EXISTS;
+import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_PATH_EXISTS;
 import static cn.iocoder.yudao.module.infra.enums.ErrorCodeConstants.FILE_PATH_INVALID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.same;
@@ -102,7 +103,7 @@ public class FileServiceImplTest extends BaseDbUnitTest {
         }), eq(type))).thenReturn(url);
         when(client.getId()).thenReturn(10L);
         // 调用
-        String result = fileService.createFile(content, name, directory, type);
+        String result = fileService.createFile(content, name, directory, type, false);
         // 断言
         assertEquals(result, url);
         // 校验数据
@@ -134,7 +135,7 @@ public class FileServiceImplTest extends BaseDbUnitTest {
         }), eq(type))).thenReturn(url);
         when(client.getId()).thenReturn(10L);
         // 调用
-        String result = fileService.createFile(content, null, null, null);
+        String result = fileService.createFile(content, null, null, null, false);
         // 断言
         assertEquals(result, url);
         // 校验数据
@@ -144,6 +145,26 @@ public class FileServiceImplTest extends BaseDbUnitTest {
         assertEquals(url, file.getUrl());
         assertEquals(type, file.getType());
         assertEquals(content.length, file.getSize());
+    }
+
+    @Test
+    public void testCreateFile_pathExists() throws Exception {
+        // 准备参数，关闭 path 中的时间和随机后缀，确保生成固定路径
+        FileServiceImpl.PATH_PREFIX_DATE_ENABLE = false;
+        FileServiceImpl.PATH_SUFFIX_TIMESTAMP_ENABLE = false;
+        String directory = randomString();
+        String name = "test.jpg";
+        byte[] content = new byte[]{1};
+        FileDO dbFile = randomPojo(FileDO.class, o -> o.setConfigId(10L).setPath(directory + "/" + name));
+        fileMapper.insert(dbFile);
+        // mock Master 文件客户端
+        FileClient client = mock(FileClient.class);
+        when(fileConfigService.getMasterFileClient()).thenReturn(client);
+        when(client.getId()).thenReturn(10L);
+
+        // 调用并断言不会上传
+        assertServiceException(() -> fileService.createFile(content, name, directory, "image/jpeg", true), FILE_PATH_EXISTS);
+        verify(client, never()).upload(any(), anyString(), anyString());
     }
 
     @Test

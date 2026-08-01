@@ -20,7 +20,7 @@ public class FileApiImpl implements FileApi {
     @Override
     public CommonResult<String> createFile(FileCreateReqDTO createReqDTO) {
         return success(fileService.createFile(createReqDTO.getContent(), createReqDTO.getName(),
-                createReqDTO.getDirectory(), createReqDTO.getType()));
+                createReqDTO.getDirectory(), createReqDTO.getType(), false));
     }
 
     @Override
