@@ -103,9 +103,9 @@ public class FileServiceImpl implements FileService {
         // 2.2 上传到文件存储器
         FileClient client = fileConfigService.getMasterFileClient();
         Assert.notNull(client, "客户端(master) 不能为空");
-        if (checkDuplicate && fileMapper.selectLatestByConfigIdAndPath(client.getId(), path) != null) {
-            throw exception(FILE_PATH_EXISTS);
-        }
+//        if (checkDuplicate && fileMapper.selectLatestByConfigIdAndPath(client.getId(), path) != null) {
+//            throw exception(FILE_PATH_EXISTS);
+//        }
         log.info("[createFile][准备上传文件，clientId={}, clientClass={}, path={}, type={}, size={}]",
                 client.getId(), client.getClass().getSimpleName(), path, type, content.length);
         long uploadBeginTime = System.currentTimeMillis();
