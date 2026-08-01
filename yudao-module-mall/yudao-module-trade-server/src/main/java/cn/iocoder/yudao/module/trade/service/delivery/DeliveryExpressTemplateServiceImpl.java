@@ -26,6 +26,8 @@ import static cn.iocoder.yudao.module.trade.convert.delivery.DeliveryExpressTemp
 import static cn.iocoder.yudao.module.trade.enums.ErrorCodeConstants.EXPRESS_TEMPLATE_NAME_DUPLICATE;
 import static cn.iocoder.yudao.module.trade.enums.ErrorCodeConstants.EXPRESS_TEMPLATE_NOT_EXISTS;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 /**
  * 快递运费模板 Service 实现类
  *
@@ -181,7 +183,9 @@ public class DeliveryExpressTemplateServiceImpl implements DeliveryExpressTempla
 
     @Override
     public List<DeliveryExpressTemplateDO> getDeliveryExpressTemplateList() {
-        return expressTemplateMapper.selectList();
+        LambdaQueryWrapper<DeliveryExpressTemplateDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByAsc(DeliveryExpressTemplateDO::getSort);
+        return expressTemplateMapper.selectList(wrapper);
     }
 
     @Override
