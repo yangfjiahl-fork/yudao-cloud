@@ -1,9 +1,11 @@
 package cn.iocoder.yudao.module.gift.mq.consumer.order;
 
 import cn.iocoder.yudao.module.gift.enums.MessageTemplateConstants;
+import cn.iocoder.yudao.module.gift.service.wool.WoolService;
 import cn.iocoder.yudao.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.yudao.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
 import cn.iocoder.yudao.module.trade.api.message.order.TradeOrderLifecycleMessage;
+import cn.iocoder.yudao.module.trade.api.order.TradeOrderApi;
 import cn.iocoder.yudao.module.trade.enums.order.TradeOrderLifecycleTypeEnum;
 import cn.iocoder.yudao.module.trade.enums.order.TradeOrderTypeEnum;
 import jakarta.annotation.Resource;
@@ -26,12 +28,20 @@ public class PointExchangeNotifyConsumer {
 
     @Resource
     private NotifyMessageSendApi notifyMessageSendApi;
+    @Resource
+    private TradeOrderApi tradeOrderApi;
+    @Resource
+    private WoolService woolService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async
     public void onMessage(TradeOrderLifecycleMessage message) {
         if (!TradeOrderTypeEnum.isPoint(message.getOrderType())) {
             return;
+        }
+        if (isPointExchangeCreatedOrPaid(message)
+                && tradeOrderApi.isFirstPointExchange(message.getUserId(), message.getOrderId()).getCheckedData()) {
+            woolService.grantWoolByFirstPointExchange(message.getUserId(), message.getOrderId());
         }
         String templateCode = getTemplateCode(message);
         if (templateCode == null) {
@@ -64,6 +74,11 @@ public class PointExchangeNotifyConsumer {
         }
         return TradeOrderLifecycleTypeEnum.CREATED.getType().equals(message.getLifecycleType())
                 && Boolean.TRUE.equals(message.getPayStatus());
+    }
+
+    private boolean isPointExchangeCreatedOrPaid(TradeOrderLifecycleMessage message) {
+        return TradeOrderLifecycleTypeEnum.CREATED.getType().equals(message.getLifecycleType())
+                || TradeOrderLifecycleTypeEnum.PAID.getType().equals(message.getLifecycleType());
     }
 
 }

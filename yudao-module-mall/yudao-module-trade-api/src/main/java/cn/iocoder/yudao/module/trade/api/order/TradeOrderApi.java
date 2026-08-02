@@ -31,6 +31,14 @@ public interface TradeOrderApi {
     @Parameter(name = "id", description = "订单编号", required = true)
     CommonResult<TradeOrderRespDTO> getOrder(@RequestParam("id") Long id);
 
+    @GetMapping(PREFIX + "/is-first-point-exchange")
+    @Parameters({
+            @Parameter(name = "userId", description = "用户编号", required = true, example = "1024"),
+            @Parameter(name = "orderId", description = "订单编号", required = true, example = "2048"),
+    })
+    CommonResult<Boolean> isFirstPointExchange(@RequestParam("userId") Long userId,
+                                               @RequestParam("orderId") Long orderId);
+
     @PutMapping(PREFIX + "/cancel-paid")
     @Parameters({
             @Parameter(name = "userId", description = "用户编号", required = true, example = "1024"),

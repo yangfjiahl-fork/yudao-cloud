@@ -108,6 +108,14 @@ public interface WoolService {
     void grantWoolByRegister(Long memberId);
 
     /**
+     * 用户首次积分兑换成功时，发放邀请羊毛
+     *
+     * @param memberId 会员编号
+     * @param orderId  积分兑换订单编号
+     */
+    void grantWoolByFirstPointExchange(Long memberId, Long orderId);
+
+    /**
      * 用户签到时，生成待收取羊毛
      *
      * @param memberId 会员编号

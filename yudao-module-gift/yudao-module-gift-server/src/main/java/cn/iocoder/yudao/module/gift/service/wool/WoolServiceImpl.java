@@ -44,8 +44,11 @@ public class WoolServiceImpl implements WoolService {
 
     private static final String NEW_USER_WOOL_AMOUNT_CONFIG_KEY = "wool.amount.for.new.user";
     private static final String RECOMMEND_USER_WOOL_AMOUNT_CONFIG_KEY = "recommend.user.wool.cnt";
+    private static final String RECOMMEND_USER_FIRST_EXCHANGE_WOOL_AMOUNT_CONFIG_KEY = "recommend.user.first.exchange.wool.cnt";
+    private static final String FIRST_POINT_EXCHANGE_BIZ_ID_FORMAT = "first-point-exchange:%s:%s";
     private static final String REGISTER_WOOL_REMARK = "新用户注册赠送羊毛";
     private static final String RECOMMEND_WOOL_REMARK = "邀请新用户奖励羊毛";
+    private static final String FIRST_POINT_EXCHANGE_RECOMMEND_WOOL_REMARK = "首次积分兑换奖励羊毛";
     private static final String SIGN_IN_WOOL_REMARK = "签到第%s天奖励羊毛";
     private static final String DEFAULT_WOOL_POINT_REMARK = "收取羊毛";
 
@@ -209,9 +212,57 @@ public class WoolServiceImpl implements WoolService {
                 .memberId(recommendUserId)
                 .build();
         wool.setCreator(String.valueOf(recommendUserId));
+
+        if (wool.getAmount() <= 0) {
+            log.info("[grantWoolByRecommend]邀请赠送羊毛关闭");
+            return;
+        }
+
         woolMapper.insert(wool);
         log.info("[grantWoolByRecommend][会员({}) 邀请会员({})，羊毛({}) 发放成功，数量({})]",
                 recommendUserId, memberId, wool.getId(), wool.getAmount());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void grantWoolByFirstPointExchange(Long memberId, Long orderId) {
+        MemberUserRespDTO member = memberUserApi.getUser(memberId).getCheckedData();
+        if (member == null || member.getRecommendUserId() == null) {
+            return;
+        }
+
+        int amount = getFirstPointExchangeRecommendWoolAmount();
+        if (amount <= 0) {
+            log.info("[grantWoolByFirstPointExchange][首次积分兑换邀请羊毛关闭]");
+            return;
+        }
+
+        grantWoolByFirstPointExchange(memberId, orderId, amount);
+        grantWoolByFirstPointExchange(member.getRecommendUserId(), orderId, amount);
+    }
+
+    private void grantWoolByFirstPointExchange(Long memberId, Long orderId, int amount) {
+        MemberPointBizTypeEnum bizTypeEnum = MemberPointBizTypeEnum.RECOMMEND;
+        String bizId = String.format(FIRST_POINT_EXCHANGE_BIZ_ID_FORMAT, orderId, memberId);
+        WoolDO existsWool = woolMapper.selectByBizTypeAndBizId(bizTypeEnum.getType(), bizId);
+        if (existsWool != null) {
+            log.info("[grantWoolByFirstPointExchange][会员({}) 的首次积分兑换邀请羊毛({}) 已存在，跳过发放]",
+                    memberId, existsWool.getId());
+            return;
+        }
+
+        WoolDO wool = WoolDO.builder()
+                .bizType(bizTypeEnum.getType())
+                .bizId(bizId)
+                .amount(amount)
+                .remark(FIRST_POINT_EXCHANGE_RECOMMEND_WOOL_REMARK)
+                .status(WoolStatusEnum.INIT.getType())
+                .memberId(memberId)
+                .build();
+        wool.setCreator(String.valueOf(memberId));
+        woolMapper.insert(wool);
+        log.info("[grantWoolByFirstPointExchange][会员({}) 首次积分兑换邀请羊毛({}) 发放成功，数量({})]",
+                memberId, wool.getId(), wool.getAmount());
     }
 
     @Override
@@ -263,6 +314,11 @@ public class WoolServiceImpl implements WoolService {
         return getWoolAmount(RECOMMEND_USER_WOOL_AMOUNT_CONFIG_KEY, WOOL_RECOMMEND_USER_AMOUNT_CONFIG_INVALID);
     }
 
+    private int getFirstPointExchangeRecommendWoolAmount() {
+        return getWoolAmount(RECOMMEND_USER_FIRST_EXCHANGE_WOOL_AMOUNT_CONFIG_KEY,
+                WOOL_RECOMMEND_USER_AMOUNT_CONFIG_INVALID);
+    }
+
     private int getWoolAmount(String configKey, ErrorCode errorCode) {
         String value = configApi.getConfigValueByKey(configKey).getCheckedData();
         if (StrUtil.isBlank(value) || !NumberUtil.isInteger(value.trim())) {
@@ -270,7 +326,7 @@ public class WoolServiceImpl implements WoolService {
             throw exception(errorCode);
         }
         int amount = Integer.parseInt(value.trim());
-        if (amount <= 0) {
+        if (amount < 0) {
             log.warn("[getWoolAmount][羊毛数量配置必须大于 0，key({}) value({})]", configKey, value);
             throw exception(errorCode);
         }

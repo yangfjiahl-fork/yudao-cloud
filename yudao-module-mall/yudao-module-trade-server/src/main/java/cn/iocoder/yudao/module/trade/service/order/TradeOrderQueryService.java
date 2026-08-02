@@ -94,6 +94,15 @@ public interface TradeOrderQueryService {
     Long getOrderCount(Long userId, Integer status, Boolean commonStatus);
 
     /**
+     * 判断订单是否为用户首次成功的积分兑换
+     *
+     * @param userId  用户编号
+     * @param orderId 订单编号
+     * @return 是否首次成功的积分兑换
+     */
+    boolean isFirstPointExchange(Long userId, Long orderId);
+
+    /**
      * 【前台】获得订单的物流轨迹
      *
      * @param id     订单编号

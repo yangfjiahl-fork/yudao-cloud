@@ -39,6 +39,11 @@ public class TradeOrderApiImpl implements TradeOrderApi {
     }
 
     @Override
+    public CommonResult<Boolean> isFirstPointExchange(Long userId, Long orderId) {
+        return success(tradeOrderQueryService.isFirstPointExchange(userId, orderId));
+    }
+
+    @Override
     public CommonResult<Boolean> cancelPaidOrder(Long userId, Long orderId, Integer cancelType) {
         tradeOrderUpdateService.cancelPaidOrder(userId, orderId, cancelType);
         return success(true);

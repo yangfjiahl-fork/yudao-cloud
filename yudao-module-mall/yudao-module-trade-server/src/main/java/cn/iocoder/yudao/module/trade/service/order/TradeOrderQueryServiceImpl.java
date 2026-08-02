@@ -43,6 +43,11 @@ import static cn.iocoder.yudao.module.trade.enums.ErrorCodeConstants.ORDER_NOT_F
 @Service
 public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
 
+    private static final List<Integer> POINT_EXCHANGE_SUCCESS_STATUSES = List.of(
+            TradeOrderStatusEnum.UNDELIVERED.getStatus(),
+            TradeOrderStatusEnum.DELIVERED.getStatus(),
+            TradeOrderStatusEnum.COMPLETED.getStatus());
+
     @Resource
     private ExpressClientFactory expressClientFactory;
 
@@ -151,6 +156,17 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
     @Override
     public Long getOrderCount(Long userId, Integer status, Boolean commentStatus) {
         return tradeOrderMapper.selectCountByUserIdAndStatus(userId, status, commentStatus);
+    }
+
+    @Override
+    public boolean isFirstPointExchange(Long userId, Long orderId) {
+        TradeOrderDO order = tradeOrderMapper.selectByIdAndUserId(orderId, userId);
+        if (order == null || !TradeOrderTypeEnum.isPoint(order.getType())
+                || !POINT_EXCHANGE_SUCCESS_STATUSES.contains(order.getStatus())) {
+            return false;
+        }
+        return tradeOrderMapper.selectCountByUserIdAndTypeAndStatusIn(userId, TradeOrderTypeEnum.POINT.getType(),
+                POINT_EXCHANGE_SUCCESS_STATUSES) == 1;
     }
 
     @Override

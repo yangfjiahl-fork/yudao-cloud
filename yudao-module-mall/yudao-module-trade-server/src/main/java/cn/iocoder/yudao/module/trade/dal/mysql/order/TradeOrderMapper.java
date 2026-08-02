@@ -81,6 +81,13 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
                 .eqIfPresent(TradeOrderDO::getCommentStatus, commentStatus));
     }
 
+    default Long selectCountByUserIdAndTypeAndStatusIn(Long userId, Integer type, List<Integer> statuses) {
+        return selectCount(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getUserId, userId)
+                .eq(TradeOrderDO::getType, type)
+                .in(TradeOrderDO::getStatus, statuses));
+    }
+
     default TradeOrderDO selectOrderByIdAndUserId(Long orderId, Long loginUserId) {
         return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getId, orderId)
