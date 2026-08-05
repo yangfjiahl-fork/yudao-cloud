@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
 
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.constraints.*;
 import jakarta.validation.*;
 import jakarta.servlet.http.*;
@@ -41,6 +42,7 @@ public class AppVideoController {
     @GetMapping("/random-list")
     @Operation(summary = "随机获得视频列表")
     @Parameter(name = "pageSize", description = "返回数量，默认 30，最大 50", example = "30")
+    @PermitAll
     public CommonResult<List<AppVideoRespVO>> getRandomVideoList(
             @RequestParam(value = "pageSize", defaultValue = "30") @Min(1) @Max(50) Integer pageSize) {
         List<VideoDO> videos = videoService.getRandomVideoList(pageSize);
@@ -51,6 +53,7 @@ public class AppVideoController {
     @GetMapping("/list-by-ids")
     @Operation(summary = "根据id获得视频列表")
     @Parameter(name = "ids", description = "多个id", example = "30")
+    @PermitAll
     public CommonResult<List<AppVideoRespVO>> getByIds(@RequestParam("ids") Set<Long> ids) {
         List<VideoDO> videos = videoService.getByIds(ids);
         videoService.authUrl(videos);
