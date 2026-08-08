@@ -19,6 +19,7 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
         return selectPage(reqVO, new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus())
+                .orderByDesc(ArticlesDO::getStatus)
                 .orderByDesc(ArticlesDO::getSort)
                 .orderByDesc(ArticlesDO::getId));
     }

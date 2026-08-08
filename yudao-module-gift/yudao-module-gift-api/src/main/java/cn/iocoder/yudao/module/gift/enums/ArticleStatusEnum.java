@@ -25,9 +25,9 @@ public enum ArticleStatusEnum implements ArrayValuable<Integer> {
 
     DRAFT(1, "草稿", "草稿"),
 
-    ONLINE(3, "已发布", "已发布"),
+    OFFLINE(3, "已下线", "已下线"),
 
-    OFFLINE(5, "已下线", "已下线"),
+    ONLINE(5, "已发布", "已发布"),
     ;
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(ArticleStatusEnum::getType).toArray(Integer[]::new);
