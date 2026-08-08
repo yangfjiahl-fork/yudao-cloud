@@ -1,0 +1,61 @@
+package cn.iocoder.yudao.module.gift.service.article;
+
+import java.util.*;
+import jakarta.validation.*;
+import cn.iocoder.yudao.module.gift.controller.admin.article.vo.*;
+import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+
+/**
+ * 文章 Service 接口
+ *
+ * @author 羔享科技
+ */
+public interface ArticleService {
+
+    /**
+     * 创建文章
+     *
+     * @param createReqVO 创建信息
+     * @return 编号
+     */
+    Long createArticle(@Valid ArticleSaveReqVO createReqVO);
+
+    /**
+     * 更新文章
+     *
+     * @param updateReqVO 更新信息
+     */
+    void updateArticle(@Valid ArticleSaveReqVO updateReqVO);
+
+    /**
+     * 删除文章
+     *
+     * @param id 编号
+     */
+    void deleteArticle(Long id);
+
+    /**
+    * 批量删除文章
+    *
+    * @param ids 编号
+    */
+    void deleteArticleListByIds(List<Long> ids);
+
+    /**
+     * 获得文章
+     *
+     * @param id 编号
+     * @return 文章
+     */
+    ArticlesDO getArticle(Long id);
+
+    /**
+     * 获得文章分页
+     *
+     * @param pageReqVO 分页查询
+     * @return 文章分页
+     */
+    PageResult<ArticlesDO> getArticlePage(ArticlePageReqVO pageReqVO);
+
+}

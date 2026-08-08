@@ -23,4 +23,6 @@ public interface ErrorCodeConstants {
             "推荐用户羊毛数量配置不存在或格式错误");
 
     ErrorCode VIDEO_NOT_EXISTS = new ErrorCode(1_042_000_001, "视频不存在");
+
+    ErrorCode ARTICLE_NOT_EXISTS = new ErrorCode(1_043_000_001, "文章不存在");
 }
