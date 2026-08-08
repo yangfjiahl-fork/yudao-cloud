@@ -52,6 +52,14 @@ public class ArticlesController {
         return success(true);
     }
 
+    @PutMapping("/change-status")
+    @Operation(summary = "修改文章状态")
+    @PreAuthorize("@ss.hasPermission('gift:article:update')")
+    public CommonResult<Boolean> changeArticleStatus(@Valid @RequestBody ArticleChangeStatusReqVO reqVO) {
+        articleService.changeArticleStatus(reqVO.getId(), reqVO.getStatus());
+        return success(true);
+    }
+
     @DeleteMapping("/delete")
     @Operation(summary = "删除文章")
     @Parameter(name = "id", description = "编号", required = true)

@@ -48,6 +48,17 @@ public class ArticlesServiceImpl implements ArticleService {
     }
 
     @Override
+    public void changeArticleStatus(Long id, Integer status) {
+        // 校验存在
+        validateArticleExists(id);
+
+        ArticlesDO updateObj = new ArticlesDO();
+        updateObj.setId(id);
+        updateObj.setStatus(status);
+        articlesMapper.updateById(updateObj);
+    }
+
+    @Override
     public void deleteArticle(Long id) {
         // 校验存在
         validateArticleExists(id);

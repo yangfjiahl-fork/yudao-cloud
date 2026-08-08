@@ -35,6 +35,10 @@ public class ArticlesDO extends BaseDO {
      */
     private Long memberId;
     /**
+     * 文章作者
+     */
+    private String author;
+    /**
      * 文章分类编号，发布时要求为末级分类
      */
     private Long categoryId;
@@ -50,6 +54,18 @@ public class ArticlesDO extends BaseDO {
      * 封面图地址
      */
     private String coverImage;
+    /**
+     * 封面宽度
+     */
+    private Integer coverWidth;
+    /**
+     * 封面高度
+     */
+    private Integer coverHeight;
+    /**
+     * 封面方向
+     */
+    private String coverOrientation;
     /**
      * 轮播图地址数组
      */

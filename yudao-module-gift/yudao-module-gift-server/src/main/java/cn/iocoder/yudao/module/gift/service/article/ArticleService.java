@@ -29,6 +29,14 @@ public interface ArticleService {
     void updateArticle(@Valid ArticleSaveReqVO updateReqVO);
 
     /**
+     * 修改文章状态
+     *
+     * @param id     文章编号
+     * @param status 文章状态
+     */
+    void changeArticleStatus(Long id, Integer status);
+
+    /**
      * 删除文章
      *
      * @param id 编号

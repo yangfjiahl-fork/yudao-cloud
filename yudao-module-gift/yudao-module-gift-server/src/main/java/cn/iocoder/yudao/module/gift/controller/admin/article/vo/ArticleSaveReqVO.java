@@ -1,5 +1,10 @@
 package cn.iocoder.yudao.module.gift.controller.admin.article.vo;
 
+import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
+import static cn.iocoder.yudao.framework.common.util.date.DateUtils.TIME_ZONE_DEFAULT;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
@@ -18,6 +23,9 @@ public class ArticleSaveReqVO {
     @NotNull(message = "文章作者会员编号不能为空")
     private Long memberId;
 
+    @Schema(description = "文章作者")
+    private String author;
+
     @Schema(description = "文章分类编号，发布时要求为末级分类", requiredMode = Schema.RequiredMode.REQUIRED, example = "15436")
     @NotNull(message = "文章分类编号，发布时要求为末级分类不能为空")
     private Long categoryId;
@@ -33,6 +41,15 @@ public class ArticleSaveReqVO {
     @Schema(description = "封面图地址", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "封面图地址不能为空")
     private String coverImage;
+
+    @Schema(description = "封面宽度", example = "750")
+    private Integer coverWidth;
+
+    @Schema(description = "封面高度", example = "422")
+    private Integer coverHeight;
+
+    @Schema(description = "封面方向", example = "landscape")
+    private String coverOrientation;
 
     @Schema(description = "轮播图地址数组", requiredMode = Schema.RequiredMode.REQUIRED)
 //    @NotEmpty(message = "轮播图地址数组不能为空")
@@ -60,6 +77,8 @@ public class ArticleSaveReqVO {
 
     @Schema(description = "发布时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "发布时间不能为空")
+    @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
+    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND, timezone = TIME_ZONE_DEFAULT)
     private LocalDateTime publishTime;
 
 }
