@@ -19,4 +19,7 @@ public class AppArticlePageReqVO extends PageParam {
     @Schema(description = "状态：0-草稿，1-已发布，2-已下架", example = "1")
     private Integer status;
 
+    @Schema(description = "当前列表最后一条文章的编号；首次加载不传", example = "1024")
+    private Long maxId;
+
 }

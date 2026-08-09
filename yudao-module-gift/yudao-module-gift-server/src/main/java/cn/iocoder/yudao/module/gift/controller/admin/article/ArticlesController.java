@@ -56,7 +56,7 @@ public class ArticlesController {
     @Operation(summary = "修改文章状态")
     @PreAuthorize("@ss.hasPermission('gift:article:update')")
     public CommonResult<Boolean> changeArticleStatus(@Valid @RequestBody ArticleChangeStatusReqVO reqVO) {
-        articleService.changeArticleStatus(reqVO.getId(), reqVO.getStatus());
+        articleService.changeArticleStatus(reqVO.getIds(), reqVO.getStatus());
         return success(true);
     }
 

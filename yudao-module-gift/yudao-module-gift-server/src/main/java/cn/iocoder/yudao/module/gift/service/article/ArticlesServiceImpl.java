@@ -6,6 +6,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.util.*;
 import cn.iocoder.yudao.module.gift.controller.admin.article.vo.*;
+import cn.iocoder.yudao.module.gift.controller.app.article.vo.AppArticlePageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
@@ -48,14 +49,8 @@ public class ArticlesServiceImpl implements ArticleService {
     }
 
     @Override
-    public void changeArticleStatus(Long id, Integer status) {
-        // 校验存在
-        validateArticleExists(id);
-
-        ArticlesDO updateObj = new ArticlesDO();
-        updateObj.setId(id);
-        updateObj.setStatus(status);
-        articlesMapper.updateById(updateObj);
+    public void changeArticleStatus(List<Long> ids, Integer status) {
+        articlesMapper.updateStatusByIds(ids, status);
     }
 
     @Override
@@ -85,7 +80,17 @@ public class ArticlesServiceImpl implements ArticleService {
     }
 
     @Override
+    public void addArticleViewCount(Long id) {
+        articlesMapper.updateViewCount(id);
+    }
+
+    @Override
     public PageResult<ArticlesDO> getArticlePage(ArticlePageReqVO pageReqVO) {
+        return articlesMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public PageResult<ArticlesDO> getArticlePage(AppArticlePageReqVO pageReqVO) {
         return articlesMapper.selectPage(pageReqVO);
     }
 

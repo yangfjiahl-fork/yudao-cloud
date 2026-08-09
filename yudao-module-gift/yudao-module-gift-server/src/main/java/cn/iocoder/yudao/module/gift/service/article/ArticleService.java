@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.article;
 import java.util.*;
 import jakarta.validation.*;
 import cn.iocoder.yudao.module.gift.controller.admin.article.vo.*;
+import cn.iocoder.yudao.module.gift.controller.app.article.vo.AppArticlePageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 
@@ -31,10 +32,10 @@ public interface ArticleService {
     /**
      * 修改文章状态
      *
-     * @param id     文章编号
+     * @param ids    文章编号列表
      * @param status 文章状态
      */
-    void changeArticleStatus(Long id, Integer status);
+    void changeArticleStatus(List<Long> ids, Integer status);
 
     /**
      * 删除文章
@@ -59,11 +60,26 @@ public interface ArticleService {
     ArticlesDO getArticle(Long id);
 
     /**
+     * 增加文章浏览次数
+     *
+     * @param id 文章编号
+     */
+    void addArticleViewCount(Long id);
+
+    /**
      * 获得文章分页
      *
      * @param pageReqVO 分页查询
      * @return 文章分页
      */
     PageResult<ArticlesDO> getArticlePage(ArticlePageReqVO pageReqVO);
+
+    /**
+     * 获得 APP 文章分页
+     *
+     * @param pageReqVO 分页查询
+     * @return 文章分页
+     */
+    PageResult<ArticlesDO> getArticlePage(AppArticlePageReqVO pageReqVO);
 
 }

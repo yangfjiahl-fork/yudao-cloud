@@ -2,7 +2,6 @@ package cn.iocoder.yudao.module.gift.controller.app.article;
 
 import org.springframework.web.bind.annotation.*;
 
-import cn.iocoder.yudao.module.gift.controller.admin.article.vo.ArticlePageReqVO;
 import cn.iocoder.yudao.module.gift.enums.ArticleStatusEnum;
 import cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants;
 import jakarta.annotation.Resource;
@@ -46,14 +45,16 @@ public class AppArticlesController {
         if (article == null || !Objects.equals(article.getStatus(), ArticleStatusEnum.ONLINE.getType())) {
             return error(ErrorCodeConstants.ARTICLE_NOT_EXISTS);
         }
+        articleService.addArticleViewCount(id);
         return success(BeanUtils.toBean(article, AppArticleRespVO.class));
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得文章分页")
     @PermitAll
-    public CommonResult<PageResult<AppArticleRespVO>> getArticlePage(@Valid ArticlePageReqVO pageReqVO) {
+    public CommonResult<PageResult<AppArticleRespVO>> getArticlePage(@Valid AppArticlePageReqVO pageReqVO) {
         pageReqVO.setStatus(ArticleStatusEnum.ONLINE.getType());
+        pageReqVO.setPageNo(1);
         PageResult<ArticlesDO> pageResult = articleService.getArticlePage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, AppArticleRespVO.class));
     }
