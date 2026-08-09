@@ -113,7 +113,7 @@ public class ProductSpuController {
     @Operation(summary = "获得商品 SPU 分页")
     @PreAuthorize("@ss.hasPermission('product:spu:query')")
     public CommonResult<PageResult<ProductSpuRespVO>> getSpuPage(@Valid ProductSpuPageReqVO pageVO) {
-        PageResult<ProductSpuDO> pageResult = productSpuService.getSpuPage(pageVO);
+        PageResult<ProductSpuDO> pageResult = productSpuService.getSpuPageForList(pageVO);
         return success(BeanUtils.toBean(pageResult, ProductSpuRespVO.class));
     }
 

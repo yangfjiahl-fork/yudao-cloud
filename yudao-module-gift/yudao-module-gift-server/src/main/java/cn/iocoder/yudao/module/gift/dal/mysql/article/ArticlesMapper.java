@@ -32,9 +32,15 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
     }
 
     default PageResult<ArticlesDO> selectPage(ArticlePageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<ArticlesDO>()
+        LambdaQueryWrapperX<ArticlesDO> query = new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
-                .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus())
+                .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
+        query.select(ArticlesDO::getId, ArticlesDO::getAuthor, ArticlesDO::getCategoryId,
+                ArticlesDO::getTitle, ArticlesDO::getSummary, ArticlesDO::getCoverImage,
+                ArticlesDO::getCoverWidth, ArticlesDO::getCoverHeight, ArticlesDO::getCoverOrientation,
+                ArticlesDO::getViewCount, ArticlesDO::getLikeCount, ArticlesDO::getSort,
+                ArticlesDO::getStatus, ArticlesDO::getPublishTime);
+        return selectPage(reqVO, query
                 .orderByDesc(ArticlesDO::getStatus)
                 .orderByDesc(ArticlesDO::getSort)
                 .orderByDesc(ArticlesDO::getId));
@@ -44,6 +50,9 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
         LambdaQueryWrapperX<ArticlesDO> query = new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
+        query.select(ArticlesDO::getId, ArticlesDO::getAuthor, ArticlesDO::getTitle, ArticlesDO::getCoverImage,
+                ArticlesDO::getCoverWidth, ArticlesDO::getCoverHeight, ArticlesDO::getCoverOrientation,
+                ArticlesDO::getViewCount, ArticlesDO::getLikeCount);
         query.ltIfPresent(ArticlesDO::getId, reqVO.getMaxId());
         Page<ArticlesDO> page = new Page<>(reqVO.getPageNo(), reqVO.getPageSize());
         page.setSearchCount(false); // 禁用 MyBatis-Plus 的 COUNT(*) 查询

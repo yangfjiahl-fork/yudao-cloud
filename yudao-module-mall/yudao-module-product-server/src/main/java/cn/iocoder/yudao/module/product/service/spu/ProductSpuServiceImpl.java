@@ -232,6 +232,11 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     }
 
     @Override
+    public PageResult<ProductSpuDO> getSpuPageForList(ProductSpuPageReqVO pageReqVO) {
+        return productSpuMapper.selectPageForList(pageReqVO);
+    }
+
+    @Override
     public PageResult<ProductSpuDO> getSpuPage(AppProductSpuPageReqVO pageReqVO) {
         // 查找时，如果查找某个分类编号，则包含它的子分类。因为顶级分类不包含商品
         Set<Long> categoryIds = new HashSet<>();

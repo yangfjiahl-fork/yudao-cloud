@@ -96,6 +96,14 @@ public interface ProductSpuService {
     PageResult<ProductSpuDO> getSpuPage(ProductSpuPageReqVO pageReqVO);
 
     /**
+     * 获得管理后台商品 SPU 分页列表，仅包含列表展示所需字段
+     *
+     * @param pageReqVO 分页查询
+     * @return 商品 SPU 分页
+     */
+    PageResult<ProductSpuDO> getSpuPageForList(ProductSpuPageReqVO pageReqVO);
+
+    /**
      * 获得商品 SPU 分页，提供给用户 App 使用
      *
      * @param pageReqVO 分页查询

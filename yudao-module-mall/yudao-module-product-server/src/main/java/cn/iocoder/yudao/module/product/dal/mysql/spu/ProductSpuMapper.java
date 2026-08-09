@@ -50,6 +50,33 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
     }
 
     /**
+     * 获取商品 SPU 分页列表数据，仅查询列表展示所需字段
+     *
+     * @param reqVO 分页请求参数
+     * @return 商品 SPU 分页列表数据
+     */
+    default PageResult<ProductSpuDO> selectPageForList(ProductSpuPageReqVO reqVO) {
+        Integer tabType = reqVO.getTabType();
+        LambdaQueryWrapperX<ProductSpuDO> queryWrapper = new LambdaQueryWrapperX<ProductSpuDO>();
+        queryWrapper.select(ProductSpuDO::getId, ProductSpuDO::getName, ProductSpuDO::getKeyword,
+                ProductSpuDO::getIntroduction, ProductSpuDO::getCategoryId, ProductSpuDO::getBrandId,
+                ProductSpuDO::getPicUrl, ProductSpuDO::getSort, ProductSpuDO::getStatus,
+                ProductSpuDO::getSpecType, ProductSpuDO::getPrice, ProductSpuDO::getMarketPrice,
+                ProductSpuDO::getCostPrice, ProductSpuDO::getStock, ProductSpuDO::getDeliveryTemplateId,
+                ProductSpuDO::getGiveIntegral, ProductSpuDO::getSubCommissionType,
+                ProductSpuDO::getSalesCount, ProductSpuDO::getVirtualSalesCount,
+                ProductSpuDO::getBrowseCount, ProductSpuDO::getCreateTime);
+        queryWrapper
+                .likeIfPresent(ProductSpuDO::getName, reqVO.getName())
+                .eqIfPresent(ProductSpuDO::getCategoryId, reqVO.getCategoryId())
+                .betweenIfPresent(ProductSpuDO::getCreateTime, reqVO.getCreateTime())
+                .orderByDesc(ProductSpuDO::getSort)
+                .orderByDesc(ProductSpuDO::getId);
+        appendTabQuery(tabType, queryWrapper);
+        return selectPage(reqVO, queryWrapper);
+    }
+
+    /**
      * 查询触发警戒库存的 SPU 数量
      *
      * @return 触发警戒库存的 SPU 数量
@@ -67,7 +94,13 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
      * 获得商品 SPU 分页，提供给用户 App 使用
      */
     default PageResult<ProductSpuDO> selectPage(AppProductSpuPageReqVO pageReqVO, Set<Long> categoryIds) {
-        LambdaQueryWrapperX<ProductSpuDO> query = new LambdaQueryWrapperX<ProductSpuDO>()
+        LambdaQueryWrapperX<ProductSpuDO> query = new LambdaQueryWrapperX<ProductSpuDO>();
+        query.select(ProductSpuDO::getId, ProductSpuDO::getName, ProductSpuDO::getIntroduction,
+                ProductSpuDO::getCategoryId, ProductSpuDO::getPicUrl, ProductSpuDO::getSliderPicUrls,
+                ProductSpuDO::getSpecType, ProductSpuDO::getPrice, ProductSpuDO::getMarketPrice,
+                ProductSpuDO::getStock, ProductSpuDO::getDeliveryTypes, ProductSpuDO::getSalesCount,
+                ProductSpuDO::getVirtualSalesCount);
+        query
                 // 关键字匹配，目前只匹配商品名
                 .likeIfPresent(ProductSpuDO::getName, pageReqVO.getKeyword())
                 // 分类
