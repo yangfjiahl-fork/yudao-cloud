@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.gift.controller.app.article.vo.AppArticlePageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Mapper;
 import cn.iocoder.yudao.module.gift.controller.admin.article.vo.*;
 
@@ -44,9 +45,12 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
         query.ltIfPresent(ArticlesDO::getId, reqVO.getMaxId());
-        return selectPage(reqVO, query
+        Page<ArticlesDO> page = new Page<>(reqVO.getPageNo(), reqVO.getPageSize());
+        page.setSearchCount(false); // 禁用 MyBatis-Plus 的 COUNT(*) 查询
+        selectPage(page, query
                 .orderByDesc(ArticlesDO::getSort)
                 .orderByDesc(ArticlesDO::getId));
+        return new PageResult<>(page.getRecords(), 0L);
     }
 
 }
