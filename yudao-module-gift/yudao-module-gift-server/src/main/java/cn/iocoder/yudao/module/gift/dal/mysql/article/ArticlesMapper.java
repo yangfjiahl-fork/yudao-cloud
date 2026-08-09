@@ -35,7 +35,7 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
         LambdaQueryWrapperX<ArticlesDO> query = new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
-        query.select(ArticlesDO::getId, ArticlesDO::getAuthor, ArticlesDO::getCategoryId,
+        query.select(ArticlesDO::getId, ArticlesDO::getMemberId, ArticlesDO::getAuthor, ArticlesDO::getCategoryId,
                 ArticlesDO::getTitle, ArticlesDO::getSummary, ArticlesDO::getCoverImage,
                 ArticlesDO::getCoverWidth, ArticlesDO::getCoverHeight, ArticlesDO::getCoverOrientation,
                 ArticlesDO::getViewCount, ArticlesDO::getLikeCount, ArticlesDO::getSort,
