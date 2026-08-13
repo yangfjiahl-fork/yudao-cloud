@@ -18,7 +18,7 @@ public interface RedisKeyConstants {
     /**
      * 交易序号的缓存
      *
-     * KEY 格式：express_track:{code-logisticsNo-receiverMobile}
+     * KEY 格式：express_track:{sha256(code-logisticsNo-receiverMobile)}
      * VALUE 数据格式 String, 物流信息集合
      */
     String EXPRESS_TRACK = "express_track";

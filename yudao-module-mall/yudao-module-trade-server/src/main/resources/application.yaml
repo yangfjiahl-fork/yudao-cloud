@@ -122,6 +122,7 @@ yudao:
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:
+      - /admin-api/trade/express/aliyun-kd100/notify # 阿里云快递 100 动态通知
     ignore-tables:
   trade:
     order:
@@ -130,7 +131,7 @@ yudao:
       comment-expire-time: 7d # 评论的过期时间
       status-sync-to-wxa-enable: true # 是否同步订单状态到微信小程序
     express:
-      client: kd_100
+      client: ${TRADE_EXPRESS_CLIENT:aliyun_kd100}
       kd-niao:
         api-key: cb022f1e-48f1-4c4a-a723-9001ac9676b8
         business-id: 1809751
@@ -138,5 +139,12 @@ yudao:
       kd100:
         key: pLXUGAwK5305
         customer: E77DF18BE109F454A5CD319E44BF5177
+      aliyun-kd100:
+        app-code: ${ALIYUN_KD100_APP_CODE:}
+        query-url: https://kdapi.kuaidi100.com/test/poll/query
+        subscribe-url: https://kd100api.kuaidi100.com/express/poll
+        callback-url: http://fc.xiaoyanggao.cn/kuaidi_evet
+        callback-token: ${ALIYUN_KD100_CALLBACK_TOKEN:}
+        result-v2: ${ALIYUN_KD100_RESULT_V2:0}
 
 debug: false

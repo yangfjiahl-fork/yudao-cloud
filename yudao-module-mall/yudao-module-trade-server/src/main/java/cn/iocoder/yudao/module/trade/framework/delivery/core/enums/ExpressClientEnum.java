@@ -14,7 +14,8 @@ public enum ExpressClientEnum {
 
     NOT_PROVIDE("not_provide","未提供"),
     KD_NIAO("kd_niao", "快递鸟"),
-    KD_100("kd_100", "快递100");
+    KD_100("kd_100", "快递100"),
+    ALIYUN_KD_100("aliyun_kd100", "阿里云快递100");
 
     /**
      * 快递服务商唯一编码

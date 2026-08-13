@@ -21,9 +21,11 @@ import cn.iocoder.yudao.module.trade.enums.order.TradeOrderRefundStatusEnum;
 import cn.iocoder.yudao.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.iocoder.yudao.module.trade.enums.order.TradeOrderTypeEnum;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.ExpressClientFactory;
+import cn.iocoder.yudao.module.trade.framework.delivery.core.client.ExpressTrackCacheKeyUtils;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.dto.ExpressTrackQueryReqDTO;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.dto.ExpressTrackRespDTO;
 import cn.iocoder.yudao.module.trade.service.delivery.DeliveryExpressService;
+import cn.iocoder.yudao.module.trade.service.delivery.TradeOrderLogisticsService;
 import jakarta.annotation.Resource;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -58,6 +60,8 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
 
     @Resource
     private DeliveryExpressService deliveryExpressService;
+    @Resource
+    private TradeOrderLogisticsService tradeOrderLogisticsService;
 
     @Resource
     private MemberUserApi memberUserApi;
@@ -219,7 +223,8 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
             throw exception(EXPRESS_NOT_EXISTS);
         }
         // 查询物流轨迹
-        return getSelf().getExpressTrackList(express.getCode(), order.getLogisticsNo(), order.getReceiverMobile());
+        return getSelf().getExpressTrackList(order.getId(), order.getLogisticsId(), express.getCode(),
+                order.getLogisticsNo(), order.getReceiverMobile());
     }
 
     /**
@@ -227,16 +232,29 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
      * <p>
      * 缓存的目的：考虑及时性要求不高，但是每次调用需要钱
      *
+     * @param orderId        订单编号
+     * @param logisticsId    物流公司编号
      * @param code           快递公司编码
      * @param logisticsNo    发货快递单号
      * @param receiverMobile 收、寄件人的电话号码
      * @return 物流轨迹
      */
-    @Cacheable(cacheNames = RedisKeyConstants.EXPRESS_TRACK, key = "#code + '-' + #logisticsNo + '-' + #receiverMobile",
+    @Cacheable(cacheNames = RedisKeyConstants.EXPRESS_TRACK,
+            key = "T(cn.iocoder.yudao.module.trade.framework.delivery.core.client.ExpressTrackCacheKeyUtils)" +
+                    ".build(#code, #logisticsNo, #receiverMobile)",
             unless = "#result == null")
-    public List<ExpressTrackRespDTO> getExpressTrackList(String code, String logisticsNo, String receiverMobile) {
-        return expressClientFactory.getDefaultExpressClient().getExpressTrackList(new ExpressTrackQueryReqDTO()
-                .setExpressCode(code).setLogisticsNo(logisticsNo).setPhone(receiverMobile));
+    public List<ExpressTrackRespDTO> getExpressTrackList(Long orderId, Long logisticsId, String code,
+                                                        String logisticsNo, String receiverMobile) {
+        String cacheKey = ExpressTrackCacheKeyUtils.build(code, logisticsNo, receiverMobile);
+        List<ExpressTrackRespDTO> tracks = tradeOrderLogisticsService.getTrackList(cacheKey);
+        if (tracks != null) {
+            return tracks;
+        }
+        ExpressTrackQueryReqDTO reqDTO = new ExpressTrackQueryReqDTO().setExpressCode(code)
+                .setLogisticsNo(logisticsNo).setPhone(receiverMobile);
+        tracks = expressClientFactory.getDefaultExpressClient().getExpressTrackList(reqDTO);
+        tradeOrderLogisticsService.saveQueryResult(orderId, logisticsId, reqDTO, tracks);
+        return tracks;
     }
 
     // =================== Order Item ===================

@@ -49,12 +49,14 @@ import cn.iocoder.yudao.module.trade.dal.mysql.order.TradeOrderMapper;
 import cn.iocoder.yudao.module.trade.dal.redis.no.TradeNoRedisDAO;
 import cn.iocoder.yudao.module.trade.enums.delivery.DeliveryTypeEnum;
 import cn.iocoder.yudao.module.trade.enums.order.*;
+import cn.iocoder.yudao.module.trade.framework.delivery.core.client.dto.ExpressTrackQueryReqDTO;
 import cn.iocoder.yudao.module.trade.framework.order.config.TradeOrderProperties;
 import cn.iocoder.yudao.module.trade.framework.order.core.annotations.TradeOrderLog;
 import cn.iocoder.yudao.module.trade.framework.order.core.utils.TradeOrderLogUtils;
 import cn.iocoder.yudao.module.trade.service.cart.CartService;
 import cn.iocoder.yudao.module.trade.service.delivery.DeliveryExpressService;
 import cn.iocoder.yudao.module.trade.service.delivery.DeliveryPickUpStoreService;
+import cn.iocoder.yudao.module.trade.service.delivery.ExpressSubscriptionService;
 import cn.iocoder.yudao.module.trade.service.message.TradeMessageService;
 import cn.iocoder.yudao.module.trade.service.message.bo.TradeOrderMessageWhenDeliveryOrderReqBO;
 import cn.iocoder.yudao.module.trade.service.order.handler.TradeOrderHandler;
@@ -113,6 +115,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     private TradeMessageService tradeMessageService;
     @Resource
     private DeliveryPickUpStoreService pickUpStoreService;
+    @Resource
+    private ExpressSubscriptionService expressSubscriptionService;
 
     @Resource
     private PayOrderApi payOrderApi;
@@ -417,6 +421,12 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         order.setLogisticsId(updateOrderObj.getLogisticsId()).setLogisticsNo(updateOrderObj.getLogisticsNo())
                 .setStatus(updateOrderObj.getStatus()).setDeliveryTime(updateOrderObj.getDeliveryTime());
         tradeOrderHandlers.forEach(handler -> handler.afterDeliveryOrder(order));
+        // 6. 提交物流动态订阅。订阅失败不影响发货，仍可通过实时查询获取轨迹。
+        if (express != null) {
+            expressSubscriptionService.subscribeAfterCommit(order.getId(), express.getId(), new ExpressTrackQueryReqDTO()
+                    .setExpressCode(express.getCode()).setLogisticsNo(deliveryReqVO.getLogisticsNo())
+                    .setPhone(order.getReceiverMobile()));
+        }
     }
 
     @Async

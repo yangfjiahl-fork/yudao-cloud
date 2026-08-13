@@ -4,6 +4,7 @@ import cn.hutool.core.lang.Assert;
 import cn.iocoder.yudao.module.trade.framework.delivery.config.TradeExpressProperties;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.ExpressClient;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.ExpressClientFactory;
+import cn.iocoder.yudao.module.trade.framework.delivery.core.client.impl.aliyunkd100.AliyunKd100ExpressClient;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.impl.kd100.Kd100ExpressClient;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.client.impl.kdniao.KdNiaoExpressClient;
 import cn.iocoder.yudao.module.trade.framework.delivery.core.enums.ExpressClientEnum;
@@ -48,6 +49,8 @@ public class ExpressClientFactoryImpl implements ExpressClientFactory {
                 return new KdNiaoExpressClient(restTemplate, tradeExpressProperties.getKdNiao());
             case KD_100:
                 return new Kd100ExpressClient(restTemplate, tradeExpressProperties.getKd100());
+            case ALIYUN_KD_100:
+                return new AliyunKd100ExpressClient(restTemplate, tradeExpressProperties.getAliyunKd100());
         }
         return null;
     }

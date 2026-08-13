@@ -38,6 +38,11 @@ public class TradeExpressProperties {
      */
     @Valid
     private Kd100Config kd100;
+    /**
+     * 阿里云快递 100 配置
+     */
+    @Valid
+    private AliyunKd100Config aliyunKd100;
 
     /**
      * 快递鸟配置项目
@@ -83,6 +88,39 @@ public class TradeExpressProperties {
          */
         @NotEmpty(message = "快递 100 授权 Key 配置项不能为空")
         private String key;
+
+    }
+
+    /**
+     * 阿里云快递 100 配置项
+     */
+    @Data
+    public static class AliyunKd100Config {
+
+        /**
+         * 阿里云市场分配的 AppCode
+         */
+        private String appCode;
+        /**
+         * 实时查询接口地址
+         */
+        private String queryUrl = "https://kdapi.kuaidi100.com/test/poll/query";
+        /**
+         * 订阅接口地址
+         */
+        private String subscribeUrl = "https://kd100api.kuaidi100.com/express/poll";
+        /**
+         * 接收物流动态通知的公网地址
+         */
+        private String callbackUrl;
+        /**
+         * 回调地址校验令牌
+         */
+        private String callbackToken;
+        /**
+         * 订阅结果版本：0 基础轨迹；4 高级状态；8 时效预测
+         */
+        private String resultV2 = "0";
 
     }
 
