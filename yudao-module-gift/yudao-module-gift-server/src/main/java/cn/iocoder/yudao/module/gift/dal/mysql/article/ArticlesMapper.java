@@ -31,6 +31,18 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
                 .setSql("view_count = view_count + 1"));
     }
 
+    default void incrementLikeCount(Long id) {
+        update(null, new LambdaUpdateWrapper<ArticlesDO>()
+                .eq(ArticlesDO::getId, id)
+                .setSql("like_count = like_count + 1"));
+    }
+
+    default void decrementLikeCount(Long id) {
+        update(null, new LambdaUpdateWrapper<ArticlesDO>()
+                .eq(ArticlesDO::getId, id)
+                .setSql("like_count = CASE WHEN like_count > 0 THEN like_count - 1 ELSE 0 END"));
+    }
+
     default PageResult<ArticlesDO> selectPage(ArticlePageReqVO reqVO) {
         LambdaQueryWrapperX<ArticlesDO> query = new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())

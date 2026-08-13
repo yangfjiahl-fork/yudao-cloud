@@ -75,6 +75,9 @@ public class AppArticleRespVO {
     @ExcelProperty("点赞次数")
     private Integer likeCount;
 
+    @Schema(description = "当前用户是否已点赞", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
+    private Boolean liked;
+
     @Schema(description = "排序值，越大越靠前", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("排序值，越大越靠前")
     private Integer sort;

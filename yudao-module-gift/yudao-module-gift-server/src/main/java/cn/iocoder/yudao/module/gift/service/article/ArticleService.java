@@ -67,6 +67,31 @@ public interface ArticleService {
     void addArticleViewCount(Long id);
 
     /**
+     * 点赞文章
+     *
+     * @param memberId 会员编号
+     * @param articleId 文章编号
+     */
+    void likeArticle(Long memberId, Long articleId);
+
+    /**
+     * 取消点赞文章
+     *
+     * @param memberId 会员编号
+     * @param articleId 文章编号
+     */
+    void unlikeArticle(Long memberId, Long articleId);
+
+    /**
+     * 获得会员已点赞的文章编号集合
+     *
+     * @param memberId 会员编号
+     * @param articleIds 文章编号集合
+     * @return 已点赞的文章编号集合
+     */
+    Set<Long> getLikedArticleIds(Long memberId, Collection<Long> articleIds);
+
+    /**
      * 获得文章分页
      *
      * @param pageReqVO 分页查询
