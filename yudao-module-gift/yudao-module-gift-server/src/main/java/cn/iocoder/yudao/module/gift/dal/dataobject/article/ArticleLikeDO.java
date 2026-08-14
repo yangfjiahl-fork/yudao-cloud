@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.gift.dal.dataobject.article;
 
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import lombok.Data;
 
 /**
@@ -12,7 +12,7 @@ import lombok.Data;
  */
 @TableName("gift_article_like")
 @Data
-public class ArticleLikeDO extends BaseDO {
+public class ArticleLikeDO extends TenantBaseDO {
 
     /** 编号 */
     @TableId

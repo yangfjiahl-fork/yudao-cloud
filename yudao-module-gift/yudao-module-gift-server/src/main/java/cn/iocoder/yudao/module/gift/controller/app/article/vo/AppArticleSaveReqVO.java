@@ -26,6 +26,9 @@ public class AppArticleSaveReqVO {
     @Schema(description = "文章作者")
     private String author;
 
+    @Schema(description = "官方名称")
+    private String officialName;
+
     @Schema(description = "文章分类编号，发布时要求为末级分类", requiredMode = Schema.RequiredMode.REQUIRED, example = "15436")
     @NotNull(message = "文章分类编号，发布时要求为末级分类不能为空")
     private Long categoryId;

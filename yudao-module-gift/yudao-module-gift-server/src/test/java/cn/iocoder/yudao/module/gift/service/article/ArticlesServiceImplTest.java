@@ -95,6 +95,16 @@ public class ArticlesServiceImplTest extends BaseMockitoUnitTest {
     }
 
     @Test
+    public void testUnlikeArticle_alreadyUnliked() {
+        when(articleLikeMapper.deleteByArticleIdAndMemberId(1L, 2L)).thenReturn(0);
+
+        articleService.unlikeArticle(2L, 1L);
+
+        verify(articlesMapper, never()).decrementLikeCount(anyLong());
+        verify(articleLikeRedisDAO).updateLiked(2L, 1L, false);
+    }
+
+    @Test
     public void testGetLikedArticleIds() {
         when(articleLikeRedisDAO.getLikedMap(2L, List.of(1L, 2L, 3L)))
                 .thenReturn(Map.of(1L, true, 2L, false));

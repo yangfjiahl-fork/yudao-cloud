@@ -13,12 +13,18 @@ import java.time.LocalDateTime;
 import cn.idev.excel.annotation.*;
 import cn.iocoder.yudao.framework.excel.core.annotations.DictFormat;
 import cn.iocoder.yudao.framework.excel.core.convert.DictConvert;
+import cn.iocoder.yudao.module.gift.service.article.ArticleLikeAutoTransService;
+import org.dromara.core.trans.anno.Trans;
+import org.dromara.core.trans.constant.TransType;
+import org.dromara.core.trans.vo.VO;
 
 @Schema(description = "用户 APP - 文章 Response VO")
 @Data
 @ExcelIgnoreUnannotated
-public class AppArticleRespVO {
+public class AppArticleRespVO implements VO {
 
+    @Trans(type = TransType.AUTO_TRANS, key = ArticleLikeAutoTransService.NAMESPACE,
+            fields = "liked", ref = "liked")
     @Schema(description = "主键", requiredMode = Schema.RequiredMode.REQUIRED, example = "4112")
     @ExcelProperty("主键")
     private Long id;
@@ -30,6 +36,10 @@ public class AppArticleRespVO {
     @Schema(description = "文章作者")
     @ExcelProperty("文章作者")
     private String author;
+
+    @Schema(description = "官方名称")
+    @ExcelProperty("官方名称")
+    private String officialName;
 
     @Schema(description = "文章分类编号，发布时要求为末级分类", requiredMode = Schema.RequiredMode.REQUIRED, example = "15436")
     @ExcelProperty("文章分类编号，发布时要求为末级分类")

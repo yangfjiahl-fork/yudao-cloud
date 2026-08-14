@@ -17,6 +17,7 @@ import jakarta.validation.*;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import org.dromara.core.trans.anno.TransMethodResult;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.error;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -26,10 +27,7 @@ import cn.iocoder.yudao.module.gift.controller.app.article.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 import cn.iocoder.yudao.module.gift.service.article.ArticleService;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 @Tag(name = "用户 APP - 文章")
 @RestController
@@ -44,6 +42,7 @@ public class AppArticlesController {
     @Operation(summary = "获得文章")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PermitAll
+    @TransMethodResult
     public CommonResult<AppArticleRespVO> getArticle(@RequestParam("id") Long id) {
         ArticlesDO article = articleService.getArticle(id);
         if (article == null || !Objects.equals(article.getStatus(), ArticleStatusEnum.ONLINE.getType())) {
@@ -51,19 +50,18 @@ public class AppArticlesController {
         }
         articleService.addArticleViewCount(id);
         AppArticleRespVO respVO = BeanUtils.toBean(article, AppArticleRespVO.class);
-        fillLiked(getLoginUserId(), List.of(respVO));
         return success(respVO);
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得文章分页")
     @PermitAll
+    @TransMethodResult
     public CommonResult<PageResult<AppArticleRespVO>> getArticlePage(@Valid AppArticlePageReqVO pageReqVO) {
         pageReqVO.setStatus(ArticleStatusEnum.ONLINE.getType());
         pageReqVO.setPageNo(1);
         PageResult<ArticlesDO> pageResult = articleService.getArticlePage(pageReqVO);
         PageResult<AppArticleRespVO> respVOPage = BeanUtils.toBean(pageResult, AppArticleRespVO.class);
-        fillLiked(getLoginUserId(), respVOPage.getList());
         return success(respVOPage);
     }
 
@@ -81,12 +79,6 @@ public class AppArticlesController {
     public CommonResult<Boolean> unlikeArticle(@RequestParam("id") Long id) {
         articleService.unlikeArticle(getLoginUserId(), id);
         return success(true);
-    }
-
-    private void fillLiked(Long memberId, Collection<AppArticleRespVO> articles) {
-        Set<Long> likedArticleIds = articleService.getLikedArticleIds(memberId,
-                articles.stream().map(AppArticleRespVO::getId).toList());
-        articles.forEach(article -> article.setLiked(likedArticleIds.contains(article.getId())));
     }
 
 }

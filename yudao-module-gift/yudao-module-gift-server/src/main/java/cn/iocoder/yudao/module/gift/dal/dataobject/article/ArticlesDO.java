@@ -39,6 +39,10 @@ public class ArticlesDO extends BaseDO {
      */
     private String author;
     /**
+     * 官方名称
+     */
+    private String officialName;
+    /**
      * 文章分类编号，发布时要求为末级分类
      */
     private Long categoryId;

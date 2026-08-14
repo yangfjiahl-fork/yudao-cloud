@@ -31,6 +31,10 @@ public class ArticleRespVO {
     @ExcelProperty("文章作者")
     private String author;
 
+    @Schema(description = "官方名称")
+    @ExcelProperty("官方名称")
+    private String officialName;
+
     @Schema(description = "文章分类编号，发布时要求为末级分类", requiredMode = Schema.RequiredMode.REQUIRED, example = "15436")
     @ExcelProperty("文章分类编号，发布时要求为末级分类")
     private Long categoryId;

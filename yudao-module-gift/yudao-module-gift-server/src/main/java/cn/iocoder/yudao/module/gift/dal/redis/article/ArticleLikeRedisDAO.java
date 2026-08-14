@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static cn.iocoder.yudao.module.gift.dal.redis.RedisKeyConstants.ARTICLE_LIKE;
 
@@ -19,11 +20,15 @@ import static cn.iocoder.yudao.module.gift.dal.redis.RedisKeyConstants.ARTICLE_L
 @Repository
 public class ArticleLikeRedisDAO {
 
+    private static final long CACHE_EXPIRE_DAYS = 7;
+
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
     public void updateLiked(Long memberId, Long articleId, boolean liked) {
-        stringRedisTemplate.opsForHash().put(getKey(memberId), String.valueOf(articleId), liked ? "1" : "0");
+        String key = getKey(memberId);
+        stringRedisTemplate.opsForHash().put(key, String.valueOf(articleId), liked ? "1" : "0");
+        stringRedisTemplate.expire(key, CACHE_EXPIRE_DAYS, TimeUnit.DAYS);
     }
 
     public void updateLiked(Long memberId, Collection<Long> articleIds, Collection<Long> likedArticleIds) {
@@ -32,7 +37,9 @@ public class ArticleLikeRedisDAO {
             values.put(String.valueOf(articleId), likedArticleIds.contains(articleId) ? "1" : "0");
         }
         if (!values.isEmpty()) {
-            stringRedisTemplate.opsForHash().putAll(getKey(memberId), values);
+            String key = getKey(memberId);
+            stringRedisTemplate.opsForHash().putAll(key, values);
+            stringRedisTemplate.expire(key, CACHE_EXPIRE_DAYS, TimeUnit.DAYS);
         }
     }
 
