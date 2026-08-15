@@ -25,4 +25,21 @@ public interface ErrorCodeConstants {
     ErrorCode VIDEO_NOT_EXISTS = new ErrorCode(1_042_000_001, "视频不存在");
 
     ErrorCode ARTICLE_NOT_EXISTS = new ErrorCode(1_043_000_001, "文章不存在");
+
+    // ========== 文章分类相关 1-043-001-000 ==========
+    ErrorCode ARTICLE_CATEGORY_NOT_EXISTS = new ErrorCode(1_043_001_000, "文章分类不存在");
+    ErrorCode ARTICLE_CATEGORY_PARENT_NOT_EXISTS = new ErrorCode(1_043_001_001, "父分类不存在");
+    ErrorCode ARTICLE_CATEGORY_PARENT_NOT_FIRST_LEVEL = new ErrorCode(1_043_001_002, "父分类不能是二级分类");
+    ErrorCode ARTICLE_CATEGORY_EXISTS_CHILDREN = new ErrorCode(1_043_001_003, "存在子分类，无法删除");
+    ErrorCode ARTICLE_CATEGORY_DISABLED = new ErrorCode(1_043_001_004, "文章分类({})已禁用，无法使用");
+    ErrorCode ARTICLE_CATEGORY_HAVE_BIND_ARTICLES = new ErrorCode(1_043_001_005, "分类下存在文章，无法删除");
+    ErrorCode ARTICLE_SAVE_FAIL_CATEGORY_LEVEL_ERROR = new ErrorCode(1_043_001_006,
+            "文章分类不正确，原因：必须使用第二级的文章分类及以下");
+
+    ErrorCode ARTICLE_CATEGORY_NAME_DUPLICATE = new ErrorCode(1_043_001_007, "已经存在该分类名称的文章分类");
+    ErrorCode ARTICLE_CATEGORY_PARENT_IS_CHILD = new ErrorCode(1_043_001_008, "不能设置自己的子ArticlesCategory" +
+            "为父ArticlesCategory");
+
+    ErrorCode ARTICLE_CATEGORY_PARENT_ERROR = new ErrorCode(1_043_001_009, "不能设置自己为父文章分类");
+
 }

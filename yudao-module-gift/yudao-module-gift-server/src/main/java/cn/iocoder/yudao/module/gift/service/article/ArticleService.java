@@ -60,6 +60,14 @@ public interface ArticleService {
     ArticlesDO getArticle(Long id);
 
     /**
+     * 获得分类下的文章数量
+     *
+     * @param categoryId 分类编号
+     * @return 文章数量
+     */
+    Long getArticleCountByCategoryId(Long categoryId);
+
+    /**
      * 增加文章浏览次数
      *
      * @param id 文章编号

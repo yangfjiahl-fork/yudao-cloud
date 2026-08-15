@@ -38,9 +38,12 @@ public class ArticlesServiceImpl implements ArticleService {
     private ArticleLikeMapper articleLikeMapper;
     @Resource
     private ArticleLikeRedisDAO articleLikeRedisDAO;
+    @Resource
+    private ArticleCategoryService articleCategoryService;
 
     @Override
     public Long createArticle(ArticleSaveReqVO createReqVO) {
+        articleCategoryService.validateArticleCategory(createReqVO.getCategoryId());
         // 插入
         ArticlesDO article = BeanUtils.toBean(createReqVO, ArticlesDO.class);
         articlesMapper.insert(article);
@@ -53,6 +56,7 @@ public class ArticlesServiceImpl implements ArticleService {
     public void updateArticle(ArticleSaveReqVO updateReqVO) {
         // 校验存在
         validateArticleExists(updateReqVO.getId());
+        articleCategoryService.validateArticleCategory(updateReqVO.getCategoryId());
         // 更新
         ArticlesDO updateObj = BeanUtils.toBean(updateReqVO, ArticlesDO.class);
         articlesMapper.updateById(updateObj);
@@ -87,6 +91,11 @@ public class ArticlesServiceImpl implements ArticleService {
     @Override
     public ArticlesDO getArticle(Long id) {
         return articlesMapper.selectById(id);
+    }
+
+    @Override
+    public Long getArticleCountByCategoryId(Long categoryId) {
+        return articlesMapper.selectCount(ArticlesDO::getCategoryId, categoryId);
     }
 
     @Override
