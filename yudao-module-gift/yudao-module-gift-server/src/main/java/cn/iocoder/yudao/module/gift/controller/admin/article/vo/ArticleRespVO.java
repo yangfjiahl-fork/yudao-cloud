@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 import cn.idev.excel.annotation.*;
 import cn.iocoder.yudao.framework.excel.core.annotations.DictFormat;
 import cn.iocoder.yudao.framework.excel.core.convert.DictConvert;
-import cn.iocoder.yudao.module.gift.service.article.ArticleCategoryAutoTransService;
-import cn.iocoder.yudao.module.gift.service.article.ArticleSuffixAutoTransService;
+import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticleSuffixDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesCategoryDO;
 import org.dromara.core.trans.anno.Trans;
 import org.dromara.core.trans.constant.TransType;
 import org.dromara.core.trans.vo.VO;
@@ -42,8 +42,7 @@ public class ArticleRespVO implements VO {
 
     @Schema(description = "文章分类编号，发布时要求为末级分类", requiredMode = Schema.RequiredMode.REQUIRED, example = "15436")
     @ExcelProperty("文章分类编号，发布时要求为末级分类")
-    @Trans(type = TransType.AUTO_TRANS, key = ArticleCategoryAutoTransService.NAMESPACE,
-            fields = "name", ref = "categoryName")
+    @Trans(type = TransType.SIMPLE, target = ArticlesCategoryDO.class, fields = "name", ref = "categoryName")
     private Long categoryId;
 
     @Schema(description = "文章分类名称", example = "饰品搭配")
@@ -52,8 +51,7 @@ public class ArticleRespVO implements VO {
 
     @Schema(description = "文章后缀编号", example = "1")
     @ExcelProperty("文章后缀编号")
-    @Trans(type = TransType.AUTO_TRANS, key = ArticleSuffixAutoTransService.NAMESPACE,
-            fields = "title", ref = "suffixName")
+    @Trans(type = TransType.SIMPLE, target = ArticleSuffixDO.class, fields = "title", ref = "suffixName")
     private Long suffixId;
 
     @Schema(description = "文章后缀名称", example = "今日穿搭")
