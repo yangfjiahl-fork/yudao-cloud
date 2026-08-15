@@ -50,7 +50,7 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
                 .likeIfPresent(ArticlesDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
         query.select(ArticlesDO::getId, ArticlesDO::getMemberId, ArticlesDO::getAuthor, ArticlesDO::getOfficialName,
-                ArticlesDO::getCategoryId,
+                ArticlesDO::getCategoryId, ArticlesDO::getSuffixId,
                 ArticlesDO::getTitle, ArticlesDO::getSummary, ArticlesDO::getCoverImage,
                 ArticlesDO::getCoverWidth, ArticlesDO::getCoverHeight, ArticlesDO::getCoverOrientation,
                 ArticlesDO::getViewCount, ArticlesDO::getLikeCount, ArticlesDO::getSort,
@@ -65,7 +65,8 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
         LambdaQueryWrapperX<ArticlesDO> query = new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
-        query.select(ArticlesDO::getId, ArticlesDO::getAuthor, ArticlesDO::getOfficialName, ArticlesDO::getTitle,
+        query.select(ArticlesDO::getId, ArticlesDO::getAuthor, ArticlesDO::getOfficialName, ArticlesDO::getCategoryId,
+                ArticlesDO::getSuffixId, ArticlesDO::getTitle,
                 ArticlesDO::getCoverImage,
                 ArticlesDO::getCoverWidth, ArticlesDO::getCoverHeight, ArticlesDO::getCoverOrientation,
                 ArticlesDO::getViewCount, ArticlesDO::getLikeCount);

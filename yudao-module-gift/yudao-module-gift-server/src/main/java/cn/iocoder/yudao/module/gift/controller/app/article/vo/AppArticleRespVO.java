@@ -45,6 +45,10 @@ public class AppArticleRespVO implements VO {
     @ExcelProperty("文章分类编号，发布时要求为末级分类")
     private Long categoryId;
 
+    @Schema(description = "文章后缀编号", example = "1")
+    @ExcelProperty("文章后缀编号")
+    private Long suffixId;
+
     @Schema(description = "标题", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("标题")
     private String title;

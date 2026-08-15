@@ -33,6 +33,9 @@ public class ArticleSaveReqVO {
     @NotNull(message = "文章分类编号，发布时要求为末级分类不能为空")
     private Long categoryId;
 
+    @Schema(description = "文章后缀编号", example = "1")
+    private Long suffixId;
+
     @Schema(description = "标题", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "标题不能为空")
     private String title;

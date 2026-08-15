@@ -47,6 +47,10 @@ public class ArticlesDO extends BaseDO {
      */
     private Long categoryId;
     /**
+     * 文章后缀编号
+     */
+    private Long suffixId;
+    /**
      * 标题
      */
     private String title;
