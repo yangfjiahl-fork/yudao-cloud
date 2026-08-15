@@ -19,4 +19,6 @@ public class ArticlePageReqVO extends PageParam {
     @Schema(description = "状态：0-草稿，1-已发布，2-已下架", example = "1")
     private Integer status;
 
+    @Schema(description = "文章标题")
+    private String title;
 }

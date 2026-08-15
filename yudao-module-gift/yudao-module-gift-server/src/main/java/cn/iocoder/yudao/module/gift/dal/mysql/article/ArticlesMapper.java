@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.gift.controller.app.article.vo.AppArticlePageReqVO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticleSuffixDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -46,6 +47,7 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
     default PageResult<ArticlesDO> selectPage(ArticlePageReqVO reqVO) {
         LambdaQueryWrapperX<ArticlesDO> query = new LambdaQueryWrapperX<ArticlesDO>()
                 .eqIfPresent(ArticlesDO::getCategoryId, reqVO.getCategoryId())
+                .likeIfPresent(ArticlesDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
         query.select(ArticlesDO::getId, ArticlesDO::getMemberId, ArticlesDO::getAuthor, ArticlesDO::getOfficialName,
                 ArticlesDO::getCategoryId,

@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.controller.admin.article;
 
+import org.dromara.core.trans.anno.TransMethodResult;
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
@@ -82,6 +83,7 @@ public class ArticlesController {
     @Operation(summary = "获得文章")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('gift:article:query')")
+    @TransMethodResult
     public CommonResult<ArticleRespVO> getArticle(@RequestParam("id") Long id) {
         ArticlesDO article = articleService.getArticle(id);
         return success(BeanUtils.toBean(article, ArticleRespVO.class));
@@ -90,6 +92,7 @@ public class ArticlesController {
     @GetMapping("/page")
     @Operation(summary = "获得文章分页")
     @PreAuthorize("@ss.hasPermission('gift:article:query')")
+    @TransMethodResult
     public CommonResult<PageResult<ArticleRespVO>> getArticlePage(@Valid ArticlePageReqVO pageReqVO) {
         PageResult<ArticlesDO> pageResult = articleService.getArticlePage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, ArticleRespVO.class));
