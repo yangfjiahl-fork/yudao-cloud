@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.gift.controller.admin.article.vo;
+package cn.iocoder.yudao.module.gift.controller.app.article.vo;
 
 import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticleSuffixDO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -8,10 +8,10 @@ import lombok.EqualsAndHashCode;
 import org.dromara.core.trans.anno.Trans;
 import org.dromara.core.trans.constant.TransType;
 
-@Schema(description = "管理后台 - 文章详情 Response VO")
+@Schema(description = "用户 APP - 文章详情 Response VO")
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class ArticleDetailRespVO extends ArticleRespVO {
+public class AppArticleDetailRespVO extends AppArticleRespVO {
 
     @JsonIgnore
     @Trans(type = TransType.SIMPLE, target = ArticleSuffixDO.class, fields = "content", ref = "suffixContent")

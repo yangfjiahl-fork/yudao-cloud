@@ -84,13 +84,9 @@ public class ArticlesController {
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('gift:article:query')")
     @TransMethodResult
-    public CommonResult<ArticleDetailRespVO> getArticle(@RequestParam("id") Long id) {
+    public CommonResult<ArticleRespVO> getArticle(@RequestParam("id") Long id) {
         ArticlesDO article = articleService.getArticle(id);
-        ArticleDetailRespVO respVO = BeanUtils.toBean(article, ArticleDetailRespVO.class);
-        if (respVO != null) {
-            respVO.setSuffixContentId(respVO.getSuffixId());
-        }
-        return success(respVO);
+        return success(BeanUtils.toBean(article, ArticleRespVO.class));
     }
 
     @GetMapping("/page")

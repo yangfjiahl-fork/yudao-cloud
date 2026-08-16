@@ -43,13 +43,14 @@ public class AppArticlesController {
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PermitAll
     @TransMethodResult
-    public CommonResult<AppArticleRespVO> getArticle(@RequestParam("id") Long id) {
+    public CommonResult<AppArticleDetailRespVO> getArticle(@RequestParam("id") Long id) {
         ArticlesDO article = articleService.getArticle(id);
         if (article == null || !Objects.equals(article.getStatus(), ArticleStatusEnum.ONLINE.getType())) {
             return error(ErrorCodeConstants.ARTICLE_NOT_EXISTS);
         }
         articleService.addArticleViewCount(id);
-        AppArticleRespVO respVO = BeanUtils.toBean(article, AppArticleRespVO.class);
+        AppArticleDetailRespVO respVO = BeanUtils.toBean(article, AppArticleDetailRespVO.class);
+        respVO.setSuffixContentId(respVO.getSuffixId());
         return success(respVO);
     }
 
