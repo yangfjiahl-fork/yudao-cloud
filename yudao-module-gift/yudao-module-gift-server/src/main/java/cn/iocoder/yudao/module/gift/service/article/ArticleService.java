@@ -60,6 +60,13 @@ public interface ArticleService {
     ArticlesDO getArticle(Long id);
 
     /**
+     * 随机获得文章编号
+     *
+     * @return 文章编号；不存在文章时返回 null
+     */
+    Long getRandomArticleId();
+
+    /**
      * 获得分类下的文章数量
      *
      * @param categoryId 分类编号

@@ -94,6 +94,11 @@ public class ArticlesServiceImpl implements ArticleService {
     }
 
     @Override
+    public Long getRandomArticleId() {
+        return articlesMapper.selectRandomId();
+    }
+
+    @Override
     public Long getArticleCountByCategoryId(Long categoryId) {
         return articlesMapper.selectCount(ArticlesDO::getCategoryId, categoryId);
     }

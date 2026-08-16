@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Mapper;
 import cn.iocoder.yudao.module.gift.controller.admin.article.vo.*;
+import cn.iocoder.yudao.module.gift.enums.ArticleStatusEnum;
 
 import java.util.Collection;
 
@@ -20,6 +21,14 @@ import java.util.Collection;
  */
 @Mapper
 public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
+
+    default Long selectRandomId() {
+        ArticlesDO article = selectOne(new LambdaQueryWrapperX<ArticlesDO>()
+                .select(ArticlesDO::getId)
+                .eq(ArticlesDO::getStatus, ArticleStatusEnum.ONLINE.getType())
+                .last("ORDER BY RAND() LIMIT 1"));
+        return article == null ? null : article.getId();
+    }
 
     default int updateStatusByIds(Collection<Long> ids, Integer status) {
         return update(new ArticlesDO().setStatus(status), new LambdaQueryWrapperX<ArticlesDO>()

@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.gift.controller.app.video;
 
 import org.springframework.web.bind.annotation.*;
+
+import cn.iocoder.yudao.module.gift.service.article.ArticleService;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 
@@ -44,11 +46,15 @@ public class AppVideoController {
     @Resource
     private ConfigApi configApi;
 
+    @Resource
+    private ArticleService articleService;
+
     @GetMapping("/jump-page")
     @Operation(summary = "获得小程序视频跳转页面")
     @PermitAll
     public CommonResult<String> getMiniProgramVideoPage() {
-        return success(configApi.getConfigValueByKey(MINI_PROGRAM_VIDEO_PAGE_CONFIG_KEY).getCheckedData());
+        String s = configApi.getConfigValueByKey(MINI_PROGRAM_VIDEO_PAGE_CONFIG_KEY).getCheckedData();
+        return success(String.format("%s?id=%s", s, articleService.getRandomArticleId()));
     }
 
     @GetMapping("/random-list")
