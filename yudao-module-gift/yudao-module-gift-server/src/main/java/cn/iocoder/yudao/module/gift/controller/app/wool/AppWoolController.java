@@ -38,6 +38,7 @@ public class AppWoolController {
     private static final String MAIN_BANNER_CONFIG_KEY = "main.swipper.list";
     private static final String MALL_BANNER_CONFIG_KEY = "mall.swipper.list";
     private static final String MAIN_PROGRESS_ICON_CONFIG_KEY = "main.progress.icon";
+    private static final String STARTUP_IMAGE_URL_CONFIG_KEY = "startup.image.url";
 
     @Resource
     private WoolService woolService;
@@ -64,6 +65,13 @@ public class AppWoolController {
     public CommonResult<List<ProgressIconRespVO>> getMainProgressIcon() {
         String configValue = configApi.getConfigValueByKey(MAIN_PROGRESS_ICON_CONFIG_KEY).getCheckedData();
         return success(JsonUtils.parseArray(configValue, ProgressIconRespVO.class));
+    }
+
+    @GetMapping("/startup-image")
+    @Operation(summary = "获得启动图")
+    @PermitAll
+    public CommonResult<String> getStartupImage() {
+        return success(configApi.getConfigValueByKey(STARTUP_IMAGE_URL_CONFIG_KEY).getCheckedData());
     }
 
     @GetMapping("/list-init")
