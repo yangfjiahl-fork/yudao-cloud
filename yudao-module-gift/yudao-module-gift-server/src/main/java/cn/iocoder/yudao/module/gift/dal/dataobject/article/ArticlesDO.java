@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.gift.dal.dataobject.article;
 
 import lombok.*;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -80,6 +81,11 @@ public class ArticlesDO extends BaseDO {
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<String> sliderPicUrls;
     /**
+     * 轮播图尺寸数组，与 {@link #sliderPicUrls} 按下标一一对应
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<SliderPicSize> sliderPicSize;
+    /**
      * 站内富文本正文
      */
     private String content;
@@ -106,5 +112,20 @@ public class ArticlesDO extends BaseDO {
      */
     private LocalDateTime publishTime;
 
+    /**
+     * 轮播图尺寸
+     */
+    @Data
+    public static class SliderPicSize implements Serializable {
+
+        /**
+         * 图片宽度
+         */
+        private Integer w;
+        /**
+         * 图片高度
+         */
+        private Integer h;
+    }
 
 }

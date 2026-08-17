@@ -76,7 +76,7 @@ public interface ArticlesMapper extends BaseMapperX<ArticlesDO> {
                 .eqIfPresent(ArticlesDO::getStatus, reqVO.getStatus());
         query.select(ArticlesDO::getId, ArticlesDO::getAuthor, ArticlesDO::getOfficialName, ArticlesDO::getCategoryId,
                 ArticlesDO::getSuffixId, ArticlesDO::getTitle,
-                ArticlesDO::getCoverImage,
+                ArticlesDO::getCoverImage, ArticlesDO::getSliderPicSize,
                 ArticlesDO::getCoverWidth, ArticlesDO::getCoverHeight, ArticlesDO::getCoverOrientation,
                 ArticlesDO::getViewCount, ArticlesDO::getLikeCount);
         query.ltIfPresent(ArticlesDO::getId, reqVO.getMaxId());

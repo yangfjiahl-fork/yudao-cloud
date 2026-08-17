@@ -11,6 +11,7 @@ import java.util.*;
 import jakarta.validation.constraints.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDateTime;
+import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 
 @Schema(description = "管理后台 - 文章新增/修改 Request VO")
 @Data
@@ -60,6 +61,9 @@ public class ArticleSaveReqVO {
     @Schema(description = "轮播图地址数组", requiredMode = Schema.RequiredMode.REQUIRED)
 //    @NotEmpty(message = "轮播图地址数组不能为空")
     private List<String> sliderPicUrls;
+
+    @Schema(description = "轮播图尺寸数组，与轮播图地址数组按下标一一对应")
+    private List<ArticlesDO.SliderPicSize> sliderPicSize;
 
     @Schema(description = "站内富文本正文", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "站内富文本正文不能为空")

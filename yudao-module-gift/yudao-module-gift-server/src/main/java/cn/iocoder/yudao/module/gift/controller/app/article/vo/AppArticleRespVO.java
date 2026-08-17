@@ -14,6 +14,7 @@ import cn.idev.excel.annotation.*;
 import cn.iocoder.yudao.framework.excel.core.annotations.DictFormat;
 import cn.iocoder.yudao.framework.excel.core.convert.DictConvert;
 import cn.iocoder.yudao.module.gift.service.article.ArticleLikeAutoTransService;
+import cn.iocoder.yudao.module.gift.dal.dataobject.article.ArticlesDO;
 import org.dromara.core.trans.anno.Trans;
 import org.dromara.core.trans.constant.TransType;
 import org.dromara.core.trans.vo.VO;
@@ -76,6 +77,10 @@ public class AppArticleRespVO implements VO {
     @Schema(description = "轮播图地址数组", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("轮播图地址数组")
     private List<String> sliderPicUrls;
+
+    @Schema(description = "轮播图尺寸数组，与轮播图地址数组按下标一一对应")
+    @ExcelProperty("轮播图尺寸数组")
+    private List<ArticlesDO.SliderPicSize> sliderPicSize;
 
     @Schema(description = "站内富文本正文", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("站内富文本正文")
