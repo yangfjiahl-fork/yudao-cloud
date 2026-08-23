@@ -94,11 +94,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         Assert.notNull(user, "获取用户失败，结果为空");
 
         // 校验是否禁用
-        if (CommonStatusEnum.isDisable(user.getStatus())) {
-            log.warn("[smsLogin][会员({}) 已被禁用，拒绝登录]", user.getId());
-            createLoginLog(user.getId(), reqVO.getMobile(), LoginLogTypeEnum.LOGIN_SMS, LoginResultEnum.USER_DISABLED);
-            throw exception(AUTH_LOGIN_USER_DISABLED);
-        }
+        validateUserStatus(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_SMS);
 
         // 如果 socialType 非空，说明需要绑定社交用户
         String openid = null;
@@ -129,7 +125,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         if (socialUser.getUserId() != null) {
             log.info("[socialLogin][社交账号已绑定会员({})]", socialUser.getUserId());
             user = userService.getUser(socialUser.getUserId());
-            // 情况二：未绑定，注册用户 + 绑定用户
+        // 情况二：未绑定，注册用户 + 绑定用户
         } else {
             user = userService.createUser(socialUser.getNickname(), socialUser.getAvatar(), getClientIP(), getTerminal());
             log.info("[socialLogin][创建会员({}) 并绑定社交账号，社交类型({})]", user.getId(), reqVO.getType());
@@ -140,6 +136,9 @@ public class MemberAuthServiceImpl implements MemberAuthService {
             log.warn("[socialLogin][社交账号绑定的会员不存在，会员编号({})]", socialUser.getUserId());
             throw exception(USER_NOT_EXISTS);
         }
+
+        // 校验是否禁用
+        validateUserStatus(user, user.getMobile(), LoginLogTypeEnum.LOGIN_SOCIAL);
 
         // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, user.getMobile(), LoginLogTypeEnum.LOGIN_SOCIAL, socialUser.getOpenid());
@@ -159,6 +158,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         Assert.notNull(user, "获取用户失败，结果为空");
         log.info("[weixinMiniAppLogin][获取会员({})，手机号({})]", user.getId(),
                 DesensitizedUtil.mobilePhone(phoneNumberInfo.getPurePhoneNumber()));
+        validateUserStatus(user, user.getMobile(), LoginLogTypeEnum.LOGIN_SOCIAL);
 
         // 绑定社交用户
         log.info("[weixinMiniAppLogin][会员({}) 绑定微信小程序账号]", user.getId());
@@ -171,6 +171,9 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
     private AppAuthLoginRespVO createTokenAfterLoginSuccess(MemberUserDO user, String mobile,
                                                             LoginLogTypeEnum logType, String openid) {
+        // 统一校验用户状态，避免登录方式增加后遗漏
+        validateUserStatus(user, mobile, logType);
+
         // 插入登陆日志
         createLoginLog(user.getId(), mobile, logType, LoginResultEnum.SUCCESS);
         // 创建 Token 令牌
@@ -180,6 +183,14 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         log.info("[createTokenAfterLoginSuccess][会员({}) 登录成功，登录类型({})，已创建访问令牌]", user.getId(), logType.getType());
         // 构建返回结果
         return AuthConvert.INSTANCE.convert(accessTokenRespDTO, openid);
+    }
+
+    private void validateUserStatus(MemberUserDO user, String mobile, LoginLogTypeEnum logType) {
+        if (CommonStatusEnum.isDisable(user.getStatus())) {
+            log.warn("[smsLogin][会员({}) 已被禁用，拒绝登录]", user.getId());
+            createLoginLog(user.getId(), mobile, logType, LoginResultEnum.USER_DISABLED);
+            throw exception(AUTH_LOGIN_USER_DISABLED);
+        }
     }
 
     @Override
@@ -203,11 +214,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
             throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
         }
         // 校验是否禁用
-        if (CommonStatusEnum.isDisable(user.getStatus())) {
-            log.warn("[login0][会员({}) 已被禁用，拒绝登录]", user.getId());
-            createLoginLog(user.getId(), mobile, logTypeEnum, LoginResultEnum.USER_DISABLED);
-            throw exception(AUTH_LOGIN_USER_DISABLED);
-        }
+        validateUserStatus(user, mobile, logTypeEnum);
         return user;
     }
 
@@ -281,7 +288,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     public void validateSmsCode(Long userId, AppAuthSmsValidateReqVO reqVO) {
         log.info("[validateSmsCode][校验会员短信验证码，会员编号({})，场景({})，手机号({})]", userId, reqVO.getScene(),
                 DesensitizedUtil.mobilePhone(reqVO.getMobile()));
-        smsCodeApi.validateSmsCode(AuthConvert.INSTANCE.convert(reqVO));
+        smsCodeApi.validateSmsCode(AuthConvert.INSTANCE.convert(reqVO)).checkError();
         log.info("[validateSmsCode][会员短信验证码校验通过，会员编号({})，场景({})]", userId, reqVO.getScene());
     }
 

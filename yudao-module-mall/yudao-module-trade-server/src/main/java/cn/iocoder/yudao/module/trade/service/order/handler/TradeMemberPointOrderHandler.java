@@ -112,7 +112,7 @@ public class TradeMemberPointOrderHandler implements TradeOrderHandler {
      */
     protected void addPoint(Long userId, Integer point, MemberPointBizTypeEnum bizType, String bizId) {
         if (point != null && point > 0) {
-            memberPointApi.addPoint(userId, point, bizType.getType(), bizId);
+            memberPointApi.addPoint(userId, point, bizType.getType(), String.valueOf(bizId)).checkError();
         }
     }
 
