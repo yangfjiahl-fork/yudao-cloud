@@ -8,7 +8,10 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.ai.controller.admin.chat.vo.message.AiChatMessagePageReqVO;
 import cn.iocoder.yudao.module.ai.controller.admin.chat.vo.message.AiChatMessageRespVO;
@@ -35,6 +38,7 @@ import cn.iocoder.yudao.module.ai.service.model.AiModelService;
 import cn.iocoder.yudao.module.ai.service.model.AiToolService;
 import cn.iocoder.yudao.module.ai.util.AiUtils;
 import cn.iocoder.yudao.module.ai.util.FileTypeUtils;
+import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.TokenUsage;
 import com.google.common.collect.Maps;
 import io.modelcontextprotocol.client.McpSyncClient;
 import jakarta.annotation.Resource;
@@ -43,6 +47,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.StreamingChatModel;
@@ -139,13 +144,19 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
     @Transactional(rollbackFor = Exception.class)
     public AiChatMessageSendRespVO sendMessage(AiChatMessageSendReqVO sendReqVO, Long userId) {
+        return sendMessage(sendReqVO, userId, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AiChatMessageSendRespVO sendMessage(AiChatMessageSendReqVO sendReqVO, Long userId, Integer userType) {
         // 1.1 校验对话存在
         AiChatConversationDO conversation = chatConversationService
-                .validateChatConversationExists(sendReqVO.getConversationId());
+                .validateChatConversationExists(sendReqVO.getConversationId(), userType);
         if (ObjUtil.notEqual(conversation.getUserId(), userId)) {
             throw exception(CHAT_CONVERSATION_NOT_EXISTS);
         }
-        List<AiChatMessageDO> historyMessages = chatMessageMapper.selectListByConversationId(conversation.getId());
+        List<AiChatMessageDO> historyMessages = chatMessageMapper.selectListByConversationId(conversation.getId(), userType);
         // 1.2 校验模型
         AiModelDO model = modalService.validateModel(conversation.getModelId());
         ChatModel chatModel = modalService.getChatModel(model.getId());
@@ -161,16 +172,17 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
         // 3. 插入 user 发送消息
         AiChatMessageDO userMessage = createChatMessage(conversation.getId(), null, model,
-                userId, conversation.getRoleId(), MessageType.USER, sendReqVO.getContent(), sendReqVO.getUseContext(),
+                userId, userType, conversation.getRoleId(), MessageType.USER, sendReqVO.getContent(), sendReqVO.getUseContext(),
                 null, sendReqVO.getAttachmentUrls(), null);
 
         // 4.1 插入 assistant 接收消息
         AiChatMessageDO assistantMessage = createChatMessage(conversation.getId(), userMessage.getId(), model,
-                userId, conversation.getRoleId(), MessageType.ASSISTANT, "", sendReqVO.getUseContext(),
+                userId, userType, conversation.getRoleId(), MessageType.ASSISTANT, "", sendReqVO.getUseContext(),
                 knowledgeSegments, null, webSearchResponse);
 
         // 4.2 创建 chat 需要的 Prompt
         Prompt prompt = buildPrompt(conversation, historyMessages, knowledgeSegments, webSearchResponse, model, sendReqVO);
+        recordModelRequest(assistantMessage.getId(), userType, prompt.toString());
         ChatResponse chatResponse = chatModel.call(prompt);
 
         // 4.3 更新响应内容
@@ -178,6 +190,8 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         String newReasoningContent = AiUtils.getChatResponseReasoningContent(chatResponse);
         chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
                 .setContent(newContent).setReasoningContent(newReasoningContent));
+        recordModelResponse(assistantMessage.getId(), userType, newContent, getPromptTokens(chatResponse),
+                getCompletionTokens(chatResponse), getCachedTokens(chatResponse), getTotalTokens(chatResponse));
         // 4.4 响应结果
         Map<Long, AiKnowledgeDocumentDO> documentMap = knowledgeDocumentService.getKnowledgeDocumentMap(
                 convertSet(knowledgeSegments, AiKnowledgeSegmentSearchRespBO::getDocumentId));
@@ -196,13 +210,20 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
     @Override
     public Flux<CommonResult<AiChatMessageSendRespVO>> sendChatMessageStream(AiChatMessageSendReqVO sendReqVO,
             Long userId) {
+        return sendChatMessageStream(sendReqVO, userId, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public Flux<CommonResult<AiChatMessageSendRespVO>> sendChatMessageStream(AiChatMessageSendReqVO sendReqVO,
+            Long userId, Integer userType) {
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
         // 1.1 校验对话存在
         AiChatConversationDO conversation = chatConversationService
-                .validateChatConversationExists(sendReqVO.getConversationId());
+                .validateChatConversationExists(sendReqVO.getConversationId(), userType);
         if (ObjUtil.notEqual(conversation.getUserId(), userId)) {
             throw exception(CHAT_CONVERSATION_NOT_EXISTS);
         }
-        List<AiChatMessageDO> historyMessages = chatMessageMapper.selectListByConversationId(conversation.getId());
+        List<AiChatMessageDO> historyMessages = chatMessageMapper.selectListByConversationId(conversation.getId(), userType);
         // 1.2 校验模型
         AiModelDO model = modalService.validateModel(conversation.getModelId());
         StreamingChatModel chatModel = modalService.getChatModel(model.getId());
@@ -218,31 +239,36 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
         // 3. 插入 user 发送消息
         AiChatMessageDO userMessage = createChatMessage(conversation.getId(), null, model,
-                userId, conversation.getRoleId(), MessageType.USER, sendReqVO.getContent(), sendReqVO.getUseContext(),
+                userId, userType, conversation.getRoleId(), MessageType.USER, sendReqVO.getContent(), sendReqVO.getUseContext(),
                 null, sendReqVO.getAttachmentUrls(), null);
 
         // 4.1 插入 assistant 接收消息
         AiChatMessageDO assistantMessage = createChatMessage(conversation.getId(), userMessage.getId(), model,
-                userId, conversation.getRoleId(), MessageType.ASSISTANT, "", sendReqVO.getUseContext(),
+                userId, userType, conversation.getRoleId(), MessageType.ASSISTANT, "", sendReqVO.getUseContext(),
                 knowledgeSegments, null, webSearchResponse);
 
         // 4.2 构建 Prompt，并进行调用
         Prompt prompt = buildPrompt(conversation, historyMessages, knowledgeSegments, webSearchResponse, model, sendReqVO);
+        recordModelRequest(assistantMessage.getId(), userType, prompt.toString());
         Flux<ChatResponse> streamResponse = chatModel.stream(prompt);
 
         // 4.3 流式返回
         StringBuffer contentBuffer = new StringBuffer();
         StringBuffer reasoningContentBuffer = new StringBuffer();
+        AtomicReference<ChatResponse> usageResponse = new AtomicReference<>();
 
         // 防止执行多次知识库和联网搜索
         AtomicBoolean firstExecuteFlag = new AtomicBoolean(true);
         AtomicReference<List<AiChatMessageRespVO.KnowledgeSegment>> cacheSegments = new AtomicReference<>();
         AtomicReference<List<AiWebSearchResponse.WebPage>> cacheWebSearchPages = new AtomicReference<>();
         return streamResponse.map(chunk -> {
+            if (hasTokenUsage(chunk)) {
+                usageResponse.set(chunk);
+            }
             // 仅首次：返回知识库、联网搜索
             if (StrUtil.isEmpty(contentBuffer)) {
                 if (firstExecuteFlag.compareAndSet(true, false)) { // CAS 操作，确保仅执行一次
-                    Map<Long, AiKnowledgeDocumentDO> documentMap = TenantUtils.executeIgnore(() -> knowledgeDocumentService.getKnowledgeDocumentMap(
+                    Map<Long, AiKnowledgeDocumentDO> documentMap = TenantUtils.execute(tenantId, () -> knowledgeDocumentService.getKnowledgeDocumentMap(
                             convertSet(knowledgeSegments, AiKnowledgeSegmentSearchRespBO::getDocumentId)));
                     cacheSegments.set(BeanUtils.toBean(knowledgeSegments, AiChatMessageRespVO.KnowledgeSegment.class, segment -> {
                         AiKnowledgeDocumentDO document = documentMap.get(segment.getDocumentId());
@@ -269,18 +295,25 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                             .setReasoningContent(StrUtil.nullToDefault(newReasoningContent, "")) // 避免 null 的 情况
                             .setSegments(cacheSegments.get()).setWebSearchPages(cacheWebSearchPages.get()))); // 知识库 + 联网搜索
         }).doOnComplete(() -> {
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> chatMessageMapper.updateById(
-                    new AiChatMessageDO().setId(assistantMessage.getId()).setContent(contentBuffer.toString())
-                            .setReasoningContent(reasoningContentBuffer.toString())));
+            TenantUtils.execute(tenantId, () -> {
+                chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
+                        .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
+                ChatResponse finalResponse = usageResponse.get();
+                recordModelResponse(assistantMessage.getId(), userType, contentBuffer.toString(),
+                        getPromptTokens(finalResponse), getCompletionTokens(finalResponse), getCachedTokens(finalResponse),
+                        getTotalTokens(finalResponse));
+            });
         }).doOnError(throwable -> {
             log.error("[sendChatMessageStream][userId({}) sendReqVO({}) 发生异常]", userId, sendReqVO, throwable);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> {
+            TenantUtils.execute(tenantId, () -> {
                 // 如果有内容，则更新内容
                 if (StrUtil.isNotEmpty(contentBuffer)) {
                     chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
                             .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
+                    ChatResponse finalResponse = usageResponse.get();
+                    recordModelResponse(assistantMessage.getId(), userType, contentBuffer.toString(),
+                            getPromptTokens(finalResponse), getCompletionTokens(finalResponse), getCachedTokens(finalResponse),
+                            getTotalTokens(finalResponse));
                 } else {
                     // 否则，则进行删除
                     chatMessageMapper.deleteById(assistantMessage.getId());
@@ -288,12 +321,15 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
             });
         }).doOnCancel(() -> {
             log.info("[sendChatMessageStream][userId({}) sendReqVO({}) 取消请求]", userId, sendReqVO);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> {
+            TenantUtils.execute(tenantId, () -> {
                 // 如果有内容，则更新内容
                 if (StrUtil.isNotEmpty(contentBuffer)) {
                     chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
                             .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
+                    ChatResponse finalResponse = usageResponse.get();
+                    recordModelResponse(assistantMessage.getId(), userType, contentBuffer.toString(),
+                            getPromptTokens(finalResponse), getCompletionTokens(finalResponse), getCachedTokens(finalResponse),
+                            getTotalTokens(finalResponse));
                 } else {
                     // 否则，则进行删除
                     chatMessageMapper.deleteById(assistantMessage.getId());
@@ -501,13 +537,13 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
     }
 
     private AiChatMessageDO createChatMessage(Long conversationId, Long replyId,
-                                              AiModelDO model, Long userId, Long roleId,
+                                              AiModelDO model, Long userId, Integer userType, Long roleId,
                                               MessageType messageType, String content, Boolean useContext,
                                               List<AiKnowledgeSegmentSearchRespBO> knowledgeSegments,
                                               List<String> attachmentUrls,
                                               AiWebSearchResponse webSearchResponse) {
         AiChatMessageDO message = new AiChatMessageDO().setConversationId(conversationId).setReplyId(replyId)
-                .setModel(model.getModel()).setModelId(model.getId()).setUserId(userId).setRoleId(roleId)
+                .setModel(model.getModel()).setModelId(model.getId()).setUserId(userId).setUserType(userType).setRoleId(roleId)
                 .setType(messageType.getValue()).setContent(content).setUseContext(useContext)
                 .setSegmentIds(convertList(knowledgeSegments, AiKnowledgeSegmentSearchRespBO::getId))
                 .setAttachmentUrls(attachmentUrls);
@@ -521,18 +557,28 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
     @Override
     public List<AiChatMessageDO> getChatMessageListByConversationId(Long conversationId) {
-        return chatMessageMapper.selectListByConversationId(conversationId);
+        return getChatMessageListByConversationId(conversationId, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public List<AiChatMessageDO> getChatMessageListByConversationId(Long conversationId, Integer userType) {
+        return chatMessageMapper.selectListByConversationId(conversationId, userType);
     }
 
     @Override
     public AiChatMessageDO getChatMessage(Long id) {
-        return chatMessageMapper.selectById(id);
+        return getChatMessage(id, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public AiChatMessageDO getChatMessage(Long id, Integer userType) {
+        return chatMessageMapper.selectByIdAndUserType(id, userType);
     }
 
     @Override
     public void deleteChatMessage(Long id, Long userId) {
         // 1. 校验消息存在
-        AiChatMessageDO message = chatMessageMapper.selectById(id);
+        AiChatMessageDO message = chatMessageMapper.selectByIdAndUserType(id, UserTypeEnum.ADMIN.getValue());
         if (message == null || ObjUtil.notEqual(message.getUserId(), userId)) {
             throw exception(CHAT_MESSAGE_NOT_EXIST);
         }
@@ -543,7 +589,8 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
     @Override
     public void deleteChatMessageByConversationId(Long conversationId, Long userId) {
         // 1. 校验消息存在
-        List<AiChatMessageDO> messages = chatMessageMapper.selectListByConversationId(conversationId);
+        List<AiChatMessageDO> messages = chatMessageMapper.selectListByConversationId(conversationId,
+                UserTypeEnum.ADMIN.getValue());
         if (CollUtil.isEmpty(messages) || ObjUtil.notEqual(messages.get(0).getUserId(), userId)) {
             throw exception(CHAT_MESSAGE_NOT_EXIST);
         }
@@ -554,7 +601,7 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
     @Override
     public void deleteChatMessageByAdmin(Long id) {
         // 1. 校验消息存在
-        AiChatMessageDO message = chatMessageMapper.selectById(id);
+        AiChatMessageDO message = chatMessageMapper.selectByIdAndUserType(id, UserTypeEnum.ADMIN.getValue());
         if (message == null) {
             throw exception(CHAT_MESSAGE_NOT_EXIST);
         }
@@ -564,17 +611,94 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
     @Override
     public Integer getChatMessageCount(Long conversationId) {
-        return chatMessageMapper.selectCount(AiChatMessageDO::getConversationId, conversationId).intValue();
+        return chatMessageMapper.selectCount(new LambdaQueryWrapperX<AiChatMessageDO>()
+                .eq(AiChatMessageDO::getConversationId, conversationId)
+                .eq(AiChatMessageDO::getUserType, UserTypeEnum.ADMIN.getValue())).intValue();
     }
 
     @Override
     public Map<Long, Integer> getChatMessageCountMap(Collection<Long> conversationIds) {
-        return chatMessageMapper.selectCountMapByConversationId(conversationIds);
+        return chatMessageMapper.selectCountMapByConversationId(conversationIds, UserTypeEnum.ADMIN.getValue());
     }
 
     @Override
     public PageResult<AiChatMessageDO> getChatMessagePage(AiChatMessagePageReqVO pageReqVO) {
-        return chatMessageMapper.selectPage(pageReqVO);
+        return chatMessageMapper.selectPage(pageReqVO, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public AiChatMessageDO createAssistantMessage(Long conversationId, Long userId, Integer userType, String content) {
+        AiChatConversationDO conversation = chatConversationService.validateChatConversationExists(conversationId, userType);
+        if (ObjUtil.notEqual(conversation.getUserId(), userId)) {
+            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+        }
+        AiModelDO model = new AiModelDO().setId(conversation.getModelId()).setModel(conversation.getModel());
+        return createChatMessage(conversationId, null, model, userId, userType, conversation.getRoleId(),
+                MessageType.ASSISTANT, content, false, null, null, null);
+    }
+
+    @Override
+    public void recordModelRequest(Long messageId, Integer userType, String requestBody) {
+        AiChatMessageDO message = chatMessageMapper.selectByIdAndUserType(messageId, userType);
+        if (message == null) {
+            throw exception(CHAT_MESSAGE_NOT_EXIST);
+        }
+        chatMessageMapper.updateById(new AiChatMessageDO().setId(messageId).setRequestBody(requestBody));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordModelResponse(Long messageId, Integer userType, String responseBody, Long promptTokens,
+                                    Long completionTokens, Long cachedTokens, Long totalTokens) {
+        AiChatMessageDO message = chatMessageMapper.selectByIdAndUserType(messageId, userType);
+        if (message == null) {
+            throw exception(CHAT_MESSAGE_NOT_EXIST);
+        }
+        promptTokens = ObjUtil.defaultIfNull(promptTokens, 0L);
+        completionTokens = ObjUtil.defaultIfNull(completionTokens, 0L);
+        cachedTokens = ObjUtil.defaultIfNull(cachedTokens, 0L);
+        totalTokens = ObjUtil.defaultIfNull(totalTokens, 0L);
+        chatMessageMapper.updateById(new AiChatMessageDO().setId(messageId).setResponseBody(responseBody)
+                .setPromptTokens(promptTokens).setCompletionTokens(completionTokens)
+                .setCachedTokens(cachedTokens).setTotalTokens(totalTokens));
+        chatConversationService.increaseTokenUsage(message.getConversationId(), userType, promptTokens,
+                completionTokens, cachedTokens, totalTokens);
+    }
+
+    private static boolean hasTokenUsage(ChatResponse response) {
+        return response != null && response.getMetadata() != null && response.getMetadata().getUsage() != null
+                && (response.getMetadata().getUsage().getPromptTokens() != null
+                || response.getMetadata().getUsage().getCompletionTokens() != null);
+    }
+
+    private static Long getPromptTokens(ChatResponse response) {
+        return getTokenUsage(response, Usage::getPromptTokens);
+    }
+
+    private static Long getCompletionTokens(ChatResponse response) {
+        return getTokenUsage(response, Usage::getCompletionTokens);
+    }
+
+    private static Long getTotalTokens(ChatResponse response) {
+        return getTokenUsage(response, Usage::getTotalTokens);
+    }
+
+    private static Long getCachedTokens(ChatResponse response) {
+        if (response == null || response.getMetadata() == null) {
+            return 0L;
+        }
+        Object nativeUsage = response.getMetadata().getUsage().getNativeUsage();
+        if (!(nativeUsage instanceof TokenUsage tokenUsage) || tokenUsage.promptTokenDetailed() == null) {
+            return 0L;
+        }
+        return ObjUtil.defaultIfNull(tokenUsage.promptTokenDetailed().cachedTokens(), 0).longValue();
+    }
+
+    private static Long getTokenUsage(ChatResponse response, java.util.function.Function<Usage, Integer> extractor) {
+        if (response == null || response.getMetadata() == null || response.getMetadata().getUsage() == null) {
+            return 0L;
+        }
+        return ObjUtil.defaultIfNull(extractor.apply(response.getMetadata().getUsage()), 0).longValue();
     }
 
 }

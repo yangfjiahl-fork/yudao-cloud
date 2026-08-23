@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.ai.controller.admin.model.vo.chatRole.AiChatRolePageReqVO;
@@ -50,7 +51,8 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         validateTools(createReqVO.getToolIds());
 
         // 保存角色
-        AiChatRoleDO chatRole = BeanUtils.toBean(createReqVO, AiChatRoleDO.class);
+        AiChatRoleDO chatRole = BeanUtils.toBean(createReqVO, AiChatRoleDO.class)
+                .setUserType(UserTypeEnum.ADMIN.getValue());
         chatRoleMapper.insert(chatRole);
         return chatRole.getId();
     }
@@ -64,7 +66,8 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
 
         // 保存角色
         AiChatRoleDO chatRole = BeanUtils.toBean(createReqVO, AiChatRoleDO.class).setUserId(userId)
-                .setStatus(CommonStatusEnum.ENABLE.getStatus()).setPublicStatus(false);
+                .setUserType(UserTypeEnum.ADMIN.getValue()).setStatus(CommonStatusEnum.ENABLE.getStatus())
+                .setPublicStatus(false);
         chatRoleMapper.insert(chatRole);
         return chatRole.getId();
     }
@@ -72,7 +75,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     public void updateChatRole(AiChatRoleSaveReqVO updateReqVO) {
         // 校验存在
-        validateChatRoleExists(updateReqVO.getId());
+        validateChatRoleExists(updateReqVO.getId(), UserTypeEnum.ADMIN.getValue());
         // 校验文档
         validateDocuments(updateReqVO.getKnowledgeIds());
         // 校验工具
@@ -86,7 +89,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     public void updateChatRoleMy(AiChatRoleSaveMyReqVO updateReqVO, Long userId) {
         // 校验存在
-        AiChatRoleDO chatRole = validateChatRoleExists(updateReqVO.getId());
+        AiChatRoleDO chatRole = validateChatRoleExists(updateReqVO.getId(), UserTypeEnum.ADMIN.getValue());
         if (ObjectUtil.notEqual(chatRole.getUserId(), userId)) {
             throw exception(CHAT_ROLE_NOT_EXISTS);
         }
@@ -129,7 +132,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     public void deleteChatRole(Long id) {
         // 校验存在
-        validateChatRoleExists(id);
+        validateChatRoleExists(id, UserTypeEnum.ADMIN.getValue());
         // 删除
         chatRoleMapper.deleteById(id);
     }
@@ -137,7 +140,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     public void deleteChatRoleMy(Long id, Long userId) {
         // 校验存在
-        AiChatRoleDO chatRole = validateChatRoleExists(id);
+        AiChatRoleDO chatRole = validateChatRoleExists(id, UserTypeEnum.ADMIN.getValue());
         if (ObjectUtil.notEqual(chatRole.getUserId(), userId)) {
             throw exception(CHAT_ROLE_NOT_EXISTS);
         }
@@ -145,8 +148,8 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         chatRoleMapper.deleteById(id);
     }
 
-    private AiChatRoleDO validateChatRoleExists(Long id) {
-        AiChatRoleDO chatRole = chatRoleMapper.selectById(id);
+    private AiChatRoleDO validateChatRoleExists(Long id, Integer userType) {
+        AiChatRoleDO chatRole = chatRoleMapper.selectByIdAndUserType(id, userType);
         if (chatRole == null) {
             throw exception(CHAT_ROLE_NOT_EXISTS);
         }
@@ -155,20 +158,35 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
 
     @Override
     public AiChatRoleDO getChatRole(Long id) {
-        return chatRoleMapper.selectById(id);
+        return getChatRole(id, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public AiChatRoleDO getChatRole(Long id, Integer userType) {
+        return chatRoleMapper.selectByIdAndUserType(id, userType);
     }
 
     @Override
     public List<AiChatRoleDO> getChatRoleList(Collection<Long> ids) {
+        return getChatRoleList(ids, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public List<AiChatRoleDO> getChatRoleList(Collection<Long> ids, Integer userType) {
         if (CollUtil.isEmpty(ids)) {
             return Collections.emptyList();
         }
-        return chatRoleMapper.selectByIds(ids);
+        return chatRoleMapper.selectListByIdsAndUserType(ids, userType);
     }
 
     @Override
     public AiChatRoleDO validateChatRole(Long id) {
-        AiChatRoleDO chatRole = validateChatRoleExists(id);
+        return validateChatRole(id, UserTypeEnum.ADMIN.getValue());
+    }
+
+    @Override
+    public AiChatRoleDO validateChatRole(Long id, Integer userType) {
+        AiChatRoleDO chatRole = validateChatRoleExists(id, userType);
         if (CommonStatusEnum.isDisable(chatRole.getStatus())) {
             throw exception(CHAT_ROLE_DISABLE, chatRole.getName());
         }
@@ -177,24 +195,25 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
 
     @Override
     public PageResult<AiChatRoleDO> getChatRolePage(AiChatRolePageReqVO pageReqVO) {
-        return chatRoleMapper.selectPage(pageReqVO);
+        return chatRoleMapper.selectPage(pageReqVO, UserTypeEnum.ADMIN.getValue());
     }
 
     @Override
     public PageResult<AiChatRoleDO> getChatRoleMyPage(AiChatRolePageReqVO pageReqVO, Long userId) {
-        return chatRoleMapper.selectPageByMy(pageReqVO, userId);
+        return chatRoleMapper.selectPageByMy(pageReqVO, userId, UserTypeEnum.ADMIN.getValue());
     }
 
     @Override
     public List<String> getChatRoleCategoryList() {
-        List<AiChatRoleDO> list = chatRoleMapper.selectListGroupByCategory(CommonStatusEnum.ENABLE.getStatus());
+        List<AiChatRoleDO> list = chatRoleMapper.selectListGroupByCategory(CommonStatusEnum.ENABLE.getStatus(),
+                UserTypeEnum.ADMIN.getValue());
         return convertList(list, AiChatRoleDO::getCategory,
                 role -> role != null && StrUtil.isNotBlank(role.getCategory()));
     }
 
     @Override
     public List<AiChatRoleDO> getChatRoleListByName(String name) {
-        return chatRoleMapper.selectListByName(name);
+        return chatRoleMapper.selectListByName(name, UserTypeEnum.ADMIN.getValue());
     }
 
 }

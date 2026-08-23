@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.ai.dal.dataobject.chat;
 
-import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.model.AiChatRoleDO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.model.AiModelDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -24,7 +25,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AiChatConversationDO extends BaseDO {
+public class AiChatConversationDO extends TenantBaseDO {
 
     public static final String TITLE_DEFAULT = "新对话";
 
@@ -37,9 +38,16 @@ public class AiChatConversationDO extends BaseDO {
     /**
      * 用户编号
      *
-     * 关联 AdminUserDO 的 userId 字段
+     * 关联用户表的 userId 字段
      */
     private Long userId;
+
+    /**
+     * 用户类型
+     *
+     * 枚举 {@link UserTypeEnum}
+     */
+    private Integer userType;
 
     /**
      * 对话标题
@@ -96,5 +104,22 @@ public class AiChatConversationDO extends BaseDO {
      * 上下文的最大 Message 数量
      */
     private Integer maxContexts;
+
+    /**
+     * 会话累计输入 Token 数
+     */
+    private Long promptTokens;
+    /**
+     * 会话累计输出 Token 数
+     */
+    private Long completionTokens;
+    /**
+     * 会话累计缓存命中 Token 数，包含在输入 Token 内
+     */
+    private Long cachedTokens;
+    /**
+     * 会话累计总 Token 数
+     */
+    private Long totalTokens;
 
 }

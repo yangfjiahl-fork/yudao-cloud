@@ -25,6 +25,8 @@ public interface AiChatConversationService {
      */
     Long createChatConversationMy(AiChatConversationCreateMyReqVO createReqVO, Long userId);
 
+    Long createChatConversationMy(AiChatConversationCreateMyReqVO createReqVO, Long userId, Integer userType);
+
     /**
      * 更新【我的】聊天对话
      *
@@ -32,6 +34,8 @@ public interface AiChatConversationService {
      * @param userId 用户编号
      */
     void updateChatConversationMy(AiChatConversationUpdateMyReqVO updateReqVO, Long userId);
+
+    void updateChatConversationMy(AiChatConversationUpdateMyReqVO updateReqVO, Long userId, Integer userType);
 
     /**
      * 获得【我的】聊天对话列表
@@ -41,6 +45,8 @@ public interface AiChatConversationService {
      */
     List<AiChatConversationDO> getChatConversationListByUserId(Long userId);
 
+    List<AiChatConversationDO> getChatConversationListByUserId(Long userId, Integer userType);
+
     /**
      * 获得聊天对话
      *
@@ -49,6 +55,8 @@ public interface AiChatConversationService {
      */
     AiChatConversationDO getChatConversation(Long id);
 
+    AiChatConversationDO getChatConversation(Long id, Integer userType);
+
     /**
      * 删除【我的】聊天对话
      *
@@ -56,6 +64,8 @@ public interface AiChatConversationService {
      * @param userId 用户编号
      */
     void deleteChatConversationMy(Long id, Long userId);
+
+    void deleteChatConversationMy(Long id, Long userId, Integer userType);
 
     /**
      * 【管理员】删除聊天对话
@@ -72,12 +82,16 @@ public interface AiChatConversationService {
      */
     AiChatConversationDO validateChatConversationExists(Long id);
 
+    AiChatConversationDO validateChatConversationExists(Long id, Integer userType);
+
     /**
      * 删除【我的】 + 非置顶的聊天对话
      *
      * @param userId 用户编号
      */
     void deleteChatConversationMyByUnpinned(Long userId);
+
+    void deleteChatConversationMyByUnpinned(Long userId, Integer userType);
 
     /**
      * 获得聊天对话的分页列表
@@ -86,5 +100,8 @@ public interface AiChatConversationService {
      * @return 聊天对话的分页列表
      */
     PageResult<AiChatConversationDO> getChatConversationPage(AiChatConversationPageReqVO pageReqVO);
+
+    void increaseTokenUsage(Long id, Integer userType, Long promptTokens, Long completionTokens,
+                            Long cachedTokens, Long totalTokens);
 
 }

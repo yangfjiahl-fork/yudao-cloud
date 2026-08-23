@@ -1,9 +1,9 @@
 package cn.iocoder.yudao.module.ai.dal.dataobject.model;
 
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
-import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.framework.mybatis.core.type.LongListTypeHandler;
-import cn.iocoder.yudao.framework.mybatis.core.type.StringListTypeHandler;
 import cn.iocoder.yudao.module.ai.dal.dataobject.knowledge.AiKnowledgeDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -25,7 +25,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AiChatRoleDO extends BaseDO {
+public class AiChatRoleDO extends TenantBaseDO {
 
     /**
      * 编号
@@ -61,6 +61,13 @@ public class AiChatRoleDO extends BaseDO {
     private Long userId;
 
     /**
+     * 角色归属用户类型
+     *
+     * 枚举 {@link UserTypeEnum}
+     */
+    private Integer userType;
+
+    /**
      * 模型编号
      *
      * 关联 {@link AiModelDO#getId()} 字段
@@ -86,7 +93,7 @@ public class AiChatRoleDO extends BaseDO {
      *
      * 关联 spring.ai.mcp.client 下的名字
      */
-    @TableField(typeHandler = StringListTypeHandler.class)
+    @TableField(exist = false)
     private List<String> mcpClientNames;
 
     /**

@@ -1,8 +1,8 @@
 package cn.iocoder.yudao.module.ai.dal.dataobject.chat;
 
-import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.framework.mybatis.core.type.LongListTypeHandler;
-import cn.iocoder.yudao.framework.mybatis.core.type.StringListTypeHandler;
 import cn.iocoder.yudao.module.ai.dal.dataobject.knowledge.AiKnowledgeSegmentDO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.model.AiChatRoleDO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.model.AiModelDO;
@@ -11,7 +11,6 @@ import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,7 +31,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AiChatMessageDO extends BaseDO {
+public class AiChatMessageDO extends TenantBaseDO {
 
     /**
      * 编号，作为每条聊天记录的唯一标识符
@@ -66,9 +65,15 @@ public class AiChatMessageDO extends BaseDO {
     /**
      * 用户编号
      *
-     * 关联 AdminUserDO 的 userId 字段
+     * 关联用户表的 userId 字段
      */
     private Long userId;
+    /**
+     * 用户类型
+     *
+     * 枚举 {@link UserTypeEnum}
+     */
+    private Integer userType;
     /**
      * 角色编号
      *
@@ -96,6 +101,7 @@ public class AiChatMessageDO extends BaseDO {
     /**
      * 推理内容
      */
+    @TableField(exist = false)
     private String reasoningContent;
 
     /**
@@ -114,13 +120,39 @@ public class AiChatMessageDO extends BaseDO {
     /**
      * 联网搜索的网页内容数组
      */
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(exist = false)
     private List<AiWebSearchResponse.WebPage> webSearchPages;
 
     /**
      * 附件 URL 数组
      */
-    @TableField(typeHandler = StringListTypeHandler.class)
+    @TableField(exist = false)
     private List<String> attachmentUrls;
+
+    /**
+     * 本次模型调用原始请求文本或 JSON
+     */
+    private String requestBody;
+    /**
+     * 本次模型调用原始返回文本或 JSON
+     */
+    private String responseBody;
+
+    /**
+     * 本次模型调用输入 Token 数
+     */
+    private Long promptTokens;
+    /**
+     * 本次模型调用输出 Token 数
+     */
+    private Long completionTokens;
+    /**
+     * 本次模型调用缓存命中 Token 数，包含在输入 Token 内
+     */
+    private Long cachedTokens;
+    /**
+     * 本次模型调用总 Token 数
+     */
+    private Long totalTokens;
 
 }

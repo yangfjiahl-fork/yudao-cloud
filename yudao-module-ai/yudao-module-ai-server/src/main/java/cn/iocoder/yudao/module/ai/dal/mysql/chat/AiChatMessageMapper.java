@@ -26,17 +26,25 @@ import java.util.Map;
 @Mapper
 public interface AiChatMessageMapper extends BaseMapperX<AiChatMessageDO> {
 
-    default List<AiChatMessageDO> selectListByConversationId(Long conversationId) {
+    default AiChatMessageDO selectByIdAndUserType(Long id, Integer userType) {
+        return selectOne(new LambdaQueryWrapperX<AiChatMessageDO>()
+                .eq(AiChatMessageDO::getId, id)
+                .eq(AiChatMessageDO::getUserType, userType));
+    }
+
+    default List<AiChatMessageDO> selectListByConversationId(Long conversationId, Integer userType) {
         return selectList(new LambdaQueryWrapperX<AiChatMessageDO>()
                 .eq(AiChatMessageDO::getConversationId, conversationId)
+                .eq(AiChatMessageDO::getUserType, userType)
                 .orderByAsc(AiChatMessageDO::getId));
     }
 
-    default Map<Long, Integer> selectCountMapByConversationId(Collection<Long> conversationIds) {
+    default Map<Long, Integer> selectCountMapByConversationId(Collection<Long> conversationIds, Integer userType) {
         // SQL count 查询
         List<Map<String, Object>> result = selectMaps(new QueryWrapper<AiChatMessageDO>()
                 .select("COUNT(id) AS count, conversation_id AS conversationId")
                 .in("conversation_id", conversationIds)
+                .eq("user_type", userType)
                 .groupBy("conversation_id"));
         if (CollUtil.isEmpty(result)) {
             return Collections.emptyMap();
@@ -47,8 +55,9 @@ public interface AiChatMessageMapper extends BaseMapperX<AiChatMessageDO> {
                 record -> MapUtil.getInt(record, "count" ));
     }
 
-    default PageResult<AiChatMessageDO> selectPage(AiChatMessagePageReqVO pageReqVO) {
+    default PageResult<AiChatMessageDO> selectPage(AiChatMessagePageReqVO pageReqVO, Integer userType) {
         return selectPage(pageReqVO, new LambdaQueryWrapperX<AiChatMessageDO>()
+                .eq(AiChatMessageDO::getUserType, userType)
                 .eqIfPresent(AiChatMessageDO::getConversationId, pageReqVO.getConversationId())
                 .eqIfPresent(AiChatMessageDO::getUserId, pageReqVO.getUserId())
                 .likeIfPresent(AiChatMessageDO::getContent, pageReqVO.getContent())

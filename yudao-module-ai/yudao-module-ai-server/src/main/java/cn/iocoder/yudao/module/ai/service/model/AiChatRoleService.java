@@ -75,6 +75,8 @@ public interface AiChatRoleService {
      */
     AiChatRoleDO getChatRole(Long id);
 
+    AiChatRoleDO getChatRole(Long id, Integer userType);
+
     /**
      * 获得聊天角色列表
      *
@@ -82,6 +84,8 @@ public interface AiChatRoleService {
      * @return 聊天角色列表
      */
     List<AiChatRoleDO> getChatRoleList(Collection<Long> ids);
+
+    List<AiChatRoleDO> getChatRoleList(Collection<Long> ids, Integer userType);
 
     default Map<Long, AiChatRoleDO> getChatRoleMap(Collection<Long> ids) {
         return convertMap(getChatRoleList(ids), AiChatRoleDO::getId);
@@ -93,6 +97,8 @@ public interface AiChatRoleService {
      * @param id 角色编号
      */
     AiChatRoleDO validateChatRole(Long id);
+
+    AiChatRoleDO validateChatRole(Long id, Integer userType);
 
     /**
      * 获得聊天角色分页

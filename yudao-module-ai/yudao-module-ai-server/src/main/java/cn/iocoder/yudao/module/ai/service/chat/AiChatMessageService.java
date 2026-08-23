@@ -28,6 +28,8 @@ public interface AiChatMessageService {
      */
     AiChatMessageSendRespVO sendMessage(AiChatMessageSendReqVO sendReqVO, Long userId);
 
+    AiChatMessageSendRespVO sendMessage(AiChatMessageSendReqVO sendReqVO, Long userId, Integer userType);
+
     /**
      * 发送消息
      *
@@ -37,6 +39,9 @@ public interface AiChatMessageService {
      */
     Flux<CommonResult<AiChatMessageSendRespVO>> sendChatMessageStream(AiChatMessageSendReqVO sendReqVO, Long userId);
 
+    Flux<CommonResult<AiChatMessageSendRespVO>> sendChatMessageStream(AiChatMessageSendReqVO sendReqVO, Long userId,
+                                                                       Integer userType);
+
     /**
      * 获得指定对话的消息列表
      *
@@ -45,6 +50,8 @@ public interface AiChatMessageService {
      */
     List<AiChatMessageDO> getChatMessageListByConversationId(Long conversationId);
 
+    List<AiChatMessageDO> getChatMessageListByConversationId(Long conversationId, Integer userType);
+
     /**
      * 获得聊天消息
      *
@@ -52,6 +59,8 @@ public interface AiChatMessageService {
      * @return 聊天消息
      */
     AiChatMessageDO getChatMessage(Long id);
+
+    AiChatMessageDO getChatMessage(Long id, Integer userType);
 
     /**
      * 删除消息
@@ -99,5 +108,12 @@ public interface AiChatMessageService {
      * @return 聊天消息的分页
      */
     PageResult<AiChatMessageDO> getChatMessagePage(AiChatMessagePageReqVO pageReqVO);
+
+    AiChatMessageDO createAssistantMessage(Long conversationId, Long userId, Integer userType, String content);
+
+    void recordModelRequest(Long messageId, Integer userType, String requestBody);
+
+    void recordModelResponse(Long messageId, Integer userType, String responseBody, Long promptTokens,
+                             Long completionTokens, Long cachedTokens, Long totalTokens);
 
 }

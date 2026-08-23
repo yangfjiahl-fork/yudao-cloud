@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.ai.controller.admin.model.vo.chatRole.AiChatRoleP
 import cn.iocoder.yudao.module.ai.dal.dataobject.model.AiChatRoleDO;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -18,16 +19,30 @@ import java.util.List;
 @Mapper
 public interface AiChatRoleMapper extends BaseMapperX<AiChatRoleDO> {
 
-    default PageResult<AiChatRoleDO> selectPage(AiChatRolePageReqVO reqVO) {
+    default AiChatRoleDO selectByIdAndUserType(Long id, Integer userType) {
+        return selectOne(new LambdaQueryWrapperX<AiChatRoleDO>()
+                .eq(AiChatRoleDO::getId, id)
+                .eq(AiChatRoleDO::getUserType, userType));
+    }
+
+    default List<AiChatRoleDO> selectListByIdsAndUserType(Collection<Long> ids, Integer userType) {
+        return selectList(new LambdaQueryWrapperX<AiChatRoleDO>()
+                .in(AiChatRoleDO::getId, ids)
+                .eq(AiChatRoleDO::getUserType, userType));
+    }
+
+    default PageResult<AiChatRoleDO> selectPage(AiChatRolePageReqVO reqVO, Integer userType) {
         return selectPage(reqVO, new LambdaQueryWrapperX<AiChatRoleDO>()
+                .eq(AiChatRoleDO::getUserType, userType)
                 .likeIfPresent(AiChatRoleDO::getName, reqVO.getName())
                 .eqIfPresent(AiChatRoleDO::getCategory, reqVO.getCategory())
                 .eqIfPresent(AiChatRoleDO::getPublicStatus, reqVO.getPublicStatus())
                 .orderByAsc(AiChatRoleDO::getSort));
     }
 
-    default PageResult<AiChatRoleDO> selectPageByMy(AiChatRolePageReqVO reqVO, Long userId) {
+    default PageResult<AiChatRoleDO> selectPageByMy(AiChatRolePageReqVO reqVO, Long userId, Integer userType) {
         return selectPage(reqVO, new LambdaQueryWrapperX<AiChatRoleDO>()
+                .eq(AiChatRoleDO::getUserType, userType)
                 .likeIfPresent(AiChatRoleDO::getName, reqVO.getName())
                 .eqIfPresent(AiChatRoleDO::getCategory, reqVO.getCategory())
                 // 情况一：公开
@@ -38,15 +53,17 @@ public interface AiChatRoleMapper extends BaseMapperX<AiChatRoleDO> {
                 .orderByAsc(AiChatRoleDO::getSort));
     }
 
-    default List<AiChatRoleDO> selectListGroupByCategory(Integer status) {
+    default List<AiChatRoleDO> selectListGroupByCategory(Integer status, Integer userType) {
         return selectList(new LambdaQueryWrapperX<AiChatRoleDO>()
                 .select(AiChatRoleDO::getCategory)
+                .eq(AiChatRoleDO::getUserType, userType)
                 .eq(AiChatRoleDO::getStatus, status)
                 .groupBy(AiChatRoleDO::getCategory));
     }
 
-    default List<AiChatRoleDO> selectListByName(String name) {
+    default List<AiChatRoleDO> selectListByName(String name, Integer userType) {
         return selectList(new LambdaQueryWrapperX<AiChatRoleDO>()
+                .eq(AiChatRoleDO::getUserType, userType)
                 .likeIfPresent(AiChatRoleDO::getName, name)
                 .orderByAsc(AiChatRoleDO::getSort));
     }
