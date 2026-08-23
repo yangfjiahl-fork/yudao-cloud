@@ -10,7 +10,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.util.function.Function;
 
@@ -19,7 +18,6 @@ import java.util.function.Function;
  *
  * @author 芋道源码
  */
-@Component("weather_query")
 @RequiredArgsConstructor
 public class WeatherQueryToolFunction
         implements Function<WeatherQueryToolFunction.Request, WeatherQueryToolFunction.Response> {

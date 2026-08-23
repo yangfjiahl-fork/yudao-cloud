@@ -3,14 +3,12 @@ package cn.iocoder.yudao.module.ai.tool.function;
 import cn.iocoder.yudao.module.ai.framework.ai.core.scenic.ScenicSpotQueryClient;
 import cn.iocoder.yudao.module.ai.framework.ai.core.scenic.ScenicSpotQueryClientFacade;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.util.function.Function;
 
 /**
  * 工具：查询全国景点及其行政区划信息
  */
-@Component("scenic_spot_query")
 @RequiredArgsConstructor
 public class ScenicSpotQueryToolFunction
         implements Function<ScenicSpotQueryClient.Request, ScenicSpotQueryClient.Response> {
