@@ -20,6 +20,15 @@ public class AiChatConversationRespVO implements VO {
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "2048")
     private Long userId;
 
+    @Schema(description = "省级地区编号", example = "330000")
+    private Long provinceId;
+
+    @Schema(description = "市级地区编号", example = "330100")
+    private Long cityId;
+
+    @Schema(description = "区县级地区编号", example = "330106")
+    private Long districtId;
+
     @Schema(description = "对话标题", requiredMode = Schema.RequiredMode.REQUIRED, example = "我是一个标题")
     private String title;
 

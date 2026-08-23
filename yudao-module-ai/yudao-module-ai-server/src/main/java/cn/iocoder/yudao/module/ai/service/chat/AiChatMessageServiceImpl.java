@@ -36,6 +36,7 @@ import cn.iocoder.yudao.module.ai.service.knowledge.bo.AiKnowledgeSegmentSearchR
 import cn.iocoder.yudao.module.ai.service.model.AiChatRoleService;
 import cn.iocoder.yudao.module.ai.service.model.AiModelService;
 import cn.iocoder.yudao.module.ai.service.model.AiToolService;
+import cn.iocoder.yudao.module.ai.util.AiChatPromptUtils;
 import cn.iocoder.yudao.module.ai.util.AiUtils;
 import cn.iocoder.yudao.module.ai.util.FileTypeUtils;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.TokenUsage;
@@ -261,7 +262,7 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         AtomicBoolean firstExecuteFlag = new AtomicBoolean(true);
         AtomicReference<List<AiChatMessageRespVO.KnowledgeSegment>> cacheSegments = new AtomicReference<>();
         AtomicReference<List<AiWebSearchResponse.WebPage>> cacheWebSearchPages = new AtomicReference<>();
-        return streamResponse.map(chunk -> {
+        return Flux.concat(Flux.just(buildStreamHint("正在生成回答，请稍候...")), streamResponse.map(chunk -> {
             if (hasTokenUsage(chunk)) {
                 usageResponse.set(chunk);
             }
@@ -289,12 +290,13 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                 reasoningContentBuffer.append(newReasoningContent);
             }
             return success(new AiChatMessageSendRespVO()
+                    .setEvent("message")
                     .setSend(BeanUtils.toBean(userMessage, AiChatMessageSendRespVO.Message.class))
                     .setReceive(BeanUtils.toBean(assistantMessage, AiChatMessageSendRespVO.Message.class)
                             .setContent(StrUtil.nullToDefault(newContent, "")) // 避免 null 的 情况
                             .setReasoningContent(StrUtil.nullToDefault(newReasoningContent, "")) // 避免 null 的 情况
                             .setSegments(cacheSegments.get()).setWebSearchPages(cacheWebSearchPages.get()))); // 知识库 + 联网搜索
-        }).doOnComplete(() -> {
+        })).doOnComplete(() -> {
             TenantUtils.execute(tenantId, () -> {
                 chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
                         .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
@@ -338,6 +340,10 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         }).onErrorResume(error -> Flux.just(error(ErrorCodeConstants.CHAT_STREAM_ERROR)));
     }
 
+    private static CommonResult<AiChatMessageSendRespVO> buildStreamHint(String hintMessage) {
+        return success(new AiChatMessageSendRespVO().setEvent("hint").setHintMessage(hintMessage));
+    }
+
     private List<AiKnowledgeSegmentSearchRespBO> recallKnowledgeSegment(String content,
             AiChatConversationDO conversation) {
         // 1. 查询聊天角色
@@ -364,8 +370,9 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                                AiModelDO model, AiChatMessageSendReqVO sendReqVO) {
         List<Message> chatMessages = new ArrayList<>();
         // 1.1 System Context 角色设定
-        if (StrUtil.isNotBlank(conversation.getSystemMessage())) {
-            chatMessages.add(new SystemMessage(conversation.getSystemMessage()));
+        String systemMessage = AiChatPromptUtils.appendRegionSystemMessage(conversation.getSystemMessage(), conversation);
+        if (StrUtil.isNotBlank(systemMessage)) {
+            chatMessages.add(new SystemMessage(systemMessage));
         }
 
         // 1.2 历史 history message 历史消息
@@ -635,6 +642,17 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         AiModelDO model = new AiModelDO().setId(conversation.getModelId()).setModel(conversation.getModel());
         return createChatMessage(conversationId, null, model, userId, userType, conversation.getRoleId(),
                 MessageType.ASSISTANT, content, false, null, null, null);
+    }
+
+    @Override
+    public AiChatMessageDO createUserMessage(Long conversationId, Long userId, Integer userType, String content) {
+        AiChatConversationDO conversation = chatConversationService.validateChatConversationExists(conversationId, userType);
+        if (ObjUtil.notEqual(conversation.getUserId(), userId)) {
+            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+        }
+        AiModelDO model = new AiModelDO().setId(conversation.getModelId()).setModel(conversation.getModel());
+        return createChatMessage(conversationId, null, model, userId, userType, conversation.getRoleId(),
+                MessageType.USER, content, false, null, null, null);
     }
 
     @Override

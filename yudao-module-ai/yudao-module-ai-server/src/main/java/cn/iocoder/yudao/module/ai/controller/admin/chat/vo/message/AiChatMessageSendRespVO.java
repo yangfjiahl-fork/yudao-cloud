@@ -11,6 +11,12 @@ import java.util.List;
 @Data
 public class AiChatMessageSendRespVO {
 
+    @Schema(description = "流式事件类型。hint：友好提示；message：模型消息分片", example = "message")
+    private String event;
+
+    @Schema(description = "流式友好提示文案。仅 event 为 hint 时返回", example = "正在生成回答，请稍候...")
+    private String hintMessage;
+
     @Schema(description = "发送消息", requiredMode = Schema.RequiredMode.REQUIRED)
     private Message send;
 

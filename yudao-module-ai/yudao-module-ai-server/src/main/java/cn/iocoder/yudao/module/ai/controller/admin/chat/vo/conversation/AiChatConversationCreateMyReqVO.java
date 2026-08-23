@@ -13,4 +13,13 @@ public class AiChatConversationCreateMyReqVO {
     @Schema(description = "知识库编号", example = "1204")
     private Long knowledgeId;
 
+    @Schema(description = "省级地区编号", example = "330000")
+    private Long provinceId;
+
+    @Schema(description = "市级地区编号", example = "330100")
+    private Long cityId;
+
+    @Schema(description = "区县级地区编号", example = "330106")
+    private Long districtId;
+
 }

@@ -5,6 +5,8 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationUpdateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 
 import java.util.List;
 
@@ -26,5 +28,12 @@ public interface AiChatApi {
     List<AiChatMessageRespDTO> getMessageList(Long conversationId, Long userId, Integer userType);
 
     AiChatMessageRespDTO createAssistantMessage(AiChatMessageCreateAssistantReqDTO reqDTO);
+
+    AiChatMessageRespDTO createUserMessage(AiChatMessageCreateAssistantReqDTO reqDTO);
+
+    /**
+     * 使用会话绑定的 chat_role、模型及模型参数执行一次不带工具的受控生成。
+     */
+    AiChatGenerateRespDTO generate(AiChatGenerateReqDTO reqDTO);
 
 }

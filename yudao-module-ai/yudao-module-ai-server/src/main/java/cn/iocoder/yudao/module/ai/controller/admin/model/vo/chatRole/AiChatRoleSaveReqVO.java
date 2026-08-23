@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.ai.controller.admin.model.vo.chatRole;
 
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.validation.InEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
@@ -18,6 +19,11 @@ public class AiChatRoleSaveReqVO {
 
     @Schema(description = "模型编号", example = "17640")
     private Long modelId;
+
+    @Schema(description = "用户类型，参见 system_dict_data 的 user_type 字典", requiredMode = Schema.RequiredMode.REQUIRED, example = "2")
+    @NotNull(message = "用户类型不能为空")
+    @InEnum(UserTypeEnum.class)
+    private Integer userType;
 
     @Schema(description = "角色名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "李四")
     @NotEmpty(message = "角色名称不能为空")

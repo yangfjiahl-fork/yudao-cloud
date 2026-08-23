@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.ai.controller.admin.model.vo.chatRole;
 
+import cn.iocoder.yudao.framework.excel.core.annotations.DictFormat;
+import cn.iocoder.yudao.module.infra.enums.DictTypeConstants;
 import cn.iocoder.yudao.module.ai.dal.dataobject.model.AiModelDO;
 import org.dromara.core.trans.anno.Trans;
 import org.dromara.core.trans.constant.TransType;
@@ -19,6 +21,10 @@ public class AiChatRoleRespVO implements VO {
 
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "9442")
     private Long userId;
+
+    @Schema(description = "用户类型，参见 system_dict_data 的 user_type 字典", example = "2")
+    @DictFormat(DictTypeConstants.USER_TYPE)
+    private Integer userType;
 
     @Schema(description = "模型编号", example = "17640")
     @Trans(type = TransType.SIMPLE, target = AiModelDO.class, fields = { "name", "model" }, refs = { "modelName", "model" })

@@ -33,7 +33,7 @@ public interface AiChatRoleMapper extends BaseMapperX<AiChatRoleDO> {
 
     default PageResult<AiChatRoleDO> selectPage(AiChatRolePageReqVO reqVO, Integer userType) {
         return selectPage(reqVO, new LambdaQueryWrapperX<AiChatRoleDO>()
-                .eq(AiChatRoleDO::getUserType, userType)
+                .eqIfPresent(AiChatRoleDO::getUserType, userType)
                 .likeIfPresent(AiChatRoleDO::getName, reqVO.getName())
                 .eqIfPresent(AiChatRoleDO::getCategory, reqVO.getCategory())
                 .eqIfPresent(AiChatRoleDO::getPublicStatus, reqVO.getPublicStatus())

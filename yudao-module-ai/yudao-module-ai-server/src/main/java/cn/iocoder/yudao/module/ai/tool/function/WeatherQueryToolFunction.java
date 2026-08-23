@@ -1,20 +1,18 @@
 package cn.iocoder.yudao.module.ai.tool.function;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
-import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.module.ai.framework.ai.core.weather.WeatherClient;
+import cn.iocoder.yudao.module.ai.framework.ai.core.weather.WeatherClientFacade;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.function.Function;
-
-import static cn.hutool.core.date.DatePattern.NORM_DATETIME_PATTERN;
 
 /**
  * 工具：查询指定城市的天气信息
@@ -22,10 +20,11 @@ import static cn.hutool.core.date.DatePattern.NORM_DATETIME_PATTERN;
  * @author 芋道源码
  */
 @Component("weather_query")
+@RequiredArgsConstructor
 public class WeatherQueryToolFunction
         implements Function<WeatherQueryToolFunction.Request, WeatherQueryToolFunction.Response> {
 
-    private static final String[] WEATHER_CONDITIONS = { "晴朗", "多云", "阴天", "小雨", "大雨", "雷雨", "小雪", "大雪" };
+    private final WeatherClientFacade weatherClientFacade;
 
     @Data
     @JsonClassDescription("查询指定城市的天气信息")
@@ -76,9 +75,14 @@ public class WeatherQueryToolFunction
             private Integer humidity;
 
             /**
-             * 风速（km/h）
+             * 风向
              */
-            private Integer windSpeed;
+            private String windDirection;
+
+            /**
+             * 风力
+             */
+            private String windPower;
 
             /**
              * 查询时间
@@ -92,27 +96,15 @@ public class WeatherQueryToolFunction
     @Override
     public Response apply(Request request) {
         // 检查城市名称是否为空
-        if (StrUtil.isBlank(request.getCity())) {
+        if (request == null || StrUtil.isBlank(request.getCity())) {
             return new Response("未知城市", null);
         }
 
         // 获取天气数据
-        String city = request.getCity();
-        Response.WeatherInfo weatherInfo = generateMockWeatherInfo();
-        return new Response(city, weatherInfo);
-    }
-
-    /**
-     * 生成模拟的天气数据
-     * 在实际应用中，应替换为真实 API 调用
-     */
-    private Response.WeatherInfo generateMockWeatherInfo() {
-        int temperature = RandomUtil.randomInt(-5, 30);
-        int humidity = RandomUtil.randomInt(1, 100);
-        int windSpeed = RandomUtil.randomInt(1, 30);
-        String condition = RandomUtil.randomEle(WEATHER_CONDITIONS);
-        return new Response.WeatherInfo(temperature, condition, humidity, windSpeed,
-                LocalDateTimeUtil.format(LocalDateTime.now(), NORM_DATETIME_PATTERN));
+        WeatherClient.CurrentWeather weather = weatherClientFacade.getCurrentWeather(request.getCity().trim());
+        Response.WeatherInfo weatherInfo = new Response.WeatherInfo(weather.temperature(), weather.condition(),
+                weather.humidity(), weather.windDirection(), weather.windPower(), weather.queryTime());
+        return new Response(weather.city(), weatherInfo);
     }
 
 }

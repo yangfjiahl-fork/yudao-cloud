@@ -119,6 +119,10 @@ yudao:
     title: 管理后台
     description: 提供管理员管理的所有功能
     version: ${yudao.info.version}
+  gift:
+    amap:
+      key: ${AMAP_WEB_SERVICE_KEY:}
+      reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:

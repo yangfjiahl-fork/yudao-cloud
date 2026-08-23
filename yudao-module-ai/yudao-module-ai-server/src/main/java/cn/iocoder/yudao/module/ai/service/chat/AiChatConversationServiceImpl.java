@@ -74,6 +74,8 @@ public class AiChatConversationServiceImpl implements AiChatConversationService 
 
         // 2. 创建 AiChatConversationDO 聊天对话
         AiChatConversationDO conversation = new AiChatConversationDO().setUserId(userId).setUserType(userType).setPinned(false)
+                .setProvinceId(createReqVO.getProvinceId()).setCityId(createReqVO.getCityId())
+                .setDistrictId(createReqVO.getDistrictId())
                 .setModelId(model.getId()).setModel(model.getModel())
                 .setTemperature(model.getTemperature()).setMaxTokens(model.getMaxTokens()).setMaxContexts(model.getMaxContexts());
         if (role != null) {

@@ -9,15 +9,18 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationCreateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationUpdateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationCreateReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationUpdateReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatCreateStreamRespVO;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
+import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -40,6 +43,7 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @RestController
 @RequestMapping("/ai/chat/conversation")
 @Validated
+@Slf4j
 public class AppTripChatConversationController {
 
     private static final String ENTRY_ROLE_ID_CONFIG_KEY = "trip.agent.roleId";
@@ -55,17 +59,27 @@ public class AppTripChatConversationController {
     private AiChatApi aiChatApi;
     @Resource
     private ConfigApi configApi;
+    @Resource
+    private TripAgentService tripAgentService;
 
     @PostMapping(value = "/create", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "创建旅行规划会话并流式返回引导语")
-    public Flux<CommonResult<AppTripChatCreateStreamRespVO>> createConversation() {
+    public Flux<CommonResult<AppTripChatCreateStreamRespVO>> createConversation(
+            @Valid @RequestBody(required = false) AppTripChatConversationCreateReqVO reqVO) {
         Long userId = getLoginUserId();
         Integer userType = UserTypeEnum.MEMBER.getValue();
         AiChatConversationCreateReqDTO createReqDTO = new AiChatConversationCreateReqDTO();
         createReqDTO.setUserId(userId);
         createReqDTO.setUserType(userType);
-        createReqDTO.setRoleId(getEntryRoleId());
+        Long roleId = getEntryRoleId();
+        createReqDTO.setRoleId(roleId);
+        if (reqVO != null) {
+            createReqDTO.setProvinceId(reqVO.getProvinceId());
+            createReqDTO.setCityId(reqVO.getCityId());
+            createReqDTO.setDistrictId(reqVO.getDistrictId());
+        }
         Long conversationId = aiChatApi.createConversation(createReqDTO);
+        tripAgentService.createTrip(conversationId, userId);
         String content = TRAVEL_GUIDE_MESSAGES[ThreadLocalRandom.current().nextInt(TRAVEL_GUIDE_MESSAGES.length)];
         AiChatMessageCreateAssistantReqDTO messageReqDTO = new AiChatMessageCreateAssistantReqDTO();
         messageReqDTO.setConversationId(conversationId);
@@ -73,7 +87,9 @@ public class AppTripChatConversationController {
         messageReqDTO.setUserType(userType);
         messageReqDTO.setContent(content);
         AiChatMessageRespDTO message = aiChatApi.createAssistantMessage(messageReqDTO);
-        return Flux.just(success(new AppTripChatCreateStreamRespVO().setConversationId(conversationId)
+        log.info("[createConversation][conversationId({}) memberId({}) roleId({}) guideMessageId({}) 创建成功]",
+                conversationId, userId, roleId, message.getId());
+        return Flux.just(success(new AppTripChatCreateStreamRespVO().setEvent("created").setConversationId(conversationId)
                 .setMessageId(message.getId()).setContent(content)));
     }
 

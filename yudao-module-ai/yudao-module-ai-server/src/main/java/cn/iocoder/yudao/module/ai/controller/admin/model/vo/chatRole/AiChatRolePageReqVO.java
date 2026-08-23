@@ -14,6 +14,9 @@ public class AiChatRolePageReqVO extends PageParam {
     @Schema(description = "角色类别", example = "创作")
     private String category;
 
+    @Schema(description = "用户类型，参见 system_dict_data 的 user_type 字典", example = "2")
+    private Integer userType;
+
     @Schema(description = "是否公开", example = "1")
     private Boolean publicStatus;
 

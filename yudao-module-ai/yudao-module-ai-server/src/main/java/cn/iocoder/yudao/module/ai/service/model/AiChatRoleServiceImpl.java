@@ -51,8 +51,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         validateTools(createReqVO.getToolIds());
 
         // 保存角色
-        AiChatRoleDO chatRole = BeanUtils.toBean(createReqVO, AiChatRoleDO.class)
-                .setUserType(UserTypeEnum.ADMIN.getValue());
+        AiChatRoleDO chatRole = BeanUtils.toBean(createReqVO, AiChatRoleDO.class);
         chatRoleMapper.insert(chatRole);
         return chatRole.getId();
     }
@@ -75,7 +74,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     public void updateChatRole(AiChatRoleSaveReqVO updateReqVO) {
         // 校验存在
-        validateChatRoleExists(updateReqVO.getId(), UserTypeEnum.ADMIN.getValue());
+        validateChatRoleExists(updateReqVO.getId());
         // 校验文档
         validateDocuments(updateReqVO.getKnowledgeIds());
         // 校验工具
@@ -156,9 +155,17 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         return chatRole;
     }
 
+    private AiChatRoleDO validateChatRoleExists(Long id) {
+        AiChatRoleDO chatRole = chatRoleMapper.selectById(id);
+        if (chatRole == null) {
+            throw exception(CHAT_ROLE_NOT_EXISTS);
+        }
+        return chatRole;
+    }
+
     @Override
     public AiChatRoleDO getChatRole(Long id) {
-        return getChatRole(id, UserTypeEnum.ADMIN.getValue());
+        return chatRoleMapper.selectById(id);
     }
 
     @Override
@@ -195,7 +202,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
 
     @Override
     public PageResult<AiChatRoleDO> getChatRolePage(AiChatRolePageReqVO pageReqVO) {
-        return chatRoleMapper.selectPage(pageReqVO, UserTypeEnum.ADMIN.getValue());
+        return chatRoleMapper.selectPage(pageReqVO, pageReqVO.getUserType());
     }
 
     @Override

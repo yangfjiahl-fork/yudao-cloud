@@ -32,6 +32,7 @@ public interface AiChatMapper extends BaseMapperX<AiModelDO> {
                 .likeIfPresent(AiModelDO::getName, reqVO.getName())
                 .eqIfPresent(AiModelDO::getModel, reqVO.getModel())
                 .eqIfPresent(AiModelDO::getPlatform, reqVO.getPlatform())
+                .orderByAsc(AiModelDO::getStatus)
                 .orderByAsc(AiModelDO::getSort));
     }
 

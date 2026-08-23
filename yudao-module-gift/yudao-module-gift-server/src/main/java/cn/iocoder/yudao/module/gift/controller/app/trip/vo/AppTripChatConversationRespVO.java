@@ -12,6 +12,9 @@ public class AppTripChatConversationRespVO {
     private Long id;
     private String title;
     private Boolean pinned;
+    private Long provinceId;
+    private Long cityId;
+    private Long districtId;
     private LocalDateTime createTime;
 
 }

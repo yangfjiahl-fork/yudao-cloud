@@ -7,11 +7,14 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationUpdateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 import cn.iocoder.yudao.module.ai.controller.admin.chat.vo.conversation.AiChatConversationCreateMyReqVO;
 import cn.iocoder.yudao.module.ai.controller.admin.chat.vo.conversation.AiChatConversationUpdateMyReqVO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.chat.AiChatConversationDO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.chat.AiChatMessageDO;
 import cn.iocoder.yudao.module.ai.service.chat.AiChatConversationService;
+import cn.iocoder.yudao.module.ai.service.chat.AiChatControlledGenerateService;
 import cn.iocoder.yudao.module.ai.service.chat.AiChatMessageService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -25,11 +28,16 @@ public class AiChatApiImpl implements AiChatApi {
     private AiChatConversationService chatConversationService;
     @Resource
     private AiChatMessageService chatMessageService;
+    @Resource
+    private AiChatControlledGenerateService controlledGenerateService;
 
     @Override
     public Long createConversation(AiChatConversationCreateReqDTO reqDTO) {
         AiChatConversationCreateMyReqVO serviceReqVO = new AiChatConversationCreateMyReqVO();
         serviceReqVO.setRoleId(reqDTO.getRoleId());
+        serviceReqVO.setProvinceId(reqDTO.getProvinceId());
+        serviceReqVO.setCityId(reqDTO.getCityId());
+        serviceReqVO.setDistrictId(reqDTO.getDistrictId());
         return chatConversationService.createChatConversationMy(serviceReqVO, reqDTO.getUserId(), reqDTO.getUserType());
     }
 
@@ -72,6 +80,18 @@ public class AiChatApiImpl implements AiChatApi {
         AiChatMessageDO message = chatMessageService.createAssistantMessage(reqDTO.getConversationId(), reqDTO.getUserId(),
                 reqDTO.getUserType(), reqDTO.getContent());
         return BeanUtils.toBean(message, AiChatMessageRespDTO.class);
+    }
+
+    @Override
+    public AiChatMessageRespDTO createUserMessage(AiChatMessageCreateAssistantReqDTO reqDTO) {
+        AiChatMessageDO message = chatMessageService.createUserMessage(reqDTO.getConversationId(), reqDTO.getUserId(),
+                reqDTO.getUserType(), reqDTO.getContent());
+        return BeanUtils.toBean(message, AiChatMessageRespDTO.class);
+    }
+
+    @Override
+    public AiChatGenerateRespDTO generate(AiChatGenerateReqDTO reqDTO) {
+        return controlledGenerateService.generate(reqDTO);
     }
 
 }

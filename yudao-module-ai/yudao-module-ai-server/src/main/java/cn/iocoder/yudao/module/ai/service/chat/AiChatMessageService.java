@@ -111,6 +111,8 @@ public interface AiChatMessageService {
 
     AiChatMessageDO createAssistantMessage(Long conversationId, Long userId, Integer userType, String content);
 
+    AiChatMessageDO createUserMessage(Long conversationId, Long userId, Integer userType, String content);
+
     void recordModelRequest(Long messageId, Integer userType, String requestBody);
 
     void recordModelResponse(Long messageId, Integer userType, String responseBody, Long promptTokens,

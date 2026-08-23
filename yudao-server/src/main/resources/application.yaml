@@ -293,6 +293,19 @@ yudao:
     web-search:
       enable: true
       api-key: ${WEB_SEARCH_API_KEY:sk-xxxx}
+    weather:
+      app-code: ${ALIYUN_WEATHER_APP_CODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}} # 默认复用阿里云快递 100 AppCode
+      url: ${ALIYUN_WEATHER_URL:https://ali-weather.showapi.com/area-to-weather}
+      amap:
+        api-key: ${AMAP_WEATHER_API_KEY:${AMAP_WEB_SERVICE_KEY:}} # 默认复用高德 Web 服务 Key
+        geocode-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
+        weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
+    scenic-spot:
+      base-url: ${ALIYUN_SCENIC_SPOT_BASE_URL:https://jmqgjdcx.market.alicloudapi.com}
+      app-code: ${ALIYUN_SCENIC_SPOT_APPCODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}} # 默认复用阿里云快递 100 AppCode
+      amap-url: ${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}
+      amap-key: ${AMAP_WEB_SERVICE_KEY:}
+      amap-types: ${AMAP_SCENIC_SPOT_TYPES:110000} # 风景名胜
 
 --- #################### 芋道相关配置 ####################
 
@@ -339,6 +352,10 @@ yudao:
     email: xingyu4j@vip.qq.com
     license: MIT
     license-url: https://gitee.com/zhijiantianya/ruoyi-vue-pro/blob/master/LICENSE
+  gift:
+    amap:
+      key: ${AMAP_WEB_SERVICE_KEY:}
+      reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}
   codegen:
     base-package: ${yudao.info.base-package}
     db-schemas: ${spring.datasource.dynamic.datasource.master.name}

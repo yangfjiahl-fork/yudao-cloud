@@ -50,6 +50,19 @@ public class AiChatConversationDO extends TenantBaseDO {
     private Integer userType;
 
     /**
+     * 省级地区编号
+     */
+    private Long provinceId;
+    /**
+     * 市级地区编号
+     */
+    private Long cityId;
+    /**
+     * 区县级地区编号
+     */
+    private Long districtId;
+
+    /**
      * 对话标题
      *
      * 默认由系统自动生成，可用户手动修改
