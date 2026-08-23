@@ -34,19 +34,30 @@ public class AmapGeocodingClient {
                 .queryParam("extensions", "base")
                 .queryParam("output", "JSON")
                 .build().encode().toUri();
+        long startTime = System.currentTimeMillis();
+        log.info("[reverseGeocode][开始调用高德逆地理编码，longitude({}) latitude({})]", longitude, latitude);
         try {
-            return convertResponse(restTemplate.getForObject(uri, JsonNode.class));
+            Location location = convertResponse(restTemplate.getForObject(uri, JsonNode.class));
+            log.info("[reverseGeocode][高德逆地理编码成功，longitude({}) latitude({}) city({}) adcode({}) duration({}ms)]",
+                    longitude, latitude, location.city(), location.adcode(), System.currentTimeMillis() - startTime);
+            return location;
         } catch (RestClientException ex) {
             // RestClientException 可能包含带 Key 的完整 URL，避免将异常内容写入日志或向上透传。
-            log.error("[reverseGeocode][调用高德逆地理编码接口失败，longitude({}) latitude({}) errorType({})]",
-                    longitude, latitude, ex.getClass().getSimpleName());
+            log.error("[reverseGeocode][调用高德逆地理编码接口异常，longitude({}) latitude({}) errorType({}) duration({}ms)]",
+                    longitude, latitude, ex.getClass().getSimpleName(), System.currentTimeMillis() - startTime);
             throw new IllegalStateException("调用高德逆地理编码接口失败");
+        } catch (IllegalStateException ex) {
+            log.warn("[reverseGeocode][高德逆地理编码业务失败，longitude({}) latitude({}) duration({}ms) reason({})]",
+                    longitude, latitude, System.currentTimeMillis() - startTime, ex.getMessage());
+            throw ex;
         }
     }
 
     private Location convertResponse(JsonNode response) {
         if (response == null || !SUCCESS_STATUS.equals(response.path("status").asText())) {
             String info = response == null ? "接口无响应" : response.path("info").asText("未知错误");
+            String infoCode = response == null ? "" : response.path("infocode").asText("");
+            log.warn("[convertResponse][高德逆地理编码业务失败，info({}) infocode({})]", info, infoCode);
             throw new IllegalStateException("高德逆地理编码失败：" + info);
         }
         JsonNode regeocode = response.path("regeocode");
@@ -56,6 +67,8 @@ public class AmapGeocodingClient {
         String city = resolveCity(textValue(addressComponent.path("city")), province, district);
         String adcode = textValue(addressComponent.path("adcode"));
         if (StrUtil.isBlank(city) || StrUtil.isBlank(adcode)) {
+            log.warn("[convertResponse][高德逆地理编码响应缺少必要字段，province({}) city({}) district({}) adcode({})]",
+                    province, city, district, adcode);
             throw new IllegalStateException("高德逆地理编码失败：响应缺少城市或行政区编码");
         }
         return new Location(province, city, district, adcode, textValue(regeocode.path("formatted_address")));
@@ -63,9 +76,11 @@ public class AmapGeocodingClient {
 
     private void validateConfig() {
         if (properties == null || StrUtil.isBlank(properties.getKey())) {
+            log.error("[validateConfig][高德 Web 服务 API Key 未配置]");
             throw new IllegalStateException("高德 Web 服务 API Key 未配置");
         }
         if (StrUtil.isBlank(properties.getReverseGeocodingUrl())) {
+            log.error("[validateConfig][高德逆地理编码接口地址未配置]");
             throw new IllegalStateException("高德逆地理编码接口地址未配置");
         }
     }

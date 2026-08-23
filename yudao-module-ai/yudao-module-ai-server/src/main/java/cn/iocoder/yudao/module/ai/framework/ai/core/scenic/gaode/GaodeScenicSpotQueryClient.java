@@ -29,14 +29,17 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
     public Response query(Request request) {
         QueryType type = request == null || request.getType() == null ? QueryType.SCENIC_SPOT : request.getType();
         if (type != QueryType.SCENIC_SPOT) {
+            log.warn("[query][高德景点查询不支持当前类型，type({})]", type);
             return Response.failure(type, "高德景点查询仅支持 SCENIC_SPOT");
         }
         if (config == null || StrUtil.isBlank(config.getAmapKey())) {
+            log.warn("[query][高德景点查询配置缺失，type({})]", type);
             return Response.failure(type, "高德景点查询服务未配置 AMAP_WEB_SERVICE_KEY");
         }
         String keywords = request == null ? null : request.getKeyword();
         String types = StrUtil.blankToDefault(config.getAmapTypes(), DEFAULT_TYPES);
         if (StrUtil.isAllBlank(keywords, types)) {
+            log.warn("[query][高德景点查询参数无效，keyword 和 types 同时为空]");
             return Response.failure(type, "高德景点查询的 keyword 和 types 不能同时为空");
         }
 
@@ -57,10 +60,16 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
             uriBuilder.queryParam("region", region).queryParam("city_limit", true);
         }
 
+        log.info("[query][准备调用高德景点查询，type({}) keyword({}) region({}) page({}) types({})]",
+                type, keywords, region, page, types);
+        long startTime = System.currentTimeMillis();
         try {
             ResponseEntity<String> responseEntity = restTemplate.getForEntity(
                     uriBuilder.build().encode().toUri(), String.class);
             if (!responseEntity.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(responseEntity.getBody())) {
+                log.warn("[query][高德景点查询无有效响应，httpStatus({}) hasBody({}) cost({}ms)]",
+                        responseEntity.getStatusCode(), StrUtil.isNotBlank(responseEntity.getBody()),
+                        System.currentTimeMillis() - startTime);
                 return Response.failure(type, "高德景点查询服务无有效响应");
             }
             JsonNode root = JsonUtils.parseTree(responseEntity.getBody());
@@ -71,10 +80,15 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
             data.put("currentPage", page);
             data.set("list", root.has("pois") ? root.get("pois")
                     : JsonUtils.getObjectMapper().createArrayNode());
+            log.info("[query][高德景点查询完成，httpStatus({}) code({}) success({}) count({}) page({}) cost({}ms)]",
+                    responseEntity.getStatusCode(), code, success, JsonUtils.getText(root, "count"), page,
+                    System.currentTimeMillis() - startTime);
             return new Response(success, type, code, JsonUtils.getText(root, "info"), null, data);
         } catch (RuntimeException ex) {
             // 高德 Key 位于 URL 查询参数中，避免将异常详情写入日志导致 Key 泄漏
-            log.error("[query][调用高德景点查询接口失败，异常类型({})]", ex.getClass().getSimpleName());
+            log.error("[query][调用高德景点查询接口失败，type({}) keyword({}) region({}) page({}) cost({}ms) 异常类型({})]",
+                    type, keywords, region, page, System.currentTimeMillis() - startTime,
+                    ex.getClass().getSimpleName());
             return Response.failure(type, "高德景点查询服务调用失败");
         }
     }

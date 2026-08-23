@@ -32,6 +32,7 @@ public class AliyunScenicSpotQueryClient implements ScenicSpotQueryClient {
     public Response query(Request request) {
         QueryType type = request == null || request.getType() == null ? QueryType.SCENIC_SPOT : request.getType();
         if (config == null || StrUtil.isBlank(config.getAppCode())) {
+            log.warn("[query][阿里云景点查询配置缺失，type({})]", type);
             return Response.failure(type, "景点查询服务未配置 ALIYUN_SCENIC_SPOT_APPCODE");
         }
 
@@ -67,6 +68,10 @@ public class AliyunScenicSpotQueryClient implements ScenicSpotQueryClient {
                 }
                 break;
         }
+        log.info("[query][准备调用阿里云景点查询，type({}) path({}) keyword({}) proId({}) cityId({}) areaId({}) page({})]",
+                type, path, request == null ? null : request.getKeyword(),
+                request == null ? null : request.getProId(), request == null ? null : request.getCityId(),
+                request == null ? null : request.getAreaId(), request == null ? null : request.getPage());
         return post(type, path, requestBody);
     }
 
@@ -76,18 +81,27 @@ public class AliyunScenicSpotQueryClient implements ScenicSpotQueryClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/x-www-form-urlencoded; charset=UTF-8"));
         headers.set(HttpHeaders.AUTHORIZATION, "APPCODE " + config.getAppCode());
+        long startTime = System.currentTimeMillis();
         try {
             ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.POST,
                     new HttpEntity<>(requestBody, headers), String.class);
             if (!responseEntity.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(responseEntity.getBody())) {
+                log.warn("[post][阿里云景点查询无有效响应，type({}) path({}) httpStatus({}) hasBody({}) cost({}ms)]",
+                        type, path, responseEntity.getStatusCode(), StrUtil.isNotBlank(responseEntity.getBody()),
+                        System.currentTimeMillis() - startTime);
                 return Response.failure(type, "阿里云景点查询服务无有效响应");
             }
             JsonNode root = JsonUtils.parseTree(responseEntity.getBody());
             String code = JsonUtils.getText(root, "code");
-            return new Response("200".equals(code), type, code, JsonUtils.getText(root, "msg"),
+            boolean success = "200".equals(code);
+            log.info("[post][阿里云景点查询完成，type({}) path({}) httpStatus({}) code({}) success({}) taskNo({}) cost({}ms)]",
+                    type, path, responseEntity.getStatusCode(), code, success, JsonUtils.getText(root, "taskNo"),
+                    System.currentTimeMillis() - startTime);
+            return new Response(success, type, code, JsonUtils.getText(root, "msg"),
                     JsonUtils.getText(root, "taskNo"), root.get("data"));
         } catch (RuntimeException ex) {
-            log.error("[post][调用阿里云市场景点查询接口失败，url({})]", url, ex);
+            log.error("[post][调用阿里云市场景点查询接口失败，type({}) path({}) cost({}ms)]",
+                    type, path, System.currentTimeMillis() - startTime, ex);
             return Response.failure(type, "阿里云景点查询服务调用失败");
         }
     }
