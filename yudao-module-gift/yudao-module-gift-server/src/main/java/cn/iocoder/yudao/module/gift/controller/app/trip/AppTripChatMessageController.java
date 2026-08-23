@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
@@ -73,18 +72,26 @@ public class AppTripChatMessageController {
                 .setConversationId(reqVO.getConversationId()));
         CommonResult<AppTripChatStreamRespVO> hint = success(new AppTripChatStreamRespVO().setEvent("hint")
                 .setConversationId(reqVO.getConversationId()).setContent("正在理解你的出行偏好…"));
-        CommonResult<AppTripChatStreamRespVO> progress = success(new AppTripChatStreamRespVO().setEvent("progress")
-                .setConversationId(reqVO.getConversationId()).setContent("正在整理你的旅行需求…"));
-        Mono<CommonResult<AppTripChatStreamRespVO>> result = Mono.fromCallable(() -> TenantUtils.execute(tenantId, () -> {
-            TripAgentResult agentResult = tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent());
-            return success(new AppTripChatStreamRespVO().setEvent(agentResult.getType().toLowerCase())
-                    .setConversationId(reqVO.getConversationId()).setMessageId(agentResult.getMessageId())
-                    .setContent(agentResult.getContent()).setItinerary(agentResult.getItinerary())
-                    .setMissingRequired(agentResult.getMissingRequired()));
-        })).subscribeOn(Schedulers.boundedElastic());
+        Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> {
+            try {
+                TenantUtils.execute(tenantId, () -> {
+                    TripAgentResult agentResult = tripAgentService.handleMessage(reqVO.getConversationId(), memberId,
+                            reqVO.getContent(), progressContent -> sink.next(success(new AppTripChatStreamRespVO()
+                                    .setEvent("progress").setConversationId(reqVO.getConversationId())
+                                    .setContent(progressContent))));
+                    sink.next(success(new AppTripChatStreamRespVO().setEvent(agentResult.getType().toLowerCase())
+                            .setConversationId(reqVO.getConversationId()).setMessageId(agentResult.getMessageId())
+                            .setContent(agentResult.getContent()).setItinerary(agentResult.getItinerary())
+                            .setMissingRequired(agentResult.getMissingRequired())));
+                });
+                sink.complete();
+            } catch (Exception e) {
+                sink.error(e);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
         CommonResult<AppTripChatStreamRespVO> done = success(new AppTripChatStreamRespVO().setEvent("done")
                 .setConversationId(reqVO.getConversationId()));
-        return Flux.concat(Flux.just(accepted, hint, progress), result, Flux.just(done))
+        return Flux.concat(Flux.just(accepted, hint), execution, Flux.just(done))
                 .onErrorResume(e -> {
                     log.error("[sendMessageStream][conversationId({}) 生成旅行方案失败]", reqVO.getConversationId(), e);
                     return Flux.just(success(new AppTripChatStreamRespVO().setEvent("error")

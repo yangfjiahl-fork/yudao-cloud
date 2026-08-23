@@ -5,11 +5,13 @@ import cn.iocoder.yudao.module.ai.framework.ai.core.weather.amap.AmapWeatherClie
 import cn.iocoder.yudao.module.ai.framework.ai.core.weather.aliyun.AliyunWeatherClient;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 天气客户端门面，根据系统配置选择具体服务
  */
 @AllArgsConstructor
+@Slf4j
 public class WeatherClientFacade {
 
     public static final String QUERY_FROM_CONFIG_KEY = "weather.query.from";
@@ -27,8 +29,10 @@ public class WeatherClientFacade {
      */
     public WeatherClient.CurrentWeather getCurrentWeather(String city) {
         String queryFrom = configApi.getConfigValueByKey(QUERY_FROM_CONFIG_KEY).getCheckedData();
-        WeatherClient client = QUERY_FROM_GAODE.equalsIgnoreCase(StrUtil.trim(queryFrom))
-                ? amapWeatherClient : aliyunWeatherClient;
+        boolean useGaode = QUERY_FROM_GAODE.equalsIgnoreCase(StrUtil.trim(queryFrom));
+        WeatherClient client = useGaode ? amapWeatherClient : aliyunWeatherClient;
+        log.info("[getCurrentWeather][读取天气来源配置，key({}) value({}) provider({}) city({})]",
+                QUERY_FROM_CONFIG_KEY, queryFrom, useGaode ? "gaode" : "aliyun", city);
         return client.getCurrentWeather(city);
     }
 

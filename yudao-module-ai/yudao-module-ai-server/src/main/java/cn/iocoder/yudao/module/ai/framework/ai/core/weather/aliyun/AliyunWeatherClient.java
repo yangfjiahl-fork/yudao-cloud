@@ -57,6 +57,7 @@ public class AliyunWeatherClient implements WeatherClient {
         if (StrUtil.isBlank(city)) {
             throw new IllegalArgumentException("城市名称不能为空");
         }
+        log.info("[getCurrentWeather][开始调用阿里云天气接口，city({})]", city);
 
         URI uri = UriComponentsBuilder.fromUriString(config.getUrl())
                 .queryParam("area", city)
@@ -71,7 +72,10 @@ public class AliyunWeatherClient implements WeatherClient {
         try {
             ResponseEntity<AliyunWeatherRespDTO> responseEntity = restTemplate.exchange(uri, HttpMethod.GET,
                     new HttpEntity<>(headers), AliyunWeatherRespDTO.class);
-            return convertResponse(city, responseEntity.getBody());
+            CurrentWeather weather = convertResponse(city, responseEntity.getBody());
+            log.info("[getCurrentWeather][阿里云天气查询成功，requestCity({}) responseCity({}) queryTime({})]",
+                    city, weather.city(), weather.queryTime());
+            return weather;
         } catch (RestClientException ex) {
             log.error("[getCurrentWeather][调用阿里云天气接口失败，city({})]", city, ex);
             throw new IllegalStateException("调用阿里云天气接口失败", ex);

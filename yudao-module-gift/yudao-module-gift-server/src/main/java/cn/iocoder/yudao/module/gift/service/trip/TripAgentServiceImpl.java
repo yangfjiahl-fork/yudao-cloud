@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * 旅行规划的显式编排器。LLM 仅负责需求抽取和行程组织；状态、缺失字段、事实及引用均由服务端控制。
@@ -92,7 +93,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 30000, acquireTimeout = 3000)
-    public TripAgentResult handleMessage(Long conversationId, Long memberId, String content) {
+    public TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
+                                         Consumer<String> progressConsumer) {
         TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (trip == null) {
             log.info("[handleMessage][conversationId({}) memberId({}) 缺少旅行状态，开始兼容初始化]",
@@ -123,6 +125,8 @@ public class TripAgentServiceImpl implements TripAgentService {
             return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(missingRequired);
         }
+
+        progressConsumer.accept("需求已整理，正在生成行程…");
 
         // Provider adapters will write only verified, non-expired facts. An empty list is intentional: the composer
         // must mark volatile information as pending instead of fabricating it.

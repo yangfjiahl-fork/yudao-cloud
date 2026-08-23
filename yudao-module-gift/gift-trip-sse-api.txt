@@ -114,12 +114,13 @@ conversationId 建议直接以字符串发送，后端可以反序列化为 Long
    - 不创建聊天气泡。
 
 
-2. progress：正在执行需求抽取或行程生成
+2. progress：需求抽取完成，开始生成行程
 
-   data:{"code":0,"msg":"","data":{"event":"progress","conversationId":"1781604279872581776","messageId":null,"content":"正在整理你的旅行需求…","itinerary":null,"missingRequired":null}}
+   data:{"code":0,"msg":"","data":{"event":"progress","conversationId":"1781604279872581776","messageId":null,"content":"需求已整理，正在生成行程…","itinerary":null,"missingRequired":null}}
 
    前端处理：
 
+   - 该事件只在 Intake 模型完成、必填信息齐全并准备调用 Composer 时返回。
    - 将 content 作为真实编排阶段的 loading 文案。
    - 不把 progress 持久化为正式聊天消息。
 
@@ -210,7 +211,7 @@ itinerary 字段结构：
 
 信息不足：
 
-   accepted -> hint（可重复） -> progress -> question -> done -> 流结束
+   accepted -> hint（可重复） -> question -> done -> 流结束
 
 成功生成行程：
 
@@ -218,7 +219,7 @@ itinerary 字段结构：
 
 异步执行失败：
 
-   accepted -> hint（可重复） -> progress -> error -> 流结束
+   accepted -> hint（可重复） -> progress（可能尚未出现） -> error -> 流结束
 
 客户端主动中断：
 

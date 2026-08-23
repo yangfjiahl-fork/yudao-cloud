@@ -47,12 +47,16 @@ public class AmapWeatherClient implements WeatherClient {
             throw new IllegalArgumentException("城市名称不能为空");
         }
         String requestedCity = city.trim();
+        log.info("[getCurrentWeather][开始调用高德天气接口，city({})]", requestedCity);
         String adcode = requestedCity.matches(ADCODE_PATTERN) ? requestedCity : resolveAdcode(requestedCity);
         AmapWeatherRespDTO response = queryWeather(adcode, requestedCity);
         AmapWeatherRespDTO.Live live = response.getLives().get(0);
-        return new CurrentWeather(StrUtil.blankToDefault(live.getCity(), requestedCity),
+        CurrentWeather weather = new CurrentWeather(StrUtil.blankToDefault(live.getCity(), requestedCity),
                 parseInteger(live.getTemperature()), live.getWeather(), parseInteger(live.getHumidity()),
                 live.getWinddirection(), live.getWindpower(), live.getReporttime());
+        log.info("[getCurrentWeather][高德天气查询成功，requestCity({}) adcode({}) responseCity({}) queryTime({})]",
+                requestedCity, adcode, weather.city(), weather.queryTime());
+        return weather;
     }
 
     private String resolveAdcode(String city) {
@@ -75,7 +79,9 @@ public class AmapWeatherClient implements WeatherClient {
                 || StrUtil.isBlank(response.getGeocodes().get(0).getAdcode())) {
             throw new IllegalStateException("高德地理编码失败：" + getErrorInfo(response));
         }
-        return response.getGeocodes().get(0).getAdcode();
+        String adcode = response.getGeocodes().get(0).getAdcode();
+        log.info("[resolveAdcode][高德地理编码成功，city({}) adcode({})]", city, adcode);
+        return adcode;
     }
 
     private AmapWeatherRespDTO queryWeather(String adcode, String requestedCity) {
