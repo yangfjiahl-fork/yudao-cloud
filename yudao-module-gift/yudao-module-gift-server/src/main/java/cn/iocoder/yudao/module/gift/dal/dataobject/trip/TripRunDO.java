@@ -24,5 +24,9 @@ public class TripRunDO extends TenantBaseDO {
     private Long durationMs;
     private Integer status;
     private String errorMessage;
+    /** 节点执行前的状态与输入快照。 */
+    private String inputJson;
+    /** 节点的结构化输出快照；模型节点同时保留完整原始输出。 */
+    private String outputJson;
 
 }

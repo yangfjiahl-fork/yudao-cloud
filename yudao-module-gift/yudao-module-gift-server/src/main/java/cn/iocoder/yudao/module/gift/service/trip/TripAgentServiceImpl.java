@@ -9,8 +9,10 @@ import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripFactDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
@@ -18,6 +20,9 @@ import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripFactMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
+import cn.iocoder.yudao.module.system.api.area.AreaApi;
 import com.baomidou.lock.annotation.Lock4j;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -43,23 +49,10 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static final int STATUS_ACTIVE = 1;
     private static final int STATUS_GENERATED = 1;
+    private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
+    private static final String COMPOSER_ROLE_ID_CONFIG_KEY = "trip.agent.composerRoleId";
     private static final Set<String> STATE_FIELDS = Set.of("destination", "departure", "startDate", "endDate",
             "days", "travelerCount", "budget", "interests", "pace", "constraints");
-
-    private static final String INTAKE_INSTRUCTION = """
-            你是旅行需求抽取器。只返回 JSON，不要 Markdown：
-            {\"patch\":{...},\"question\":\"...或null\"}。
-            patch 只允许 destination, departure, startDate, endDate, days, travelerCount, budget, interests, pace, constraints。
-            只能写用户本轮明确说出的事实，禁止猜测或补全。question 最多一个，且只在缺少关键信息时提出。
-            日期使用 yyyy-MM-dd，days、travelerCount 使用数字，interests/constraints 使用字符串数组。
-            """;
-    private static final String COMPOSER_INSTRUCTION = """
-            你是旅行行程组织器。仅依据输入中的 TripState 和 VerifiedFacts，返回 JSON，不要 Markdown：
-            {\"summary\":\"...\",\"daily_itinerary\":[{\"day\":1,\"title\":\"...\",\"activities\":[\"...\"]}],
-            \"transport\":[\"...\"],\"booking_actions\":[\"...\"],\"warnings\":[\"...\"],\"citation_ids\":[\"...\"]}。
-            不得编造天气、营业时间、预约、交通班次、价格库存或签证规则；没有 VerifiedFacts 时把它们写为“待确认”。
-            citation_ids 只能引用输入 VerifiedFacts 中提供的 id。
-            """;
 
     @Resource
     private AiChatApi aiChatApi;
@@ -71,6 +64,10 @@ public class TripAgentServiceImpl implements TripAgentService {
     private TripItineraryMapper tripItineraryMapper;
     @Resource
     private TripRunLogService tripRunLogService;
+    @Resource
+    private ConfigApi configApi;
+    @Resource
+    private AreaApi areaApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -94,7 +91,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 30000, acquireTimeout = 3000)
     public TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
-                                         Consumer<String> progressConsumer) {
+                                         Consumer<TripAgentEvent> eventConsumer) {
         TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (trip == null) {
             log.info("[handleMessage][conversationId({}) memberId({}) 缺少旅行状态，开始兼容初始化]",
@@ -105,11 +102,14 @@ public class TripAgentServiceImpl implements TripAgentService {
         log.info("[handleMessage][tripId({}) conversationId({}) memberId({}) 开始编排]",
                 trip.getId(), conversationId, memberId);
         createTranscriptMessage(conversationId, memberId, content, false);
+        Map<String, Object> promptVariables = buildPromptVariables(conversationId, memberId);
 
-        Map<String, Object> state = parseMap(trip.getStateJson());
-        AiChatGenerateRespDTO intakeResponse = generate(conversationId, memberId, INTAKE_INSTRUCTION,
-                "Current TripState:\n" + JsonUtils.toJsonString(state) + "\n\nUser message:\n" + content, "INTAKE", trip.getId());
-        Map<String, Object> intake = parseMap(intakeResponse.getContent());
+        Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
+        eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
+        AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
+                "Current TripState:\n" + JsonUtils.toJsonString(state) + "\n\nUser message:\n" + content,
+                "INTAKE", trip.getId(), promptVariables);
+        Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
         mergeExplicitPatch(state, intake.get("patch"));
         List<String> missingRequired = validateState(state);
         trip.setStateJson(JsonUtils.toJsonString(state));
@@ -122,50 +122,99 @@ public class TripAgentServiceImpl implements TripAgentService {
             String question = safeQuestion(intake.get("question"), missingRequired);
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
             log.info("[handleMessage][tripId({}) 返回追问 messageId({})]", trip.getId(), assistant.getId());
-            return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
+            TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(missingRequired);
+            eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
+                    .setMissingRequired(missingRequired));
+            return result;
         }
 
-        progressConsumer.accept("需求已整理，正在生成行程…");
+        eventConsumer.accept(TripAgentEvent.of("stage", "RESEARCH", "需求已整理，正在检查已有的旅行信息…"));
 
-        // Provider adapters will write only verified, non-expired facts. An empty list is intentional: the composer
-        // must mark volatile information as pending instead of fabricating it.
+        // 工具适配器接入后在此并发写入已验证事实；当前没有可用适配器时，只使用已有事实并明确让模型标为待确认。
+        long researchStart = System.currentTimeMillis();
+        Long researchRunId = tripRunLogService.create(trip.getId(), "RESEARCH",
+                JsonUtils.toJsonString(Map.of("state", state, "toolPlans", List.of())));
         List<TripFactDO> facts = tripFactMapper.selectActiveByTripId(trip.getId());
+        tripRunLogService.complete(researchRunId, null, 0L, 0L, 0L, System.currentTimeMillis() - researchStart,
+                JsonUtils.toJsonString(Map.of("activeFactIds", facts.stream().map(TripFactDO::getId).toList(),
+                        "toolExecuted", false)));
         log.info("[handleMessage][tripId({}) 有效事实数量({})]", trip.getId(), facts.size());
         List<Map<String, Object>> verifiedFacts = facts.stream().map(fact -> Map.<String, Object>of(
-                "id", String.valueOf(fact.getId()), "key", fact.getFactKey(), "value", parseMap(fact.getValueJson()),
+                "id", String.valueOf(fact.getId()), "key", fact.getFactKey(), "value", TripAgentFormatUtils.parseMap(fact.getValueJson()),
                 "source_id", String.valueOf(fact.getSourceId()))).toList();
-        AiChatGenerateRespDTO composerResponse = generate(conversationId, memberId, COMPOSER_INSTRUCTION,
+        eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在生成你的行程…"));
+        eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
+        TripAgentStreamParser streamParser = new TripAgentStreamParser(eventConsumer);
+        AiChatGenerateRespDTO composerResponse = generateStream(conversationId, memberId,
                 "TripState:\n" + JsonUtils.toJsonString(state) + "\n\nVerifiedFacts:\n"
-                        + JsonUtils.toJsonString(verifiedFacts), "COMPOSER", trip.getId());
+                        + JsonUtils.toJsonString(verifiedFacts), "COMPOSER", trip.getId(), promptVariables, streamParser::append);
         Map<String, Object> itinerary = parseItinerary(composerResponse.getContent(), facts);
+        String displayText = StrUtil.blankToDefault(ObjUtil.toString(itinerary.get("summary")), "已为你生成旅行方案。");
+        AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, displayText, true);
         TripItineraryDO itineraryDO = new TripItineraryDO();
         itineraryDO.setTripId(trip.getId());
+        itineraryDO.setMessageId(assistant.getId());
         itineraryDO.setContentJson(JsonUtils.toJsonString(itinerary));
         itineraryDO.setCitationIdsJson(JsonUtils.toJsonString(itinerary.get("citation_ids")));
         itineraryDO.setStatus(STATUS_GENERATED);
         tripItineraryMapper.insert(itineraryDO);
 
-        String displayText = StrUtil.blankToDefault(ObjUtil.toString(itinerary.get("summary")), "已为你生成旅行方案。");
-        AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, displayText, true);
         log.info("[handleMessage][tripId({}) 行程 itineraryId({}) messageId({}) 引用数量({}) 已生成]",
                 trip.getId(), itineraryDO.getId(), assistant.getId(), ((List<?>) itinerary.get("citation_ids")).size());
-        return new TripAgentResult().setType("ITINERARY").setMessageId(assistant.getId()).setContent(displayText)
+        TripAgentResult result = new TripAgentResult().setType("ITINERARY").setMessageId(assistant.getId()).setContent(displayText)
                 .setItinerary(itinerary).setMissingRequired(List.of());
+        eventConsumer.accept(TripAgentEvent.of("assistant_end", "COMPOSER", null));
+        eventConsumer.accept(TripAgentEvent.of("itinerary", "COMPOSER", displayText).setMessageId(assistant.getId())
+                .setItinerary(itinerary).setMissingRequired(List.of()));
+        return result;
     }
 
-    private AiChatGenerateRespDTO generate(Long conversationId, Long memberId, String instruction, String content,
-                                           String stage, Long tripId) {
+    @Override
+    public Map<Long, Map<String, Object>> getItineraryMapByMessageIds(Collection<Long> messageIds) {
+        if (CollUtil.isEmpty(messageIds)) {
+            return Map.of();
+        }
+        Map<Long, Map<String, Object>> itineraryMap = new LinkedHashMap<>();
+        tripItineraryMapper.selectListByMessageIds(messageIds).forEach(itinerary ->
+                itineraryMap.put(itinerary.getMessageId(), TripAgentFormatUtils.parseMap(itinerary.getContentJson())));
+        return itineraryMap;
+    }
+
+    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
+                                                 String stage, Long tripId) {
+        return generateStream(conversationId, memberId, content, stage, tripId, Map.of(), ignored -> { });
+    }
+
+    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
+                                                 String stage, Long tripId,
+                                                 Consumer<String> contentConsumer) {
+        return generateStream(conversationId, memberId, content, stage, tripId, Map.of(), contentConsumer);
+    }
+
+    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
+                                                 String stage, Long tripId, Map<String, Object> promptVariables) {
+        return generateStream(conversationId, memberId, content, stage, tripId, promptVariables, ignored -> { });
+    }
+
+    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
+                                                 String stage, Long tripId, Map<String, Object> promptVariables,
+                                                 Consumer<String> contentConsumer) {
         long start = System.currentTimeMillis();
-        Long runId = tripRunLogService.create(tripId, stage);
-        log.info("[generate][tripId({}) runId({}) stage({}) 开始调用模型]", tripId, runId, stage);
+        Long runId = tripRunLogService.create(tripId, stage, JsonUtils.toJsonString(Map.of("content", content)));
+        log.info("[generateStream][tripId({}) runId({}) stage({}) 开始调用模型]", tripId, runId, stage);
+        StringBuilder output = new StringBuilder();
         try {
-            AiChatGenerateRespDTO response = aiChatApi.generate(new AiChatGenerateReqDTO()
+            AiChatGenerateRespDTO response = aiChatApi.generateStream(new AiChatGenerateReqDTO()
                     .setConversationId(conversationId).setUserId(memberId).setUserType(UserTypeEnum.MEMBER.getValue())
-                    .setInstruction(instruction).setContent(content));
+                    .setRoleId(getRoleId(stage)).setContent(content).setPromptVariables(promptVariables), chunk -> {
+                        output.append(chunk.getContent());
+                        contentConsumer.accept(chunk.getContent());
+                    });
             tripRunLogService.complete(runId, response.getModel(), response.getPromptTokens(), response.getCompletionTokens(),
-                    response.getTotalTokens(), System.currentTimeMillis() - start);
-            log.info("[generate][tripId({}) runId({}) stage({}) model({}) 耗时({} ms) tokens({}) 调用成功]",
+                    response.getTotalTokens(), System.currentTimeMillis() - start,
+                    JsonUtils.toJsonString(Map.of("response", output.toString())));
+            log.info("[generateStream][tripId({}) runId({}) stage({}) model({}) 耗时({} ms) tokens({}) 调用成功]",
                     tripId, runId, stage, response.getModel(), System.currentTimeMillis() - start, response.getTotalTokens());
             return response;
         } catch (RuntimeException e) {
@@ -176,6 +225,36 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
+    private Long getRoleId(String stage) {
+        String configKey = "INTAKE".equals(stage) ? INTAKE_ROLE_ID_CONFIG_KEY : COMPOSER_ROLE_ID_CONFIG_KEY;
+        String configValue = configApi.getConfigValueByKey(configKey).getCheckedData();
+        if (StrUtil.isBlank(configValue)) {
+            throw new IllegalStateException("系统配置 " + configKey + " 未配置");
+        }
+        try {
+            return Long.parseLong(configValue.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("系统配置 " + configKey + " 必须是角色编号", e);
+        }
+    }
+
+    private Map<String, Object> buildPromptVariables(Long conversationId, Long memberId) {
+        AiChatConversationRespDTO conversation = aiChatApi.getConversation(conversationId, memberId,
+                UserTypeEnum.MEMBER.getValue());
+        if (conversation == null) {
+            throw new IllegalStateException("旅行会话不存在");
+        }
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("provinceName", getAreaName(conversation.getProvinceId()));
+        variables.put("cityName", getAreaName(conversation.getCityId()));
+        variables.put("districtName", getAreaName(conversation.getDistrictId()));
+        return variables;
+    }
+
+    private String getAreaName(Long areaId) {
+        return areaId != null ? areaApi.getAreaName(areaId).getCheckedData() : "";
+    }
+
     private AiChatMessageRespDTO createTranscriptMessage(Long conversationId, Long memberId, String content, boolean assistant) {
         AiChatMessageCreateAssistantReqDTO req = new AiChatMessageCreateAssistantReqDTO();
         req.setConversationId(conversationId);
@@ -183,11 +262,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         req.setUserType(UserTypeEnum.MEMBER.getValue());
         req.setContent(content);
         return assistant ? aiChatApi.createAssistantMessage(req) : aiChatApi.createUserMessage(req);
-    }
-
-    private static Map<String, Object> parseMap(String content) {
-        Map<String, Object> parsed = JsonUtils.parseMap(content);
-        return parsed != null ? new LinkedHashMap<>(parsed) : new LinkedHashMap<>();
     }
 
     @SuppressWarnings("unchecked")
@@ -262,7 +336,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parseItinerary(String content, List<TripFactDO> facts) {
-        Map<String, Object> itinerary = parseMap(content);
+        Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(content);
         if (StrUtil.isBlank(ObjUtil.toString(itinerary.get("summary"))) || !(itinerary.get("daily_itinerary") instanceof List<?>)) {
             throw new IllegalStateException("行程生成结果不符合约定 JSON");
         }

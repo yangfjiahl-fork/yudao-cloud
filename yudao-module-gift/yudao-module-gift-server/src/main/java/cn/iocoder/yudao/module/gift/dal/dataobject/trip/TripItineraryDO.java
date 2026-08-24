@@ -16,6 +16,8 @@ public class TripItineraryDO extends TenantBaseDO {
     @TableId
     private Long id;
     private Long tripId;
+    /** 关联 ai_chat_message.id，作为 C 端恢复完整行程的消息外键。 */
+    private Long messageId;
     private String contentJson;
     private String citationIdsJson;
     private Integer status;

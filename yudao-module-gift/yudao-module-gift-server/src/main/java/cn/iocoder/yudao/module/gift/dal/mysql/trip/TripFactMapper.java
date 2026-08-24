@@ -15,7 +15,8 @@ public interface TripFactMapper extends BaseMapperX<TripFactDO> {
         return selectList(new LambdaQueryWrapperX<TripFactDO>()
                 .eq(TripFactDO::getTripId, tripId)
                 .eq(TripFactDO::getStatus, 1)
-                .gt(TripFactDO::getExpiresAt, LocalDateTime.now()));
+                .and(wrapper -> wrapper.isNull(TripFactDO::getExpiresAt)
+                        .or().gt(TripFactDO::getExpiresAt, LocalDateTime.now())));
     }
 
 }

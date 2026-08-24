@@ -67,6 +67,7 @@
         <aviator.version>5.3.3</aviator.version>
         <velocity.version>2.4.1</velocity.version>
         <fastjson2.version>2.0.63</fastjson2.version>
+        <json-repairj.version>0.50.0</json-repairj.version>
         <guava.version>33.6.0-jre</guava.version>
         <transmittable-thread-local.version>2.14.5</transmittable-thread-local.version>
         <commons-net.version>3.13.0</commons-net.version>
@@ -581,6 +582,11 @@
                 <groupId>com.alibaba.fastjson2</groupId>
                 <artifactId>fastjson2</artifactId>
                 <version>${fastjson2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.du00cs</groupId>
+                <artifactId>json-repairj</artifactId>
+                <version>${json-repairj.version}</version>
             </dependency>
 
             <dependency>

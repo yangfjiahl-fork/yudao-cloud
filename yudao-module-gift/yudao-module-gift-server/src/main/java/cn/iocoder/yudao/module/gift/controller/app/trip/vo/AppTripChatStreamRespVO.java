@@ -12,11 +12,16 @@ import java.util.Map;
 public class AppTripChatStreamRespVO {
 
     private String event;
+    /** Intake、Research、Composer 等状态机阶段。 */
+    private String stage;
     @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
     @JsonSerialize(using = ToStringSerializer.class)
     private Long messageId;
     private String content;
+    private Integer sequence;
+    private String itemType;
+    private Map<String, Object> item;
     private Map<String, Object> itinerary;
     private List<String> missingRequired;
 

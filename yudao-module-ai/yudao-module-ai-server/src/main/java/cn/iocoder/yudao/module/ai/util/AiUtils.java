@@ -100,7 +100,7 @@ public class AiUtils {
             case TONG_YI:
                 return DashScopeChatOptions.builder().model(model).temperature(temperature).maxToken(maxTokens)
                         .enableThinking(false) // TODO 芋艿：默认都开启 thinking 模式，后续可以让用户配置
-                        .multiModel(TONG_YI_MULTI_MODELS.contains(model)) // 是否多模态模型
+                        .multiModel(isTongYiMultiModel(model)) // 是否多模态模型
                         .toolCallbacks(toolCallbacks).toolContext(toolContext).build();
             case DEEP_SEEK:
             case DOU_BAO: // 复用 DeepSeek 客户端
@@ -132,6 +132,14 @@ public class AiUtils {
             default:
                 throw new IllegalArgumentException(StrUtil.format("未知平台({})", platform));
         }
+    }
+
+    /**
+     * 百炼模型名可能包含官方发布的日期后缀，例如 qwen3.7-flash-2026-07-15。
+     */
+    private static boolean isTongYiMultiModel(String model) {
+        return TONG_YI_MULTI_MODELS.stream().anyMatch(baseModel -> StrUtil.equals(model, baseModel)
+                || StrUtil.startWith(model, baseModel + "-"));
     }
 
     public static Message buildMessage(String type, String content) {

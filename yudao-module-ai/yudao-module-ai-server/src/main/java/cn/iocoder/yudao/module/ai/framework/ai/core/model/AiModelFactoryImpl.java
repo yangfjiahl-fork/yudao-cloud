@@ -128,7 +128,7 @@ public class AiModelFactoryImpl implements AiModelFactory {
             // noinspection EnhancedSwitchMigration
             switch (platform) {
                 case TONG_YI:
-                    return buildTongYiChatModel(apiKey);
+                    return buildTongYiChatModel(apiKey, url);
                 case YI_YAN:
                     return buildYiYanChatModel(apiKey);
                 case DEEP_SEEK:
@@ -332,8 +332,12 @@ public class AiModelFactoryImpl implements AiModelFactory {
     /**
      * 可参考 {@link DashScopeChatAutoConfiguration} 的 dashscopeChatModel 方法
      */
-    private static DashScopeChatModel buildTongYiChatModel(String key) {
-        DashScopeApi dashScopeApi = DashScopeApi.builder().apiKey(key).build();
+    private static DashScopeChatModel buildTongYiChatModel(String key, String url) {
+        DashScopeApi.Builder apiBuilder = DashScopeApi.builder().apiKey(key);
+        if (StrUtil.isNotBlank(url)) {
+            apiBuilder.baseUrl(normalizeDashScopeBaseUrl(url));
+        }
+        DashScopeApi dashScopeApi = apiBuilder.build();
         DashScopeChatOptions options = DashScopeChatOptions.builder().withModel(DashScopeApi.DEFAULT_CHAT_MODEL)
                 .withTemperature(0.7).build();
         return DashScopeChatModel.builder()
@@ -341,6 +345,13 @@ public class AiModelFactoryImpl implements AiModelFactory {
                 .defaultOptions(options)
                 .toolCallingManager(getToolCallingManager())
                 .build();
+    }
+
+    /**
+     * DashScope SDK 会自行追加 /api/v1/services/...；数据表中允许保存完整的 API 根路径。
+     */
+    private static String normalizeDashScopeBaseUrl(String url) {
+        return StrUtil.removeSuffix(StrUtil.removeSuffix(url.trim(), "/"), "/api/v1");
     }
 
     /**

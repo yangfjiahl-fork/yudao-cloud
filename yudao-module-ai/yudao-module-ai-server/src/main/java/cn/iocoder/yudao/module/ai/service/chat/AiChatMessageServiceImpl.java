@@ -370,7 +370,7 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                                AiModelDO model, AiChatMessageSendReqVO sendReqVO) {
         List<Message> chatMessages = new ArrayList<>();
         // 1.1 System Context 角色设定
-        String systemMessage = AiChatPromptUtils.appendRegionSystemMessage(conversation.getSystemMessage(), conversation);
+        String systemMessage = AiChatPromptUtils.buildSystemMessage(conversation.getSystemMessage(), null);
         if (StrUtil.isNotBlank(systemMessage)) {
             chatMessages.add(new SystemMessage(systemMessage));
         }

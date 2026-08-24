@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDT
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
 import cn.iocoder.yudao.module.ai.controller.admin.chat.vo.conversation.AiChatConversationCreateMyReqVO;
 import cn.iocoder.yudao.module.ai.controller.admin.chat.vo.conversation.AiChatConversationUpdateMyReqVO;
 import cn.iocoder.yudao.module.ai.dal.dataobject.chat.AiChatConversationDO;
@@ -18,6 +19,8 @@ import cn.iocoder.yudao.module.ai.service.chat.AiChatControlledGenerateService;
 import cn.iocoder.yudao.module.ai.service.chat.AiChatMessageService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+
+import java.util.function.Consumer;
 
 import java.util.List;
 
@@ -92,6 +95,12 @@ public class AiChatApiImpl implements AiChatApi {
     @Override
     public AiChatGenerateRespDTO generate(AiChatGenerateReqDTO reqDTO) {
         return controlledGenerateService.generate(reqDTO);
+    }
+
+    @Override
+    public AiChatGenerateRespDTO generateStream(AiChatGenerateReqDTO reqDTO,
+                                                Consumer<AiChatGenerateStreamRespDTO> callback) {
+        return controlledGenerateService.generateStream(reqDTO, callback);
     }
 
 }

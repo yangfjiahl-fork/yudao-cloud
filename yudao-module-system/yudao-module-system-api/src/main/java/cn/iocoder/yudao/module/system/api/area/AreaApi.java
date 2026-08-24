@@ -27,4 +27,8 @@ public interface AreaApi {
                                  @RequestParam("cityName") String cityName,
                                  @RequestParam("districtName") String districtName);
 
+    @GetMapping(PREFIX + "/get-name")
+    @Operation(summary = "根据地区编号获得地区名称")
+    CommonResult<String> getAreaName(@RequestParam("areaId") Long areaId);
+
 }

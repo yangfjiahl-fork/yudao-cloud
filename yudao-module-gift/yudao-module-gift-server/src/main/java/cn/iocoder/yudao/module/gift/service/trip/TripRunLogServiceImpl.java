@@ -17,10 +17,17 @@ public class TripRunLogServiceImpl implements TripRunLogService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Long create(Long tripId, String stage) {
+        return create(tripId, stage, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public Long create(Long tripId, String stage, String inputJson) {
         TripRunDO run = new TripRunDO();
         run.setTripId(tripId);
         run.setStage(stage);
         run.setStatus(0);
+        run.setInputJson(inputJson);
         tripRunMapper.insert(run);
         return run.getId();
     }
@@ -28,9 +35,16 @@ public class TripRunLogServiceImpl implements TripRunLogService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void complete(Long runId, String model, Long promptTokens, Long completionTokens, Long totalTokens, long durationMs) {
+        complete(runId, model, promptTokens, completionTokens, totalTokens, durationMs, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public void complete(Long runId, String model, Long promptTokens, Long completionTokens, Long totalTokens, long durationMs,
+                         String outputJson) {
         tripRunMapper.updateById(new TripRunDO().setId(runId).setStatus(1).setModel(model)
                 .setPromptTokens(promptTokens).setCompletionTokens(completionTokens).setTotalTokens(totalTokens)
-                .setDurationMs(durationMs));
+                .setDurationMs(durationMs).setOutputJson(outputJson));
     }
 
     @Override

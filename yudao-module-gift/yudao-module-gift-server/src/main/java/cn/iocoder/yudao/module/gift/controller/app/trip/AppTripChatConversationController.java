@@ -46,7 +46,7 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @Slf4j
 public class AppTripChatConversationController {
 
-    private static final String ENTRY_ROLE_ID_CONFIG_KEY = "trip.agent.roleId";
+    private static final String ENTRY_ROLE_ID_CONFIG_KEY = "trip.agent.composerRoleId";
     private static final String[] TRAVEL_GUIDE_MESSAGES = {
             "告诉我目的地、出行日期和同行人数，我来帮你规划旅程。",
             "还没想好去哪里也没关系，告诉我出发地、时间和偏好即可。",
@@ -121,12 +121,12 @@ public class AppTripChatConversationController {
     private Long getEntryRoleId() {
         String configValue = configApi.getConfigValueByKey(ENTRY_ROLE_ID_CONFIG_KEY).getCheckedData();
         if (StrUtil.isBlank(configValue)) {
-            throw new IllegalStateException("系统配置 trip.agent.roleId 未配置");
+            throw new IllegalStateException("系统配置 trip.agent.composerRoleId 未配置");
         }
         try {
             return Long.parseLong(configValue.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("系统配置 trip.agent.roleId 必须是角色编号", e);
+            throw new IllegalStateException("系统配置 trip.agent.composerRoleId 必须是角色编号", e);
         }
     }
 

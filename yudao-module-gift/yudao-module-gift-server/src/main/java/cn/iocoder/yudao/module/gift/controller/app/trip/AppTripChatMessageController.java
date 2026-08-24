@@ -11,7 +11,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatStreamResp
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
-import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +29,9 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -52,8 +54,12 @@ public class AppTripChatMessageController {
     @Operation(summary = "获得旅行规划消息列表")
     @Parameter(name = "conversationId", required = true, description = "对话编号", example = "1024")
     public CommonResult<List<AppTripChatMessageRespVO>> getMessageList(@RequestParam("conversationId") Long conversationId) {
-        return success(BeanUtils.toBean(aiChatApi.getMessageList(conversationId, getLoginUserId(),
-                UserTypeEnum.MEMBER.getValue()), AppTripChatMessageRespVO.class));
+        List<AppTripChatMessageRespVO> messages = BeanUtils.toBean(aiChatApi.getMessageList(conversationId, getLoginUserId(),
+                UserTypeEnum.MEMBER.getValue()), AppTripChatMessageRespVO.class);
+        Collection<Long> messageIds = messages.stream().map(AppTripChatMessageRespVO::getId).toList();
+        Map<Long, Map<String, Object>> itineraryMap = tripAgentService.getItineraryMapByMessageIds(messageIds);
+        messages.forEach(message -> message.setItinerary(itineraryMap.get(message.getId())));
+        return success(messages);
     }
 
     @PostMapping(value = "/send-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -70,19 +76,11 @@ public class AppTripChatMessageController {
                 reqVO.getConversationId(), memberId, tenantId);
         CommonResult<AppTripChatStreamRespVO> accepted = success(new AppTripChatStreamRespVO().setEvent("accepted")
                 .setConversationId(reqVO.getConversationId()));
-        CommonResult<AppTripChatStreamRespVO> hint = success(new AppTripChatStreamRespVO().setEvent("hint")
-                .setConversationId(reqVO.getConversationId()).setContent("正在理解你的出行偏好…"));
         Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> {
             try {
                 TenantUtils.execute(tenantId, () -> {
-                    TripAgentResult agentResult = tripAgentService.handleMessage(reqVO.getConversationId(), memberId,
-                            reqVO.getContent(), progressContent -> sink.next(success(new AppTripChatStreamRespVO()
-                                    .setEvent("progress").setConversationId(reqVO.getConversationId())
-                                    .setContent(progressContent))));
-                    sink.next(success(new AppTripChatStreamRespVO().setEvent(agentResult.getType().toLowerCase())
-                            .setConversationId(reqVO.getConversationId()).setMessageId(agentResult.getMessageId())
-                            .setContent(agentResult.getContent()).setItinerary(agentResult.getItinerary())
-                            .setMissingRequired(agentResult.getMissingRequired())));
+                    tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent(),
+                            event -> sink.next(success(toStreamResponse(reqVO.getConversationId(), event))));
                 });
                 sink.complete();
             } catch (Exception e) {
@@ -91,7 +89,7 @@ public class AppTripChatMessageController {
         }).subscribeOn(Schedulers.boundedElastic());
         CommonResult<AppTripChatStreamRespVO> done = success(new AppTripChatStreamRespVO().setEvent("done")
                 .setConversationId(reqVO.getConversationId()));
-        return Flux.concat(Flux.just(accepted, hint), execution, Flux.just(done))
+        return Flux.concat(Flux.just(accepted), execution, Flux.just(done))
                 .onErrorResume(e -> {
                     log.error("[sendMessageStream][conversationId({}) 生成旅行方案失败]", reqVO.getConversationId(), e);
                     return Flux.just(success(new AppTripChatStreamRespVO().setEvent("error")
@@ -105,6 +103,13 @@ public class AppTripChatMessageController {
                         reqVO.getConversationId()))
                 .doOnComplete(() -> log.info("[sendMessageStream][conversationId({}) SSE 完成]",
                         reqVO.getConversationId()));
+    }
+
+    private static AppTripChatStreamRespVO toStreamResponse(Long conversationId, TripAgentEvent event) {
+        return new AppTripChatStreamRespVO().setEvent(event.getEvent()).setStage(event.getStage())
+                .setConversationId(conversationId).setMessageId(event.getMessageId()).setContent(event.getContent())
+                .setSequence(event.getSequence()).setItemType(event.getItemType()).setItem(event.getItem())
+                .setItinerary(event.getItinerary()).setMissingRequired(event.getMissingRequired());
     }
 
 }

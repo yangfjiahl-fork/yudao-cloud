@@ -137,6 +137,10 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>yudao-spring-boot-starter-protection</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.github.du00cs</groupId>
+            <artifactId>json-repairj</artifactId> <!-- 修复大模型返回的非标准 JSON -->
+        </dependency>
 
         <dependency>
             <groupId>org.apache.velocity</groupId>

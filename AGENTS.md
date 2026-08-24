@@ -21,6 +21,10 @@ This is a Java 17, Spring Boot 3.5 multi-module Maven repository. Root `pom.xml`
 
 Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast.
 
+## Workspace and Branch Policy
+
+Always work in the user's current shared checkout and its current branch. Do not create, switch to, or rely on a separate task branch or Git worktree unless the user explicitly asks for one. Before making changes, confirm the repository root and current branch so the work is based on the latest shared code.
+
 ## Coding Style & Naming Conventions
 
 Use Java 17 conventions with 4-space indentation. Keep packages under `cn.iocoder.yudao.module.<domain>`. Follow existing layers: `controller`, `service`, `dal`, `api`, `mq`, `framework`. Name implementations `*ServiceImpl`, mappers `*Mapper`, data objects `*DO`, request/response objects `*ReqVO` and `*RespVO`, and DTOs `*DTO`.
