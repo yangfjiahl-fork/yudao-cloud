@@ -13,10 +13,12 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripEntityDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripFactDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripFactMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripEntityMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
@@ -49,6 +51,8 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static final int STATUS_ACTIVE = 1;
     private static final int STATUS_GENERATED = 1;
+    private static final int ENTITY_STATUS_PENDING = 0;
+    private static final String ENTITY_TYPE_CITY = "CITY";
     private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
     private static final String COMPOSER_ROLE_ID_CONFIG_KEY = "trip.agent.composerRoleId";
     private static final Set<String> STATE_FIELDS = Set.of("destination", "departure", "startDate", "endDate",
@@ -61,6 +65,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private TripFactMapper tripFactMapper;
     @Resource
+    private TripEntityMapper tripEntityMapper;
+    @Resource
     private TripItineraryMapper tripItineraryMapper;
     @Resource
     private TripRunLogService tripRunLogService;
@@ -68,6 +74,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     private ConfigApi configApi;
     @Resource
     private AreaApi areaApi;
+    @Resource
+    private TripResearchExecutor tripResearchExecutor;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -112,6 +120,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
         mergeExplicitPatch(state, intake.get("patch"));
         List<String> missingRequired = validateState(state);
+        TripEntityDO destinationEntity = syncDestinationEntity(trip.getId(), state);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
         tripPlanMapper.updateById(trip);
@@ -131,25 +140,34 @@ public class TripAgentServiceImpl implements TripAgentService {
 
         eventConsumer.accept(TripAgentEvent.of("stage", "RESEARCH", "需求已整理，正在检查已有的旅行信息…"));
 
-        // 工具适配器接入后在此并发写入已验证事实；当前没有可用适配器时，只使用已有事实并明确让模型标为待确认。
         long researchStart = System.currentTimeMillis();
         Long researchRunId = tripRunLogService.create(trip.getId(), "RESEARCH",
-                JsonUtils.toJsonString(Map.of("state", state, "toolPlans", List.of())));
+                JsonUtils.toJsonString(Map.of("state", state)));
+        TripResearchExecutor.ResearchResult researchResult = tripResearchExecutor.execute(trip.getId(), state, destinationEntity);
         List<TripFactDO> facts = tripFactMapper.selectActiveByTripId(trip.getId());
         tripRunLogService.complete(researchRunId, null, 0L, 0L, 0L, System.currentTimeMillis() - researchStart,
                 JsonUtils.toJsonString(Map.of("activeFactIds", facts.stream().map(TripFactDO::getId).toList(),
-                        "toolExecuted", false)));
+                        "toolExecuted", researchResult.executedToolCount() > 0,
+                        "toolPlans", researchResult.toolPlans())));
+        researchResult.toolPlans().forEach(plan -> eventConsumer.accept(TripAgentEvent.of("tool_result", "RESEARCH",
+                ObjUtil.toString(plan.get("detail"))).setItemType(ObjUtil.toString(plan.get("type"))).setItem(plan)));
         log.info("[handleMessage][tripId({}) 有效事实数量({})]", trip.getId(), facts.size());
-        List<Map<String, Object>> verifiedFacts = facts.stream().map(fact -> Map.<String, Object>of(
-                "id", String.valueOf(fact.getId()), "key", fact.getFactKey(), "value", TripAgentFormatUtils.parseMap(fact.getValueJson()),
-                "source_id", String.valueOf(fact.getSourceId()))).toList();
+        List<Map<String, Object>> verifiedFacts = facts.stream().map(this::toVerifiedFact).toList();
+        List<Map<String, Object>> availableEntities = tripEntityMapper.selectListByTripId(trip.getId()).stream()
+                .map(this::toAvailableEntity).toList();
         eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在生成你的行程…"));
         eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
         TripAgentStreamParser streamParser = new TripAgentStreamParser(eventConsumer);
         AiChatGenerateRespDTO composerResponse = generateStream(conversationId, memberId,
                 "TripState:\n" + JsonUtils.toJsonString(state) + "\n\nVerifiedFacts:\n"
-                        + JsonUtils.toJsonString(verifiedFacts), "COMPOSER", trip.getId(), promptVariables, streamParser::append);
-        Map<String, Object> itinerary = parseItinerary(composerResponse.getContent(), facts);
+                        + JsonUtils.toJsonString(verifiedFacts) + "\n\nAvailableEntities:\n"
+                        + JsonUtils.toJsonString(availableEntities) + "\n\nEntity reference protocol:\n"
+                        + "仅可引用 AvailableEntities 中的 entityId。activity 可为字符串，或 "
+                        + "{\"entityId\":\"...\",\"type\":\"POI|HOTEL|RESTAURANT\",\"title\":\"...\",\"description\":\"...\"}。"
+                        + "酒店 placeholder=true 仅是候选展示，不能声称价格、库存或可预订性。",
+                "COMPOSER", trip.getId(), promptVariables, streamParser::append);
+        Map<String, Object> itinerary = parseItinerary(composerResponse.getContent(), facts,
+                tripEntityMapper.selectListByTripId(trip.getId()));
         String displayText = StrUtil.blankToDefault(ObjUtil.toString(itinerary.get("summary")), "已为你生成旅行方案。");
         AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, displayText, true);
         TripItineraryDO itineraryDO = new TripItineraryDO();
@@ -255,6 +273,48 @@ public class TripAgentServiceImpl implements TripAgentService {
         return areaId != null ? areaApi.getAreaName(areaId).getCheckedData() : "";
     }
 
+    private TripEntityDO syncDestinationEntity(Long tripId, Map<String, Object> state) {
+        String destination = StrUtil.trim(ObjUtil.toString(state.get("destination")));
+        if (StrUtil.isBlank(destination)) {
+            return null;
+        }
+        TripEntityDO entity = tripEntityMapper.selectByTripIdTypeAndName(tripId, ENTITY_TYPE_CITY, destination);
+        if (entity == null) {
+            entity = new TripEntityDO();
+            entity.setTripId(tripId);
+            entity.setEntityType(ENTITY_TYPE_CITY);
+            entity.setName(destination);
+            entity.setProvider("USER_INPUT");
+            entity.setStatus(ENTITY_STATUS_PENDING);
+            tripEntityMapper.insert(entity);
+        }
+        state.put("destinationEntityId", String.valueOf(entity.getId()));
+        return entity;
+    }
+
+    private Map<String, Object> toVerifiedFact(TripFactDO fact) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", String.valueOf(fact.getId()));
+        result.put("key", fact.getFactKey());
+        result.put("value", TripAgentFormatUtils.parseMap(fact.getValueJson()));
+        result.put("entity_id", fact.getEntityId() == null ? null : String.valueOf(fact.getEntityId()));
+        result.put("source_id", fact.getSourceId() == null ? null : String.valueOf(fact.getSourceId()));
+        return result;
+    }
+
+    private Map<String, Object> toAvailableEntity(TripEntityDO entity) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", String.valueOf(entity.getId()));
+        result.put("type", entity.getEntityType());
+        result.put("name", entity.getName());
+        result.put("provider", entity.getProvider());
+        result.put("externalId", entity.getExternalId());
+        result.put("parentEntityId", entity.getParentEntityId() == null ? null : String.valueOf(entity.getParentEntityId()));
+        result.put("metadata", TripAgentFormatUtils.parseMap(entity.getMetadataJson()));
+        result.put("status", entity.getStatus());
+        return result;
+    }
+
     private AiChatMessageRespDTO createTranscriptMessage(Long conversationId, Long memberId, String content, boolean assistant) {
         AiChatMessageCreateAssistantReqDTO req = new AiChatMessageCreateAssistantReqDTO();
         req.setConversationId(conversationId);
@@ -335,7 +395,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> parseItinerary(String content, List<TripFactDO> facts) {
+    private static Map<String, Object> parseItinerary(String content, List<TripFactDO> facts,
+                                                      List<TripEntityDO> entities) {
         Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(content);
         if (StrUtil.isBlank(ObjUtil.toString(itinerary.get("summary"))) || !(itinerary.get("daily_itinerary") instanceof List<?>)) {
             throw new IllegalStateException("行程生成结果不符合约定 JSON");
@@ -347,8 +408,29 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (!factIds.containsAll(citationIds)) {
             throw new IllegalStateException("行程引用了未验证事实");
         }
+        validateEntityReferences(itinerary, entities);
         itinerary.put("citation_ids", citationIds);
         return itinerary;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void validateEntityReferences(Map<String, Object> itinerary, List<TripEntityDO> entities) {
+        Set<String> entityIds = entities.stream().map(entity -> String.valueOf(entity.getId())).collect(java.util.stream.Collectors.toSet());
+        Object dailyItinerary = itinerary.get("daily_itinerary");
+        if (!(dailyItinerary instanceof List<?> days)) {
+            return;
+        }
+        for (Object day : days) {
+            if (!(day instanceof Map<?, ?> dayMap) || !(dayMap.get("activities") instanceof List<?> activities)) {
+                continue;
+            }
+            for (Object activity : activities) {
+                if (activity instanceof Map<?, ?> activityMap && activityMap.get("entityId") != null
+                        && !entityIds.contains(String.valueOf(activityMap.get("entityId")))) {
+                    throw new IllegalStateException("行程引用了不存在的旅行实体");
+                }
+            }
+        }
     }
 
 }

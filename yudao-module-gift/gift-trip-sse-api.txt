@@ -68,8 +68,8 @@ Gift 旅行规划 C 端 SSE API 接入说明
 | `messageId` | string | 仅 `created`、`question`、`itinerary` 有。对应已持久化的聊天消息。 |
 | `content` | string | 可选。状态提示、追问、摘要增量或最终摘要。不可将状态提示当作事实。 |
 | `sequence` | integer | 仅 `assistant_delta`、`itinerary_item` 有；从 1 开始，在同一次 Composer 流中递增，两个事件共享同一序列。 |
-| `itemType` | string | 仅 `itinerary_item` 有；当前固定为 `daily_itinerary`。 |
-| `item` | object | 仅 `itinerary_item` 有；一整天的预览卡片。 |
+| `itemType` | string | `itinerary_item` 为 `daily_itinerary`；`tool_result` 为工具类型。 |
+| `item` | object | `itinerary_item` 为一天的预览卡片；`tool_result` 为 ToolPlan。 |
 | `itinerary` | object | 仅最终 `itinerary` 有；完整且已持久化的行程。 |
 | `missingRequired` | string[] | `question` 为缺失字段；最终 `itinerary` 固定为空数组。 |
 
@@ -95,8 +95,22 @@ Gift 旅行规划 C 端 SSE API 接入说明
 当前可能的阶段：
 
 - `INTAKE`：流式调用需求抽取角色，合并 JSON patch 并由确定性代码校验状态。
-- `RESEARCH`：读取数据库中未过期的已验证事实。当前没有已接入的旅行工具，不会发起地图、天气、票务等外部调用。
+- `RESEARCH`：执行受控的酒店候选、景点与适用的当前天气查询，并读取未过期事实。模型不决定工具、供应商或查询参数。
 - `COMPOSER`：流式调用行程生成角色，解析其严格 JSON 输出。
+
+4. `tool_result`
+
+一个确定性检索节点完成后发送。它不是模型 Token，也不是正式聊天消息；前端可用 `content` 更新检索进度，并按 `item.type` / `item.status` 渲染结果状态。当前每轮最多 3 条。
+
+    {
+      "event":"tool_result",
+      "stage":"RESEARCH",
+      "content":"已获取 3 个景点候选",
+      "itemType":"SCENIC_SPOT_QUERY",
+      "item":{"type":"SCENIC_SPOT_QUERY","status":"EXECUTED","entityId":"178...","detail":"已获取 3 个景点候选"}
+    }
+
+`status` 仅可能为：`EXECUTED`（本轮调用完成）、`CACHED`（使用未过期事实）、`SKIPPED`（当前能力不适用，例如未来日期不能用当前天气替代预报）、`FAILED`（外部服务暂不可用，Composer 会保持待确认）。酒店候选当前为固定占位数据，图片地址为空，不代表价格、库存或可预订性。
 
 4. `question`
 
@@ -195,15 +209,16 @@ Composer 输出已完成并通过后端行程校验、持久化；此事件无 `
 
     accepted -> stage(INTAKE) -> question -> done
 
-生成行程（当前实现，无工具调用）：
+生成行程：
 
     accepted -> stage(INTAKE) -> stage(RESEARCH) -> stage(COMPOSER)
-             -> assistant_start -> (assistant_delta | itinerary_item)*
+             -> tool_result* -> assistant_start -> (assistant_delta | itinerary_item)*
              -> assistant_end -> itinerary -> done
 
 - `assistant_delta` 和 `itinerary_item` 的先后取决于 Composer JSON 的实际输出，不能假设所有 delta 都先于所有卡片。
 - 前端不能依赖增量数量；应以 `itinerary` 作为最终成功结果。
-- 当前代码没有 `tool_progress` 事件。工具接入后如新增该事件，会另行补充协议，前端不能预先把 `stage(RESEARCH)` 当作“已查询外部服务”。
+- 不会发送泛化的 `progress` 事件。`tool_result` 是确定性工具节点的唯一进度结果；模型慢调用仍通过 `assistant_delta` 展示。
+- 最终 `daily_itinerary[].activities[]` 兼容字符串，也可为实体引用对象：`{"entityId":"...","type":"POI|HOTEL|RESTAURANT","title":"...","description":"..."}`。前端按对象的 `entityId` 关联候选卡；后端会拒绝不存在的实体编号。
 
 六、流读取要求
 --------------
@@ -219,12 +234,13 @@ Composer 输出已完成并通过后端行程校验、持久化；此事件无 `
 
 1. 收到 `accepted`：创建本轮 request 状态并显示 loading。
 2. 收到 `stage`：更新 loading 文案；不落聊天记录。
-3. 收到 `question`：插入正式助手消息，结束本轮。
-4. 收到 `assistant_start`：创建内存中的临时 summary/card 状态。
-5. 收到 `assistant_delta`：追加 `content` 到临时 summary。
-6. 收到 `itinerary_item`：按 `item.day` upsert 临时日程卡；不要重复插入。
-7. 收到 `itinerary`：以完整 `itinerary` 替换临时 summary 与日程卡，并将 `messageId` 对应的 `content` 作为正式聊天消息。
-8. 收到 `done` 或 `error`：结束 loading，清理本轮临时 request 状态。
+3. 收到 `tool_result`：更新本轮检索进度或候选卡片；不落聊天记录，也不可据 `FAILED` 推断事实。
+4. 收到 `question`：插入正式助手消息，结束本轮。
+5. 收到 `assistant_start`：创建内存中的临时 summary/card 状态。
+6. 收到 `assistant_delta`：追加 `content` 到临时 summary。
+7. 收到 `itinerary_item`：按 `item.day` upsert 临时日程卡；不要重复插入。
+8. 收到 `itinerary`：以完整 `itinerary` 替换临时 summary 与日程卡，并将 `messageId` 对应的 `content` 作为正式聊天消息。
+9. 收到 `done` 或 `error`：结束 loading，清理本轮临时 request 状态。
 
 八、持久化与重连限制
 --------------------

@@ -45,7 +45,8 @@ public class AiChatPromptUtils {
                 matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group()));
                 continue;
             }
-            matcher.appendReplacement(result, Matcher.quoteReplacement(ObjUtil.toString(variables.get(key), "")));
+            Object value = variables.get(key);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(value == null ? "" : ObjUtil.toString(value)));
         }
         matcher.appendTail(result);
         return result.toString();

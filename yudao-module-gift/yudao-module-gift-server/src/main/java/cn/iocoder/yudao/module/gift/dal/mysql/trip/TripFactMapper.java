@@ -19,4 +19,13 @@ public interface TripFactMapper extends BaseMapperX<TripFactDO> {
                         .or().gt(TripFactDO::getExpiresAt, LocalDateTime.now())));
     }
 
+    default TripFactDO selectActiveByTripIdAndFactKey(Long tripId, String factKey) {
+        return selectOne(new LambdaQueryWrapperX<TripFactDO>()
+                .eq(TripFactDO::getTripId, tripId)
+                .eq(TripFactDO::getFactKey, factKey)
+                .eq(TripFactDO::getStatus, 1)
+                .and(wrapper -> wrapper.isNull(TripFactDO::getExpiresAt)
+                        .or().gt(TripFactDO::getExpiresAt, LocalDateTime.now())));
+    }
+
 }
