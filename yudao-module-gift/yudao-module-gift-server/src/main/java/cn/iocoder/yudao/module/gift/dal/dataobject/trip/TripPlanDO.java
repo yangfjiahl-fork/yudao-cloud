@@ -17,6 +17,10 @@ public class TripPlanDO extends TenantBaseDO {
     private Long id;
     private Long conversationId;
     private Long memberId;
+    /**
+     * 当前生效的行程快照。历史行程仍通过关联的聊天消息保留。
+     */
+    private Long currentItineraryId;
     private String stateJson;
     private String missingRequiredJson;
     private Integer status;

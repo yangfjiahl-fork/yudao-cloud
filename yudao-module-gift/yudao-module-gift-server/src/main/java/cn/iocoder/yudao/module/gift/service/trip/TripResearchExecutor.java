@@ -3,21 +3,21 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import cn.iocoder.yudao.framework.tracer.core.util.TracerFrameworkUtils;
 import cn.iocoder.yudao.module.ai.api.travel.AiTravelQueryApi;
 import cn.iocoder.yudao.module.ai.api.travel.dto.AiTravelScenicSpotRespDTO;
-import cn.iocoder.yudao.module.ai.api.travel.dto.AiTravelWeatherRespDTO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripEntityDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripFactDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripSourceDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripEntityMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripFactMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripSourceMapper;
 import jakarta.annotation.Resource;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,131 +30,101 @@ import java.util.Map;
 public class TripResearchExecutor {
 
     private static final int STATUS_VERIFIED = 1;
-    private static final int ENTITY_STATUS_RESOLVED = 1;
-    private static final String ENTITY_TYPE_POI = "POI";
-    private static final String ENTITY_TYPE_HOTEL = "HOTEL";
+    private static final int MAX_SCENIC_SPOT_CANDIDATES = 2;
+    private static final String FACT_KEY_POI_CANDIDATES = "poi.candidates";
 
     @Resource
     private AiTravelQueryApi aiTravelQueryApi;
     @Resource
     private TripHotelQueryClient tripHotelQueryClient;
     @Resource
-    private TripEntityMapper tripEntityMapper;
-    @Resource
     private TripFactMapper tripFactMapper;
     @Resource
     private TripSourceMapper tripSourceMapper;
+    @Resource
+    private Tracer tracer;
 
-    public ResearchResult execute(Long tripId, Map<String, Object> state, TripEntityDO destinationEntity) {
-        List<Map<String, Object>> toolPlans = new ArrayList<>();
-        String destination = ObjUtil.toString(state.get("destination"));
-        upsertMockHotel(tripId, destination, destinationEntity.getId(), toolPlans);
-        queryScenicSpotsIfNeeded(tripId, state, destination, destinationEntity, toolPlans);
-        queryCurrentWeatherIfNeeded(tripId, state, destination, destinationEntity, toolPlans);
-        int executed = (int) toolPlans.stream().filter(plan -> "EXECUTED".equals(plan.get("status"))).count();
-        return new ResearchResult(toolPlans, executed);
-    }
-
-    private void upsertMockHotel(Long tripId, String destination, Long cityEntityId, List<Map<String, Object>> toolPlans) {
-        TripHotelQueryClient.HotelCandidate hotel = tripHotelQueryClient.queryByCity(destination);
-        TripEntityDO entity = tripEntityMapper.selectByTripIdTypeAndName(tripId, ENTITY_TYPE_HOTEL, hotel.name());
-        if (entity == null) {
-            entity = new TripEntityDO();
-            entity.setTripId(tripId);
-            entity.setEntityType(ENTITY_TYPE_HOTEL);
-            entity.setName(hotel.name());
-            entity.setProvider("mock_hotel");
-            entity.setExternalId(hotel.externalId());
-            entity.setParentEntityId(cityEntityId);
-            entity.setMetadataJson(JsonUtils.toJsonString(Map.of("imageUrl", hotel.imageUrl(), "placeholder", true)));
-            entity.setStatus(ENTITY_STATUS_RESOLVED);
-            tripEntityMapper.insert(entity);
+    /**
+     * 只补充一个骨架节点，供前端并行调用；绝不为生成骨架而提前阻塞工具请求。
+     * 外部候选直接返回并写入所属行程 JSON，不建立本地实体副本。
+     */
+    public SlotResearchResult resolveSlot(Long tripId, Map<String, Object> state, String slot) {
+        String normalizedSlot = StrUtil.trim(slot).toUpperCase(java.util.Locale.ROOT);
+        Span span = tracer.spanBuilder("trip.agent.slot.resolve")
+                .setSpanKind(SpanKind.INTERNAL)
+                .setAttribute("trip.id", String.valueOf(tripId))
+                .setAttribute("trip.itinerary.slot", normalizedSlot)
+                .startSpan();
+        try (Scope ignored = span.makeCurrent()) {
+            String destination = StrUtil.trim(ObjUtil.toString(state.get("destination")));
+            SlotResearchResult result = switch (normalizedSlot) {
+                case "MORNING", "AFTERNOON", "EVENING" -> resolveScenicSpotSlot(tripId, state, destination, normalizedSlot);
+                case "ACCOMMODATION" -> resolveHotelSlot(destination, normalizedSlot);
+                case "LUNCH", "DINNER" -> pending(normalizedSlot, "RESTAURANT_QUERY", "餐饮供应商尚未接入，保留为待确认");
+                case "ARRIVAL", "DEPARTURE" -> pending(normalizedSlot, "TRANSPORT_QUERY", "交通供应商尚未接入，保留为待确认");
+                default -> throw new IllegalArgumentException("不支持的行程节点：" + slot);
+            };
+            span.setAttribute("trip.tool.status", result.status());
+            span.setAttribute("trip.tool.candidate_count", result.candidates().size());
+            span.setAttribute("trip.tool.plan_count", result.toolPlans().size());
+            return result;
+        } catch (RuntimeException e) {
+            TracerFrameworkUtils.onError(e, span);
+            throw e;
+        } finally {
+            span.end();
         }
-        toolPlans.add(toolPlan("HOTEL_CANDIDATE", "EXECUTED", entity.getId(),
-                "占位酒店候选；不代表价格、库存或可预订性"));
     }
 
-    private void queryScenicSpotsIfNeeded(Long tripId, Map<String, Object> state, String destination,
-                                           TripEntityDO destinationEntity, List<Map<String, Object>> toolPlans) {
-        if (tripFactMapper.selectActiveByTripIdAndFactKey(tripId, "poi.candidates") != null) {
-            toolPlans.add(toolPlan("SCENIC_SPOT_QUERY", "CACHED", destinationEntity.getId(), "景点候选事实未过期"));
-            return;
+    private SlotResearchResult resolveScenicSpotSlot(Long tripId, Map<String, Object> state, String destination, String slot) {
+        TripFactDO cachedFact = tripFactMapper.selectActiveByTripIdAndFactKey(tripId, FACT_KEY_POI_CANDIDATES);
+        if (isFactForDestination(cachedFact, destination)) {
+            Map<String, Object> value = JsonUtils.parseMap(cachedFact.getValueJson());
+            List<Map<String, Object>> candidates = getCandidateList(value.get("candidates"));
+            return resolved(slot, "景点候选已获取", candidates, List.of(String.valueOf(cachedFact.getId())),
+                    toolPlan("SCENIC_SPOT_QUERY", "CACHED", "景点候选事实未过期"));
         }
         try {
             String keyword = firstInterest(state);
-            List<AiTravelScenicSpotRespDTO> spots = aiTravelQueryApi.queryScenicSpots(destination, keyword, 5);
+            List<AiTravelScenicSpotRespDTO> spots = aiTravelQueryApi.queryScenicSpots(destination, keyword,
+                    MAX_SCENIC_SPOT_CANDIDATES);
+            List<Map<String, Object>> candidates = spots.stream().map(TripResearchExecutor::toScenicCandidate).toList();
             LocalDateTime now = LocalDateTime.now();
             TripSourceDO source = insertSource(tripId, spots.isEmpty() ? "provider" : spots.get(0).getProvider(),
                     "景点查询（" + destination + "）", scenicSourceUrl(spots), now, now.plusDays(30));
-            List<String> entityIds = new ArrayList<>();
-            for (AiTravelScenicSpotRespDTO spot : spots) {
-                TripEntityDO entity = upsertScenicEntity(tripId, destinationEntity.getId(), spot);
-                entityIds.add(String.valueOf(entity.getId()));
-            }
             Map<String, Object> value = new LinkedHashMap<>();
             value.put("city", destination);
-            value.put("entityIds", entityIds);
             value.put("keyword", keyword);
-            insertFact(tripId, destinationEntity.getId(), "poi.candidates", value, source.getId(), now, now.plusDays(30));
-            toolPlans.add(toolPlan("SCENIC_SPOT_QUERY", "EXECUTED", destinationEntity.getId(), "已获取 " + spots.size() + " 个景点候选"));
+            value.put("candidates", candidates);
+            TripFactDO fact = upsertFact(tripId, cachedFact, FACT_KEY_POI_CANDIDATES, value, source.getId(), now, now.plusDays(30));
+            return resolved(slot, "已获取 " + candidates.size() + " 个景点候选", candidates, List.of(String.valueOf(fact.getId())),
+                    toolPlan("SCENIC_SPOT_QUERY", "EXECUTED", "已获取 " + candidates.size() + " 个景点候选"));
         } catch (RuntimeException e) {
-            log.warn("[queryScenicSpotsIfNeeded][tripId({}) destination({}) 景点查询失败]", tripId, destination, e);
-            toolPlans.add(toolPlan("SCENIC_SPOT_QUERY", "FAILED", destinationEntity.getId(), "景点服务暂不可用"));
+            log.warn("[resolveScenicSpotSlot][tripId({}) destination({}) 景点查询失败]", tripId, destination, e);
+            return pending(slot, "SCENIC_SPOT_QUERY", "景点服务暂不可用");
         }
     }
 
-    private void queryCurrentWeatherIfNeeded(Long tripId, Map<String, Object> state, String destination,
-                                             TripEntityDO destinationEntity, List<Map<String, Object>> toolPlans) {
-        if (!isCurrentWeatherApplicable(state)) {
-            toolPlans.add(toolPlan("CURRENT_WEATHER", "SKIPPED", destinationEntity.getId(),
-                    "当前天气不用于两天以后的出行日期"));
-            return;
-        }
-        if (tripFactMapper.selectActiveByTripIdAndFactKey(tripId, "weather.current") != null) {
-            toolPlans.add(toolPlan("CURRENT_WEATHER", "CACHED", destinationEntity.getId(), "当前天气事实未过期"));
-            return;
-        }
-        try {
-            AiTravelWeatherRespDTO weather = aiTravelQueryApi.getCurrentWeather(destination);
-            LocalDateTime now = LocalDateTime.now();
-            TripSourceDO source = insertSource(tripId, weather.getProvider(), "当前天气（" + weather.getCity() + "）",
-                    weatherSourceUrl(weather.getProvider()), now, now.plusHours(6));
-            Map<String, Object> value = new LinkedHashMap<>();
-            value.put("city", weather.getCity());
-            value.put("temperature", weather.getTemperature());
-            value.put("condition", weather.getCondition());
-            value.put("humidity", weather.getHumidity());
-            value.put("windDirection", weather.getWindDirection());
-            value.put("windPower", weather.getWindPower());
-            value.put("queryTime", weather.getQueryTime());
-            insertFact(tripId, destinationEntity.getId(), "weather.current", value, source.getId(), now, now.plusHours(6));
-            toolPlans.add(toolPlan("CURRENT_WEATHER", "EXECUTED", destinationEntity.getId(), "已获取当前天气"));
-        } catch (RuntimeException e) {
-            log.warn("[queryCurrentWeatherIfNeeded][tripId({}) destination({}) 天气查询失败]", tripId, destination, e);
-            toolPlans.add(toolPlan("CURRENT_WEATHER", "FAILED", destinationEntity.getId(), "天气服务暂不可用"));
-        }
+    private SlotResearchResult resolveHotelSlot(String destination, String slot) {
+        TripHotelQueryClient.HotelCandidate hotel = tripHotelQueryClient.queryByCity(destination);
+        Map<String, Object> candidate = new LinkedHashMap<>();
+        candidate.put("id", hotel.externalId());
+        candidate.put("type", "HOTEL");
+        candidate.put("name", hotel.name());
+        candidate.put("provider", "mock_hotel");
+        candidate.put("externalId", hotel.externalId());
+        candidate.put("metadata", Map.of("imageUrl", hotel.imageUrl(), "placeholder", true));
+        return resolved(slot, "占位酒店候选；不代表价格、库存或可预订性", List.of(candidate), List.of(),
+                toolPlan("HOTEL_CANDIDATE", "EXECUTED", "占位酒店候选；不代表价格、库存或可预订性"));
     }
 
-    private TripEntityDO upsertScenicEntity(Long tripId, Long cityEntityId, AiTravelScenicSpotRespDTO spot) {
-        TripEntityDO entity = tripEntityMapper.selectByTripIdTypeAndName(tripId, ENTITY_TYPE_POI, spot.getName());
-        if (entity == null) {
-            entity = new TripEntityDO();
-            entity.setTripId(tripId);
-            entity.setEntityType(ENTITY_TYPE_POI);
-            entity.setName(spot.getName());
-            entity.setProvider(spot.getProvider());
-            entity.setExternalId(spot.getExternalId());
-            entity.setParentEntityId(cityEntityId);
-            entity.setLongitude(parseDecimal(spot.getLongitude()));
-            entity.setLatitude(parseDecimal(spot.getLatitude()));
-            Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("address", spot.getAddress());
-            metadata.put("imageUrl", spot.getImageUrl());
-            entity.setMetadataJson(JsonUtils.toJsonString(metadata));
-            entity.setStatus(ENTITY_STATUS_RESOLVED);
-            tripEntityMapper.insert(entity);
-        }
-        return entity;
+    private static SlotResearchResult pending(String slot, String toolType, String detail) {
+        return new SlotResearchResult(slot, "PENDING", detail, List.of(), List.of(), List.of(toolPlan(toolType, "SKIPPED", detail)));
+    }
+
+    private static SlotResearchResult resolved(String slot, String detail, List<Map<String, Object>> candidates,
+                                                List<String> citationIds, Map<String, Object> toolPlan) {
+        return new SlotResearchResult(slot, "RESOLVED", detail, candidates, citationIds, List.of(toolPlan));
     }
 
     private TripSourceDO insertSource(Long tripId, String provider, String name, String url,
@@ -171,32 +141,59 @@ public class TripResearchExecutor {
         return source;
     }
 
-    private void insertFact(Long tripId, Long entityId, String key, Map<String, Object> value, Long sourceId,
-                            LocalDateTime retrievedAt, LocalDateTime expiresAt) {
-        TripFactDO fact = new TripFactDO();
-        fact.setTripId(tripId);
-        fact.setEntityId(entityId);
-        fact.setFactKey(key);
+    private TripFactDO upsertFact(Long tripId, TripFactDO fact, String key, Map<String, Object> value, Long sourceId,
+                                  LocalDateTime retrievedAt, LocalDateTime expiresAt) {
+        if (fact == null) {
+            fact = new TripFactDO();
+            fact.setTripId(tripId);
+            fact.setFactKey(key);
+        }
         fact.setValueJson(JsonUtils.toJsonString(value));
         fact.setSourceId(sourceId);
         fact.setRetrievedAt(retrievedAt);
         fact.setExpiresAt(expiresAt);
         fact.setConfidence(1D);
         fact.setStatus(STATUS_VERIFIED);
-        tripFactMapper.insert(fact);
+        if (fact.getId() == null) {
+            tripFactMapper.insert(fact);
+        } else {
+            tripFactMapper.updateById(fact);
+        }
+        return fact;
     }
 
-    private static boolean isCurrentWeatherApplicable(Map<String, Object> state) {
-        String startDate = ObjUtil.toString(state.get("startDate"));
-        if (StrUtil.isBlank(startDate)) {
-            return false;
+    private static boolean isFactForDestination(TripFactDO fact, String destination) {
+        return fact != null && StrUtil.equals(destination, ObjUtil.toString(JsonUtils.parseMap(fact.getValueJson()).get("city")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> getCandidateList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
         }
-        try {
-            LocalDate date = LocalDate.parse(startDate);
-            return !date.isBefore(LocalDate.now()) && !date.isAfter(LocalDate.now().plusDays(1));
-        } catch (RuntimeException ignored) {
-            return false;
-        }
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        list.forEach(item -> {
+            if (item instanceof Map<?, ?> candidate) {
+                candidates.add((Map<String, Object>) candidate);
+            }
+        });
+        return candidates.stream().limit(MAX_SCENIC_SPOT_CANDIDATES).toList();
+    }
+
+    private static Map<String, Object> toScenicCandidate(AiTravelScenicSpotRespDTO spot) {
+        Map<String, Object> candidate = new LinkedHashMap<>();
+        candidate.put("id", spot.getExternalId());
+        candidate.put("type", "POI");
+        candidate.put("name", spot.getName());
+        candidate.put("provider", spot.getProvider());
+        candidate.put("externalId", spot.getExternalId());
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("address", spot.getAddress());
+        metadata.put("imageUrl", spot.getImageUrl());
+        metadata.put("longitude", spot.getLongitude());
+        metadata.put("latitude", spot.getLatitude());
+        candidate.put("metadata", metadata);
+        return candidate;
     }
 
     private static String firstInterest(Map<String, Object> state) {
@@ -207,19 +204,10 @@ public class TripResearchExecutor {
         return "景点";
     }
 
-    private static BigDecimal parseDecimal(String value) {
-        try {
-            return StrUtil.isBlank(value) ? null : new BigDecimal(value);
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private static Map<String, Object> toolPlan(String type, String status, Long entityId, String detail) {
+    private static Map<String, Object> toolPlan(String type, String status, String detail) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", type);
         result.put("status", status);
-        result.put("entityId", entityId == null ? null : String.valueOf(entityId));
         result.put("detail", detail);
         return result;
     }
@@ -230,13 +218,8 @@ public class TripResearchExecutor {
                 : "https://market.aliyun.com/";
     }
 
-    private static String weatherSourceUrl(String provider) {
-        return "gaode".equalsIgnoreCase(provider)
-                ? "https://lbs.amap.com/api/webservice/guide/api/weatherinfo"
-                : "https://market.aliyun.com/";
-    }
-
-    public record ResearchResult(List<Map<String, Object>> toolPlans, int executedToolCount) {
+    public record SlotResearchResult(String slot, String status, String detail, List<Map<String, Object>> candidates,
+                                     List<String> citationIds, List<Map<String, Object>> toolPlans) {
     }
 
 }

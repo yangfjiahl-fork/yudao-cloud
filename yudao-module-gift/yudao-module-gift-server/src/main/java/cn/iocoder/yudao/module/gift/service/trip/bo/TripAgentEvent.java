@@ -18,6 +18,8 @@ public class TripAgentEvent {
     private Map<String, Object> item;
     private Map<String, Object> itinerary;
     private List<String> missingRequired;
+    /** 追问时可展示的快捷条件；点击后将 content 作为下一轮用户消息发送。 */
+    private List<Map<String, String>> suggestions;
 
     public static TripAgentEvent of(String event, String stage, String content) {
         return new TripAgentEvent().setEvent(event).setStage(stage).setContent(content);

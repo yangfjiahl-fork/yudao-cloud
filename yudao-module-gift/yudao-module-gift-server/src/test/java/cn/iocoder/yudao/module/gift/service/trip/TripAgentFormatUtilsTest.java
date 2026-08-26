@@ -43,7 +43,19 @@ class TripAgentFormatUtilsTest {
         parser.append("]}");
 
         assertEquals(List.of("assistant_delta:杭州三:null", "assistant_delta:日游:null",
+                "itinerary_day_started:正在规划第 1 天…:daily_itinerary",
                 "itinerary_item:null:daily_itinerary"), events);
+    }
+
+    @Test
+    void streamParser_shouldWaitForCompleteDayNumber() {
+        List<String> events = new ArrayList<>();
+        TripAgentStreamParser parser = new TripAgentStreamParser(event -> events.add(event.getEvent() + ":" + event.getContent()));
+
+        parser.append("{\"daily_itinerary\":[{\"day\":1");
+        parser.append("0,\"title\":\"返程\"}");
+
+        assertEquals(List.of("itinerary_day_started:正在规划第 10 天…", "itinerary_item:null"), events);
     }
 
 }

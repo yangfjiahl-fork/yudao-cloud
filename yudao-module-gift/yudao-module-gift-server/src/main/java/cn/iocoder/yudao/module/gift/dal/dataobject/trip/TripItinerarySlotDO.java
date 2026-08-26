@@ -7,21 +7,25 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-@TableName("gift_trip_itinerary")
-@KeySequence("gift_trip_itinerary_seq")
+/**
+ * 旅行行程的独立补充节点。
+ */
+@TableName("gift_trip_itinerary_slot")
+@KeySequence("gift_trip_itinerary_slot_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class TripItineraryDO extends TenantBaseDO {
+public class TripItinerarySlotDO extends TenantBaseDO {
 
     @TableId
     private Long id;
-    private Long tripId;
-    /** 同一旅行计划内从 1 开始递增的行程版本。 */
-    private Integer version;
-    /** 关联 ai_chat_message.id，作为 C 端恢复完整行程的消息外键。 */
-    private Long messageId;
-    private String contentJson;
+    private Long itineraryId;
+    private Integer day;
+    private String slot;
+    private String skeleton;
+    private String status;
+    private Integer resolveStatus;
+    private String detail;
+    private String candidatesJson;
     private String citationIdsJson;
-    private Integer status;
 
 }

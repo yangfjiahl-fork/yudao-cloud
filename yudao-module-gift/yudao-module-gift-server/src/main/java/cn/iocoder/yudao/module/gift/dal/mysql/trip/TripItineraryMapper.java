@@ -11,8 +11,20 @@ import java.util.List;
 @Mapper
 public interface TripItineraryMapper extends BaseMapperX<TripItineraryDO> {
 
+    default TripItineraryDO selectByMessageId(Long messageId) {
+        return selectOne(TripItineraryDO::getMessageId, messageId);
+    }
+
     default List<TripItineraryDO> selectListByMessageIds(Collection<Long> messageIds) {
         return selectList(new LambdaQueryWrapperX<TripItineraryDO>()
                 .inIfPresent(TripItineraryDO::getMessageId, messageIds));
+    }
+
+    default Integer selectMaxVersionByTripId(Long tripId) {
+        TripItineraryDO itinerary = selectOne(new LambdaQueryWrapperX<TripItineraryDO>()
+                .eq(TripItineraryDO::getTripId, tripId)
+                .orderByDesc(TripItineraryDO::getVersion)
+                .last("LIMIT 1"));
+        return itinerary != null ? itinerary.getVersion() : null;
     }
 }

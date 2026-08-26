@@ -18,8 +18,6 @@ public class TripFactDO extends TenantBaseDO {
     @TableId
     private Long id;
     private Long tripId;
-    /** 可选：该事实归属于某个旅行实体。 */
-    private Long entityId;
     private String factKey;
     private String valueJson;
     private Long sourceId;

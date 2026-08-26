@@ -25,7 +25,9 @@ public interface TripFactMapper extends BaseMapperX<TripFactDO> {
                 .eq(TripFactDO::getFactKey, factKey)
                 .eq(TripFactDO::getStatus, 1)
                 .and(wrapper -> wrapper.isNull(TripFactDO::getExpiresAt)
-                        .or().gt(TripFactDO::getExpiresAt, LocalDateTime.now())));
+                        .or().gt(TripFactDO::getExpiresAt, LocalDateTime.now()))
+                .orderByDesc(TripFactDO::getUpdateTime)
+                .last("LIMIT 1"));
     }
 
 }

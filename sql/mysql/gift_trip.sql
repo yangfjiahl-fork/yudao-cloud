@@ -6,6 +6,7 @@ CREATE TABLE `gift_trip_plan` (
   `tenant_id` bigint NOT NULL,
   `conversation_id` bigint NOT NULL,
   `member_id` bigint NOT NULL,
+  `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号',
   `state_json` text NOT NULL,
   `missing_required_json` text NOT NULL,
   `status` tinyint NOT NULL DEFAULT 1,
@@ -22,7 +23,6 @@ CREATE TABLE `gift_trip_fact` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint NOT NULL,
   `trip_id` bigint NOT NULL,
-  `entity_id` bigint DEFAULT NULL COMMENT '关联的旅行实体编号',
   `fact_key` varchar(128) NOT NULL,
   `value_json` text NOT NULL,
   `source_id` bigint DEFAULT NULL,
@@ -36,33 +36,8 @@ CREATE TABLE `gift_trip_fact` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
-  KEY `idx_trip_status_expire` (`tenant_id`, `trip_id`, `status`, `expires_at`),
-  KEY `idx_entity_status_expire` (`entity_id`, `status`, `expires_at`)
+  KEY `idx_trip_status_expire` (`tenant_id`, `trip_id`, `status`, `expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行事实与来源';
-
-CREATE TABLE `gift_trip_entity` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` bigint NOT NULL,
-  `trip_id` bigint NOT NULL,
-  `entity_type` varchar(32) NOT NULL COMMENT 'CITY/POI/HOTEL/RESTAURANT/TRANSPORT_HUB',
-  `name` varchar(256) NOT NULL,
-  `provider` varchar(64) NOT NULL COMMENT 'USER_INPUT/gaode/aliyun/mock_hotel',
-  `external_id` varchar(256) DEFAULT NULL,
-  `parent_entity_id` bigint DEFAULT NULL,
-  `longitude` decimal(11,8) DEFAULT NULL,
-  `latitude` decimal(10,8) DEFAULT NULL,
-  `metadata_json` text DEFAULT NULL,
-  `status` tinyint NOT NULL DEFAULT 0 COMMENT '0待解析 1已解析 2不可用',
-  `creator` varchar(64) DEFAULT '',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updater` varchar(64) DEFAULT '',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `deleted` bit NOT NULL DEFAULT b'0',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_trip_type_name` (`trip_id`, `entity_type`, `name`),
-  KEY `idx_trip_type` (`trip_id`, `entity_type`),
-  KEY `idx_provider_external` (`provider`, `external_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行关键实体';
 
 CREATE TABLE `gift_trip_source` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -87,6 +62,7 @@ CREATE TABLE `gift_trip_itinerary` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint NOT NULL,
   `trip_id` bigint NOT NULL,
+  `version` int NOT NULL COMMENT '同一旅行计划内从1开始递增的版本号',
   `message_id` bigint NOT NULL COMMENT '关联 ai_chat_message.id',
   `content_json` longtext NOT NULL,
   `citation_ids_json` text NOT NULL,
@@ -98,8 +74,30 @@ CREATE TABLE `gift_trip_itinerary` (
   `deleted` bit NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_message_id` (`message_id`),
-  KEY `idx_trip` (`tenant_id`, `trip_id`)
+  KEY `idx_trip_version` (`tenant_id`, `trip_id`, `version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行行程';
+
+CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint NOT NULL,
+  `itinerary_id` bigint NOT NULL,
+  `day` int NOT NULL COMMENT '行程天数；交通节点固定为 0',
+  `slot` varchar(32) NOT NULL,
+  `skeleton` varchar(500) NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '节点展示状态：PENDING/RESOLVED',
+  `resolve_status` tinyint NOT NULL DEFAULT 0 COMMENT '补充状态：0待处理 1处理中 2已完成 3失败',
+  `detail` varchar(500) DEFAULT NULL,
+  `candidates_json` text DEFAULT NULL,
+  `citation_ids_json` text DEFAULT NULL,
+  `creator` varchar(64) DEFAULT '',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updater` varchar(64) DEFAULT '',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted` bit NOT NULL DEFAULT b'0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_itinerary_day_slot` (`tenant_id`, `itinerary_id`, `day`, `slot`),
+  KEY `idx_itinerary_resolve_status` (`tenant_id`, `itinerary_id`, `resolve_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行行程节点补充结果';
 
 CREATE TABLE `gift_trip_run` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -140,7 +138,34 @@ ALTER TABLE `gift_trip_itinerary`
   ADD COLUMN `message_id` bigint DEFAULT NULL COMMENT '关联 ai_chat_message.id' AFTER `trip_id`,
   ADD UNIQUE KEY `uk_message_id` (`message_id`);
 
--- 已部署旅行事实表的实体关联扩展（仅执行一次）
-ALTER TABLE `gift_trip_fact`
-  ADD COLUMN `entity_id` bigint DEFAULT NULL COMMENT '关联的旅行实体编号' AFTER `trip_id`,
-  ADD KEY `idx_entity_status_expire` (`entity_id`, `status`, `expires_at`);
+-- 已部署旅行行程的版本扩展（仅执行一次；历史存量使用版本 0）
+ALTER TABLE `gift_trip_itinerary`
+  ADD COLUMN `version` int NOT NULL DEFAULT 0 COMMENT '同一旅行计划内从1开始递增的版本号' AFTER `trip_id`,
+  ADD KEY `idx_trip_version` (`tenant_id`, `trip_id`, `version`);
+
+-- 已部署旅行状态表的当前行程指针扩展（仅执行一次）
+ALTER TABLE `gift_trip_plan`
+  ADD COLUMN `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号' AFTER `member_id`;
+
+-- 已部署旅行行程的独立节点补充表（历史骨架会在首次节点请求时按需初始化）
+CREATE TABLE `gift_trip_itinerary_slot` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint NOT NULL,
+  `itinerary_id` bigint NOT NULL,
+  `day` int NOT NULL COMMENT '行程天数；交通节点固定为 0',
+  `slot` varchar(32) NOT NULL,
+  `skeleton` varchar(500) NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '节点展示状态：PENDING/RESOLVED',
+  `resolve_status` tinyint NOT NULL DEFAULT 0 COMMENT '补充状态：0待处理 1处理中 2已完成 3失败',
+  `detail` varchar(500) DEFAULT NULL,
+  `candidates_json` text DEFAULT NULL,
+  `citation_ids_json` text DEFAULT NULL,
+  `creator` varchar(64) DEFAULT '',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updater` varchar(64) DEFAULT '',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted` bit NOT NULL DEFAULT b'0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_itinerary_day_slot` (`tenant_id`, `itinerary_id`, `day`, `slot`),
+  KEY `idx_itinerary_resolve_status` (`tenant_id`, `itinerary_id`, `resolve_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行行程节点补充结果';

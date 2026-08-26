@@ -24,5 +24,6 @@ public class AppTripChatStreamRespVO {
     private Map<String, Object> item;
     private Map<String, Object> itinerary;
     private List<String> missingRequired;
+    private List<Map<String, String>> suggestions;
 
 }

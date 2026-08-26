@@ -8,10 +8,13 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageSendReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatStreamRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveRespVO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -105,11 +108,35 @@ public class AppTripChatMessageController {
                         reqVO.getConversationId()));
     }
 
+    @PostMapping("/itinerary/slot/resolve")
+    @Operation(summary = "并行补充旅行行程骨架节点")
+    public CommonResult<AppTripItinerarySlotResolveRespVO> resolveItinerarySlot(
+            @Valid @RequestBody AppTripItinerarySlotResolveReqVO reqVO) {
+        Long memberId = getLoginUserId();
+        AiChatConversationRespDTO conversation = aiChatApi.getConversation(reqVO.getConversationId(), memberId,
+                UserTypeEnum.MEMBER.getValue());
+        if (conversation == null) {
+            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+        }
+        TripItinerarySlotResult result = tripAgentService.resolveItinerarySlot(reqVO.getConversationId(), memberId,
+                reqVO.getMessageId(), reqVO.getDay(), reqVO.getSlot());
+        AppTripItinerarySlotResolveRespVO response = new AppTripItinerarySlotResolveRespVO();
+        response.setMessageId(result.getMessageId());
+        response.setDay(result.getDay());
+        response.setSlot(result.getSlot());
+        response.setStatus(result.getStatus());
+        response.setDetail(result.getDetail());
+        response.setCandidates(result.getCandidates());
+        response.setCitationIds(result.getCitationIds());
+        return success(response);
+    }
+
     private static AppTripChatStreamRespVO toStreamResponse(Long conversationId, TripAgentEvent event) {
         return new AppTripChatStreamRespVO().setEvent(event.getEvent()).setStage(event.getStage())
                 .setConversationId(conversationId).setMessageId(event.getMessageId()).setContent(event.getContent())
                 .setSequence(event.getSequence()).setItemType(event.getItemType()).setItem(event.getItem())
-                .setItinerary(event.getItinerary()).setMissingRequired(event.getMissingRequired());
+                .setItinerary(event.getItinerary()).setMissingRequired(event.getMissingRequired())
+                .setSuggestions(event.getSuggestions());
     }
 
 }

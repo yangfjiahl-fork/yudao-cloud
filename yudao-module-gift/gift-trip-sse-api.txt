@@ -1,50 +1,16 @@
-Gift 旅行规划 C 端 SSE API 接入说明
-====================================
+Gift 旅行规划 C 端接入 API
+==========================
 
-更新日期：2026-08-24（以当前后端实现为准）
+更新日期：2026-08-25
 
 一、通用约定
 ------------
 
 - API 前缀：`/app-api`。
-- 创建会话和发送消息均返回 `Content-Type: text/event-stream`。
-- 每一帧格式为 `data:{CommonResult JSON}\n\n`。业务事件在 `data.event`，不是 SSE 协议的 `event:` 行。
-- `conversationId`、`messageId` 由后端序列化为 JSON 字符串；前端必须以 `string` 保存，不能转为 JavaScript `number`。
-- 这是 POST SSE，请使用 `fetch + ReadableStream` 读取响应；浏览器原生 `EventSource` 仅支持 GET，不能直接使用。
-- 一帧正常业务数据的外层固定为 `{"code":0,"msg":"","data":{...}}`。前端先判断 `code`，再读取 `data.event`。
-- 客户端主动断开时，不保证会收到 `done`。应在取消请求时主动关闭 loading。
-
-二、接口
-----------
-
-1. 创建会话
-
-`POST /app-api/ai/chat/conversation/create`
-
-请求体可为空；也可传入已知行政区划：
-
-    {
-      "provinceId": "330000",
-      "cityId": "330100",
-      "districtId": "330106"
-    }
-
-当前只返回一帧 `created`，其中 `content` 是本地随机引导语，不是模型输出：
-
-    data:{"code":0,"msg":"","data":{"event":"created","conversationId":"1781604279872581776","messageId":"1781604279872581777","content":"告诉我目的地、出行日期和同行人数，我来帮你规划旅程。"}}
-
-拿到 `conversationId` 后保存会话，并将 `content` 作为第一条助手文本消息展示。
-
-2. 发送消息并接收流
-
-`POST /app-api/ai/chat/message/send-stream`
-
-    {
-      "conversationId":"1781604279872581776",
-      "content":"10 月去杭州玩 3 天，两个人，喜欢美食和人文"
-    }
-
-请求前会同步校验会话归属。会话不存在、没有权限或请求体校验失败时，接口可能直接返回普通错误响应，而不是包含 `data.event=error` 的 SSE 帧。
+- `conversationId`、`messageId` 及候选实体的 `id` 均按字符串保存，不能转为 JavaScript `number`。
+- 发送消息是 POST SSE。请使用 `fetch + ReadableStream`，不要使用仅支持 GET 的 `EventSource`。
+- SSE 每帧格式为：`data:{"code":0,"msg":"","data":{...}}\n\n`；业务事件读取 `data.event`。
+- SSE 建立前的参数、鉴权或权限错误可能返回普通 JSON 错误；SSE 已建立后的执行错误会以 `event=error` 返回。
 
 建议请求头：
 
@@ -53,68 +19,96 @@ Gift 旅行规划 C 端 SSE API 接入说明
     Authorization: Bearer <member access token>
     tenant-id: <tenant id>
 
-鉴权和租户头沿用现有 C 端请求封装。
-
-三、响应字段
+二、创建会话
 ------------
 
-所有字段均位于 `data`：
+`POST /app-api/ai/chat/conversation/create`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `event` | string | 必填。事件名，见下文。 |
-| `stage` | string | 可选。仅为 `INTAKE`、`RESEARCH`、`COMPOSER` 之一。 |
-| `conversationId` | string | 除创建会话的错误场景外均有。 |
-| `messageId` | string | 仅 `created`、`question`、`itinerary` 有。对应已持久化的聊天消息。 |
-| `content` | string | 可选。状态提示、追问、摘要增量或最终摘要。不可将状态提示当作事实。 |
-| `sequence` | integer | 仅 `assistant_delta`、`itinerary_item` 有；从 1 开始，在同一次 Composer 流中递增，两个事件共享同一序列。 |
-| `itemType` | string | `itinerary_item` 为 `daily_itinerary`；`tool_result` 为工具类型。 |
-| `item` | object | `itinerary_item` 为一天的预览卡片；`tool_result` 为 ToolPlan。 |
-| `itinerary` | object | 仅最终 `itinerary` 有；完整且已持久化的行程。 |
-| `missingRequired` | string[] | `question` 为缺失字段；最终 `itinerary` 固定为空数组。 |
-
-四、当前实际事件
-----------------
-
-1. `created`
-
-仅创建会话接口返回。前端建立会话并展示 `content`。
-
-2. `accepted`
-
-发送消息接口的第一帧，表示该次请求已进入 SSE 执行链。前端可开始 loading；不要创建助手气泡。
-
-    {"event":"accepted","conversationId":"1781604279872581776"}
-
-3. `stage`
-
-服务端进入状态机节点时发送。`content` 是可展示但不稳定的进度提示文案，前端可更新 loading 状态，不应存为聊天消息。
-
-    {"event":"stage","stage":"INTAKE","content":"正在提取本轮出行需求…"}
-
-当前可能的阶段：
-
-- `INTAKE`：流式调用需求抽取角色，合并 JSON patch 并由确定性代码校验状态。
-- `RESEARCH`：执行受控的酒店候选、景点与适用的当前天气查询，并读取未过期事实。模型不决定工具、供应商或查询参数。
-- `COMPOSER`：流式调用行程生成角色，解析其严格 JSON 输出。
-
-4. `tool_result`
-
-一个确定性检索节点完成后发送。它不是模型 Token，也不是正式聊天消息；前端可用 `content` 更新检索进度，并按 `item.type` / `item.status` 渲染结果状态。当前每轮最多 3 条。
+请求体可为空。创建时已知省市区可传：
 
     {
-      "event":"tool_result",
-      "stage":"RESEARCH",
-      "content":"已获取 3 个景点候选",
-      "itemType":"SCENIC_SPOT_QUERY",
-      "item":{"type":"SCENIC_SPOT_QUERY","status":"EXECUTED","entityId":"178...","detail":"已获取 3 个景点候选"}
+      "provinceId":"330000",
+      "cityId":"330100",
+      "districtId":"330106"
     }
 
-`status` 仅可能为：`EXECUTED`（本轮调用完成）、`CACHED`（使用未过期事实）、`SKIPPED`（当前能力不适用，例如未来日期不能用当前天气替代预报）、`FAILED`（外部服务暂不可用，Composer 会保持待确认）。酒店候选当前为固定占位数据，图片地址为空，不代表价格、库存或可预订性。
+成功后返回单帧 SSE：
 
-4. `question`
+    data:{"code":0,"msg":"","data":{
+      "event":"created",
+      "conversationId":"1781604279872581776",
+      "messageId":"1781604279872581777",
+      "content":"告诉我目的地、出行日期和同行人数，我来帮你规划旅程。"
+    }}
 
-最小必填信息不足时发送。它是一条已写入聊天记录的正式助手消息：用 `messageId` 创建或确认气泡，直接展示 `content`。
+前端保存 `conversationId`，并将 `content` 作为第一条助手文本展示。
+
+三、发送消息并接收流
+----------------------
+
+`POST /app-api/ai/chat/message/send-stream`
+
+    {
+      "conversationId":"1781604279872581776",
+      "content":"10 月去杭州玩 3 天，两个人，喜欢美食和人文"
+    }
+
+用户发言由前端先乐观插入；本接口流只处理助手侧的 loading、追问和行程结果。
+
+四、SSE 事件
+------------
+
+所有字段均位于外层响应的 `data` 内。
+
+| 事件 | 关键字段 | 前端处理 |
+| --- | --- | --- |
+| `accepted` | `conversationId` | 创建本轮请求状态，开始 loading。 |
+| `stage` | `stage=INTAKE|COMPOSER`、`content` | 更新 loading 文案；不写入聊天记录。 |
+| `intake_completed` | `content`、`missingRequired` | 本轮需求已完成整理与校验；展示简短摘要，不写入聊天记录。 |
+| `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 插入正式助手消息，并展示可选胶囊；点击胶囊后发送下一轮消息。 |
+| `assistant_start` | `stage=COMPOSER` | 创建临时的行程摘要/骨架区域。 |
+| `assistant_delta` | `content`、`sequence` | 追加到临时摘要，实现逐字展示；不能单独成为聊天消息。 |
+| `itinerary_day_started` | `sequence`、`item.day` | 已开始流式生成第 N 天；显示“正在规划第 N 天”，不创建日程卡。 |
+| `itinerary_item` | `item`、`sequence` | 按 `item.day` 更新临时的单日预览；不能简单追加。 |
+| `assistant_end` | - | 停止摘要光标，继续等待最终骨架。 |
+| `itinerary_skeleton` | `messageId`、`content`、`itinerary` | 用完整骨架替换临时预览，插入正式助手行程消息，并发加载可见节点。 |
+| `done` | - | 结束本轮 loading，清理临时请求状态。 |
+| `error` | `content` | 显示错误并结束 loading；该分支后不会再有 `done`。 |
+
+`stage` 只可能为：
+
+- `INTAKE`：正在理解并补全出行需求。
+- `COMPOSER`：正在生成行程骨架。
+
+五、事件顺序
+------------
+
+信息不完整时：
+
+    accepted -> stage(INTAKE) -> intake_completed -> question -> done
+
+首次信息已齐、等待用户确认时：
+
+    accepted -> stage(INTAKE) -> intake_completed -> question(missingRequired=[]) -> done
+
+用户点击“直接生成行程”或明确要求生成后：
+
+    accepted -> stage(INTAKE) -> intake_completed -> stage(COMPOSER) -> assistant_start
+             -> (assistant_delta | itinerary_day_started | itinerary_item)*
+             -> assistant_end -> itinerary_skeleton -> done
+
+`assistant_delta`、`itinerary_day_started` 和 `itinerary_item` 的先后取决于流内容；前端不得依赖数量或固定顺序。`itinerary_day_started` 只表示已开始生成，最终以 `itinerary_item` 和 `itinerary_skeleton` 为准。
+
+`question.suggestions` 最多 5 项，字段含义如下：
+
+- `label`：胶囊显示文字。
+- `content`：用户点击后，作为下一轮 `send-stream.content` 原样提交。
+
+胶囊是辅助输入，不替代 `question.content` 中的关键追问。用户仍可自由输入；点击后按正常用户消息展示，不需要额外接口。
+
+当 `missingRequired` 为空时，`question` 表示出行信息已经齐全，等待用户选择“直接生成行程”或继续补充；前端应正常展示该助手消息与胶囊，不能当作错误或空结果。
+
+`question` 示例：
 
     {
       "event":"question",
@@ -122,148 +116,154 @@ Gift 旅行规划 C 端 SSE API 接入说明
       "conversationId":"1781604279872581776",
       "messageId":"1781604279872581780",
       "content":"你的出行日期，或计划玩几天？",
-      "missingRequired":["date_or_days"]
+      "missingRequired":["date_or_days"],
+      "suggestions":[
+        {"label":"玩 3 天","content":"计划玩3天"},
+        {"label":"2 人出行","content":"总共2人出行"},
+        {"label":"人均 ¥1,500","content":"人均预算1500元"}
+      ]
     }
 
-当前缺失字段只会是：
-
-- `destination`：目的地。
-- `date_or_days`：完整日期范围或出行天数至少提供一个。
-
-注意：Intake 的模型输出是内部 JSON，不会以逐字 `assistant_delta` 返回；因此追问只会在 Intake 完成校验后以一帧 `question` 到达。
-
-5. `assistant_start`
-
-Composer 已开始生成最终方案。此事件当前没有 `content` 和 `sequence`。前端创建一个“行程摘要生成中”的临时区域即可。
-
-6. `assistant_delta`
-
-Composer 严格 JSON 的 `summary` 字段增量。按接收顺序或 `sequence` 将 `content` 追加到同一临时摘要区域，才能逐字显示；不要把每个 delta 保存成单独气泡。
+`itinerary_skeleton` 示例：
 
     {
-      "event":"assistant_delta",
-      "stage":"COMPOSER",
-      "content":"杭州三日",
-      "sequence":1
-    }
-
-`assistant_delta` 只代表摘要，不代表整份 JSON，也不包含当天活动、交通或预约字段。
-
-7. `itinerary_item`
-
-Composer 的 `daily_itinerary` 数组中某个对象已经闭合、能被解析时立即发送。前端可据此渐进渲染或更新“第 N 天”卡片。
-
-    {
-      "event":"itinerary_item",
-      "stage":"COMPOSER",
-      "sequence":7,
-      "itemType":"daily_itinerary",
-      "item":{
-        "day":1,
-        "title":"西湖与老城区",
-        "activities":["上午游览西湖","午餐地点待确认"]
-      }
-    }
-
-此事件是预览：最终必须以 `itinerary.daily_itinerary` 整体替换或校正卡片，不能把预览与最终数组简单追加。
-
-8. `assistant_end`
-
-Composer 输出已完成并通过后端行程校验、持久化；此事件无 `content`、`messageId`、`sequence`。前端停止摘要的流式光标，但不要关闭整轮 loading，仍需等待最终 `itinerary`。
-
-9. `itinerary`
-
-完整行程已保存，并已创建一条正式助手聊天消息。`content` 为 `summary`，`messageId` 对应该摘要消息；用 `itinerary` 替换临时摘要和全部日程预览。
-
-    {
-      "event":"itinerary",
+      "event":"itinerary_skeleton",
       "stage":"COMPOSER",
       "conversationId":"1781604279872581776",
       "messageId":"1781604279872581790",
       "content":"杭州三日人文美食之旅",
+      "missingRequired":[],
       "itinerary":{
+        "version":1,
         "summary":"杭州三日人文美食之旅",
-        "daily_itinerary":[{"day":1,"title":"西湖","activities":["..."]}],
-        "transport":["实时班次待确认"],
-        "booking_actions":["预约规则待确认"],
-        "warnings":["天气和营业信息待确认"],
+        "daily_itinerary":[
+          {
+            "day":1,
+            "title":"初识杭州",
+            "slots":[
+              {"slot":"MORNING","label":"上午","skeleton":"城市核心区域慢游","status":"PENDING"},
+              {"slot":"LUNCH","label":"午餐","skeleton":"安排本地风味午餐","status":"PENDING"},
+              {"slot":"AFTERNOON","label":"下午","skeleton":"人文景点与街区活动","status":"PENDING"},
+              {"slot":"DINNER","label":"晚餐","skeleton":"晚餐与休息安排","status":"PENDING"},
+              {"slot":"EVENING","label":"晚上","skeleton":"轻松夜间活动","status":"PENDING"},
+              {"slot":"ACCOMMODATION","label":"住宿","skeleton":"住宿候选待补充","status":"PENDING"}
+            ]
+          }
+        ],
+        "transport":{
+          "arrival":{"status":"PENDING","skeleton":"抵达交通待确认"},
+          "departure":{"status":"PENDING","skeleton":"返程交通待确认"}
+        },
+        "booking_actions":[],
+        "warnings":[],
         "citation_ids":[]
-      },
-      "missingRequired":[]
+      }
     }
 
-10. `done`
+六、并行补充行程节点
+--------------------
 
-本轮正常结束。关闭 loading、清除临时状态。`done` 本身不携带内容或 sequence。
+收到 `itinerary_skeleton` 后，前端可先展示文字骨架，再对当前可见卡片并行请求补充信息。MVP 中每个半天节点最多返回 2 个地点；它们是同一段行程的推荐组合，不是要求用户二选一。
 
-11. `error`
+`POST /app-api/ai/chat/message/itinerary/slot/resolve`
 
-仅代表 SSE 已建立后的异步执行失败，例如模型调用或行程 JSON 校验失败。展示 `content`，关闭 loading；此分支后不会再发送 `done`。
+日内节点：
 
-    {"event":"error","conversationId":"1781604279872581776","content":"暂时无法生成旅行方案，请稍后重试。"}
+    {
+      "conversationId":"1781604279872581776",
+      "messageId":"1781604279872581790",
+      "day":1,
+      "slot":"MORNING"
+    }
 
-五、事件顺序
-------------
+首尾交通：
 
-信息不足：
+    {
+      "conversationId":"1781604279872581776",
+      "messageId":"1781604279872581790",
+      "day":0,
+      "slot":"ARRIVAL"
+    }
 
-    accepted -> stage(INTAKE) -> question -> done
+支持的节点：
 
-生成行程：
+- 日内：`MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`EVENING`、`ACCOMMODATION`。
+- 交通：`ARRIVAL`、`DEPARTURE`，`day` 必须为 `0`。
 
-    accepted -> stage(INTAKE) -> stage(RESEARCH) -> stage(COMPOSER)
-             -> tool_result* -> assistant_start -> (assistant_delta | itinerary_item)*
-             -> assistant_end -> itinerary -> done
+该接口只能请求当前行程骨架。建议并发上限为 4，离屏节点延迟加载。
 
-- `assistant_delta` 和 `itinerary_item` 的先后取决于 Composer JSON 的实际输出，不能假设所有 delta 都先于所有卡片。
-- 前端不能依赖增量数量；应以 `itinerary` 作为最终成功结果。
-- 不会发送泛化的 `progress` 事件。`tool_result` 是确定性工具节点的唯一进度结果；模型慢调用仍通过 `assistant_delta` 展示。
-- 最终 `daily_itinerary[].activities[]` 兼容字符串，也可为实体引用对象：`{"entityId":"...","type":"POI|HOTEL|RESTAURANT","title":"...","description":"..."}`。前端按对象的 `entityId` 关联候选卡；后端会拒绝不存在的实体编号。
+成功响应：
 
-六、流读取要求
+    {
+      "code":0,
+      "msg":"",
+      "data":{
+        "messageId":"1781604279872581790",
+        "day":1,
+        "slot":"MORNING",
+        "status":"RESOLVED",
+        "detail":"已获取 2 个景点候选",
+        "candidates":[
+          {
+            "id":"178...",
+            "type":"POI",
+            "name":"杭州西湖风景名胜区",
+            "provider":"gaode",
+            "externalId":"B0...",
+            "metadata":{"address":"...","imageUrl":"..."}
+          }
+        ],
+        "citationIds":["178..."]
+      }
+    }
+
+节点状态：
+
+- `PENDING`：暂无可展示的补充结果。保留骨架并显示“待确认”。
+- `RESOLVED`：有可展示候选；日内景点节点最多 2 个，按返回顺序展示为同一时段的推荐地点。候选不表示已预订或最终确定。
+
+收到响应后，按 `(messageId, day, slot)` 覆盖对应卡片的 `status`、`detail`、`candidates`、`citationIds`。图片只在 `candidate.metadata.imageUrl` 非空时加载，失败时显示占位图。
+
+七、修改已生成行程
+------------------
+
+首次信息齐全后，前端应等待用户点击“直接生成行程”或用自然语言明确要求生成。生成过计划后，修改仍使用“发送消息”接口，前端只传自然语言，无需也不能传 Agent、行程版本或节点操作：
+
+    {
+      "conversationId":"1781604279872581776",
+      "content":"第 2 天下午改成轻松的室内活动，晚餐保留"
+    }
+
+有效修改会生成一个新版本，返回事件序列与首次生成骨架完全一致；最终会收到新的 `itinerary_skeleton`、新的 `messageId` 和递增的 `itinerary.version`。
+
+前端处理：
+
+1. 将本轮用户修改作为普通用户消息展示。
+2. 收到新的 `itinerary_skeleton` 后，用其整体替换“当前行程”视图；`itinerary.version` 仅用于展示或标记历史版本，不作为下一次请求参数。
+3. 使用新的 `messageId` 重新加载可见节点；不要复用旧行程的节点请求和结果。
+4. 历史聊天中旧行程仍按旧消息和旧版本展示，不需要被替换。
+
+八、历史消息恢复
+----------------
+
+`GET /app-api/ai/chat/message/list-by-conversation-id?conversationId=...`
+
+正常聊天消息按 `content` 显示。助手行程消息会带可选 `itinerary` 字段：
+
+    {
+      "id":"1781604279872581790",
+      "type":"ASSISTANT",
+      "content":"杭州三日人文美食之旅",
+      "itinerary":{"version":2,"summary":"杭州三日人文美食之旅","daily_itinerary":[]}
+    }
+
+有 `itinerary` 时按行程卡片渲染；没有时按普通文本消息渲染。页面恢复历史时不需要重放旧 SSE，也不应再次请求旧行程节点。
+
+九、流读取要点
 --------------
 
-1. 使用 `response.body.getReader()` 与 `TextDecoder` 的 stream 模式读取 UTF-8 数据。
-2. 缓存未完成文本，按空行分割 SSE 帧；同时兼容 `\n\n` 与 `\r\n\r\n`。
-3. 一个网络 chunk 不等于一帧 SSE：一帧可能跨多个 chunk，多帧也可能合并到同一个 chunk。
-4. 对一帧中的 `data:` 行取出 JSON 后再 `JSON.parse`；先处理外层 `code`，再分发 `data.event`。
-5. 页面卸载或用户取消时使用 `AbortController` 中止 fetch，并清理 loading。
-
-七、推荐前端状态处理
---------------------
-
-1. 收到 `accepted`：创建本轮 request 状态并显示 loading。
-2. 收到 `stage`：更新 loading 文案；不落聊天记录。
-3. 收到 `tool_result`：更新本轮检索进度或候选卡片；不落聊天记录，也不可据 `FAILED` 推断事实。
-4. 收到 `question`：插入正式助手消息，结束本轮。
-5. 收到 `assistant_start`：创建内存中的临时 summary/card 状态。
-6. 收到 `assistant_delta`：追加 `content` 到临时 summary。
-7. 收到 `itinerary_item`：按 `item.day` upsert 临时日程卡；不要重复插入。
-8. 收到 `itinerary`：以完整 `itinerary` 替换临时 summary 与日程卡，并将 `messageId` 对应的 `content` 作为正式聊天消息。
-9. 收到 `done` 或 `error`：结束 loading，清理本轮临时 request 状态。
-
-八、持久化与重连限制
---------------------
-
-- `gift_trip_plan` 是跨轮 TripState 和缺失字段的唯一状态来源。
-- `gift_trip_run` 记录 Intake、Research、Composer 的输入/输出快照、模型、token、耗时和失败信息。
-- `gift_trip_itinerary` 保存最终完整 JSON；`itinerary_item` 不单独持久化。
-- `gift_trip_itinerary.message_id` 逻辑关联 `ai_chat_message.id`；一条最终行程对应一条助手消息。
-- `GET /app-api/ai/chat/message/list-by-conversation-id?conversationId=...` 是唯一的 C 端历史恢复接口。它先读取消息，再批量读取关联行程；行程助手消息会额外携带可选字段 `itinerary`，前端可直接恢复完整卡片。例如：
-
-      {
-        "id":"1781604279872581790",
-        "type":"ASSISTANT",
-        "content":"杭州三日人文美食之旅",
-        "itinerary":{"summary":"杭州三日人文美食之旅","daily_itinerary":[]}
-      }
-
-- 没有 `itinerary` 的消息按普通文本渲染。`gift_trip_run` 只用于运行审计，不参与 C 端消息恢复。
-
-九、Chat Role 配置
--------------------
-
-- `trip.agent.intakeRoleId`：需求抽取角色，仅后端内部调用。
-- `trip.agent.composerRoleId`：行程生成角色，同时用于创建可见会话。
-- 两个角色必须是当前租户启用的 MEMBER Chat Role，并关联可用模型。
-- Chat Role ID 不会出现在 C 端请求或 SSE 响应中。
+1. 用 `response.body.getReader()` 和 `TextDecoder` 的 stream 模式读取 UTF-8。
+2. 缓存未完成文本，按空行切分 SSE 帧；兼容 `\n\n` 和 `\r\n\r\n`。
+3. 一个网络 chunk 不等于一帧 SSE：一帧可能跨多个 chunk，多帧也可能合并在同一 chunk。
+4. 解析每帧时先判断外层 `code`，再分发 `data.event`。
+5. 页面卸载或用户取消时，用 `AbortController` 中止 fetch，并清理本轮 loading。

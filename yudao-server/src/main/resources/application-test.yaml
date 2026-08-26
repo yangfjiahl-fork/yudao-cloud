@@ -143,8 +143,8 @@ wx: # 参见 https://github.com/Wechat-Group/WxJava/blob/develop/spring-boot-sta
       key-prefix: wx # Redis Key 的前缀
       http-client-type: HttpComponents # 采用 HttpComponents（HttpClient 5）请求微信公众号平台
   miniapp: # 小程序配置（必填），参见 https://github.com/Wechat-Group/WxJava/blob/develop/spring-boot-starters/wx-java-miniapp-spring-boot-starter/README.md 文档
-    appid: wxdc43f5d2f533f426
-    secret: 9c734cbb104e1a1ddb35fad1e1e40dca
+    appid: wxcbf8de320f0b2aad
+    secret: dc256c6007d107018f3fd00dd8117a2f
     config-storage:
       type: RedisTemplate # 采用 RedisTemplate 操作 Redis，会自动从 Spring 中获取
       key-prefix: wa # Redis Key 的前缀
