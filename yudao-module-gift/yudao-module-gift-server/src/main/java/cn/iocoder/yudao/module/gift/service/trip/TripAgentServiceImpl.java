@@ -6,11 +6,13 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tracer.core.util.TracerFrameworkUtils;
 import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
+import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationUpdateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
@@ -92,21 +94,32 @@ public class TripAgentServiceImpl implements TripAgentService {
     private Tracer tracer;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void createTrip(Long conversationId, Long memberId) {
+        createTrip(conversationId, memberId, null, null, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String createTrip(Long conversationId, Long memberId, Long provinceId, Long cityId, Long districtId) {
         TripPlanDO existing = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (existing != null) {
-            return;
+            return StrUtil.trim(ObjUtil.toString(TripAgentFormatUtils.parseMap(existing.getStateJson()).get("departure")));
         }
         TripPlanDO trip = new TripPlanDO();
         trip.setConversationId(conversationId);
         trip.setMemberId(memberId);
-        trip.setStateJson(JsonUtils.toJsonString(new LinkedHashMap<>()));
-        trip.setMissingRequiredJson(JsonUtils.toJsonString(List.of("destination", "date_or_days")));
+        Map<String, Object> state = new LinkedHashMap<>();
+        String defaultDeparture = getDefaultDeparture(provinceId, cityId, districtId);
+        if (StrUtil.isNotBlank(defaultDeparture)) {
+            state.put("departure", defaultDeparture);
+        }
+        trip.setStateJson(JsonUtils.toJsonString(state));
+        trip.setMissingRequiredJson(JsonUtils.toJsonString(validateState(state)));
         trip.setStatus(STATUS_ACTIVE);
         tripPlanMapper.insert(trip);
         log.info("[createTrip][tripId({}) conversationId({}) memberId({}) 初始化成功]",
                 trip.getId(), conversationId, memberId);
+        return defaultDeparture;
     }
 
     @Override
@@ -173,11 +186,11 @@ public class TripAgentServiceImpl implements TripAgentService {
             return result;
         }
 
-        eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在生成行程骨架…"));
+        eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在生成行程框架…"));
         eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
         TripAgentStreamParser streamParser = new TripAgentStreamParser(eventConsumer);
         AiChatGenerateRespDTO composerResponse = generateStream(conversationId, memberId,
-                buildSkeletonInstruction(state, getCurrentItinerary(trip)),
+                buildComposerContext(state, getCurrentItinerary(trip)),
                 "COMPOSER", trip.getId(), promptVariables, streamParser::append);
         Map<String, Object> itinerary = parseItinerarySkeleton(composerResponse.getContent());
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
@@ -196,6 +209,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         initializeItinerarySlots(itineraryDO, itinerary);
         trip.setCurrentItineraryId(itineraryDO.getId());
         tripPlanMapper.updateById(trip);
+        updateConversationTitle(conversationId, memberId, state);
 
         log.info("[handleMessage][tripId({}) 行程 itineraryId({}) version({}) messageId({}) 引用数量({}) 已生成]",
                 trip.getId(), itineraryDO.getId(), version, assistant.getId(), ((List<?>) itinerary.get("citation_ids")).size());
@@ -261,7 +275,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 "messageId", String.valueOf(messageId), "day", day, "slot", slot)));
         try {
             TripResearchExecutor.SlotResearchResult researchResult = tripResearchExecutor.resolveSlot(trip.getId(), state, slot);
-            List<Map<String, Object>> candidates = researchResult.candidates();
+            List<Map<String, Object>> candidates = bindCandidatesToSlot(itinerarySlot, researchResult.candidates());
             itinerarySlot.setStatus(researchResult.status());
             itinerarySlot.setDetail(researchResult.detail());
             itinerarySlot.setCandidatesJson(JsonUtils.toJsonString(candidates));
@@ -383,18 +397,24 @@ public class TripAgentServiceImpl implements TripAgentService {
         return areaId != null ? areaApi.getAreaName(areaId).getCheckedData() : "";
     }
 
-    private static String buildSkeletonInstruction(Map<String, Object> state, Map<String, Object> currentItinerary) {
+    private String getDefaultDeparture(Long provinceId, Long cityId, Long districtId) {
+        List<String> names = new ArrayList<>();
+        for (Long areaId : new Long[]{provinceId, cityId, districtId}) {
+            if (areaId == null) {
+                continue;
+            }
+            String name = getAreaName(areaId);
+            if (StrUtil.isNotBlank(name) && !names.contains(name)) {
+                names.add(name);
+            }
+        }
+        return String.join("", names);
+    }
+
+    private static String buildComposerContext(Map<String, Object> state, Map<String, Object> currentItinerary) {
         return "TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
                 + "CurrentItinerary（首次生成时为空；有值时仅作为上一版参考）：\n"
-                + JsonUtils.toJsonString(currentItinerary) + "\n\n"
-                + "若 TripState.itineraryOverrides 非空，必须将其中每条 SET/REMOVE 意图应用到新行程；未涉及的安排保持合理延续。"
-                + "只生成可立即展示的 ItinerarySkeleton，不调用工具，不等待或引用天气、景点、酒店、餐饮、交通等外部数据。"
-                + "每一天必须有 slots 数组，按 MORNING、LUNCH、AFTERNOON、DINNER、EVENING、ACCOMMODATION 顺序。"
-                + "每个 slot 仅含 slot、label、skeleton、status，status 固定 PENDING；skeleton 是简短的高层安排，不得写实时事实或具体供应商结论。"
-                + "transport 必须是对象，含 arrival 和 departure；每项仅含 status=PENDING、skeleton。"
-                + "输出 JSON：{summary,daily_itinerary:[{day,title,slots:[{slot,label,skeleton,status}]}],"
-                + "transport:{arrival:{status,skeleton},departure:{status,skeleton}},booking_actions:[],warnings:[],citation_ids:[]}。"
-                + "citation_ids 必须为空数组。";
+                + JsonUtils.toJsonString(currentItinerary);
     }
 
     private Map<String, Object> getCurrentItinerary(TripPlanDO trip) {
@@ -417,6 +437,20 @@ public class TripAgentServiceImpl implements TripAgentService {
         req.setUserType(UserTypeEnum.MEMBER.getValue());
         req.setContent(content);
         return assistant ? aiChatApi.createAssistantMessage(req) : aiChatApi.createUserMessage(req);
+    }
+
+    private void updateConversationTitle(Long conversationId, Long memberId, Map<String, Object> state) {
+        String startDate = StrUtil.trim(ObjUtil.toString(state.get("startDate")));
+        String destination = StrUtil.trim(ObjUtil.toString(state.get("destination")));
+        if (StrUtil.isBlank(startDate) || StrUtil.isBlank(destination)) {
+            return;
+        }
+        AiChatConversationUpdateReqDTO updateReq = new AiChatConversationUpdateReqDTO();
+        updateReq.setId(conversationId);
+        updateReq.setUserId(memberId);
+        updateReq.setUserType(UserTypeEnum.MEMBER.getValue());
+        updateReq.setTitle(startDate + " " + destination);
+        aiChatApi.updateConversation(updateReq);
     }
 
     @SuppressWarnings("unchecked")
@@ -467,27 +501,39 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static List<Map<String, String>> buildQuestionSuggestions(Map<String, Object> state, List<String> missingRequired) {
         List<Map<String, String>> suggestions = new ArrayList<>();
+        if (missingRequired.contains("departure")) {
+            addSuggestion(suggestions, "从上海出发", "我从上海出发");
+        }
         if (missingRequired.contains("destination")) {
             addSuggestion(suggestions, "去杭州", "目的地是杭州");
-            addSuggestion(suggestions, "去成都", "目的地是成都");
         }
-        if (missingRequired.contains("date_or_days")) {
+        if (missingRequired.contains("start_date")) {
+            LocalDate suggestedDate = LocalDate.now().plusWeeks(2);
+            addSuggestion(suggestions, suggestedDate.getMonthValue() + " 月 " + suggestedDate.getDayOfMonth() + " 日出发",
+                    suggestedDate + "出发");
+        }
+        if (missingRequired.contains("days")) {
             addSuggestion(suggestions, "玩 3 天", "计划玩3天");
-            addSuggestion(suggestions, "玩 5 天", "计划玩5天");
         }
-        if (MapUtil.getInt(state, "travelerCount") == null) {
+        if (missingRequired.contains("traveler_count")) {
             addSuggestion(suggestions, "2 人出行", "总共2人出行");
-            addSuggestion(suggestions, "3 人出行", "总共3人出行");
         }
-        if (StrUtil.isBlank(ObjUtil.toString(state.get("budget")))) {
+        if (missingRequired.contains("budget")) {
             addSuggestion(suggestions, "人均 ¥1,500", "人均预算1500元");
-            addSuggestion(suggestions, "人均 ¥3,000", "人均预算3000元");
+        }
+        if (!hasValues(state.get("travelerProfile"))) {
+            addSuggestion(suggestions, "2 大 1 小", "总共3人出行，其中2位成人、1位儿童");
         }
         if (!hasValues(state.get("interests"))) {
             addSuggestion(suggestions, "美食与人文", "偏好美食和人文");
-            addSuggestion(suggestions, "自然风景", "偏好自然风景");
         }
-        return suggestions.stream().limit(5).toList();
+        if (StrUtil.isBlank(ObjUtil.toString(state.get("pace")))) {
+            addSuggestion(suggestions, "轻松慢游", "希望行程节奏轻松，不要太赶");
+        }
+        if (!hasValues(state.get("constraints"))) {
+            addSuggestion(suggestions, "亲子友好", "希望行程亲子友好");
+        }
+        return suggestions.stream().limit(10).toList();
     }
 
     private static List<Map<String, String>> buildGenerationSuggestions(Map<String, Object> state,
@@ -587,6 +633,9 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static List<String> validateState(Map<String, Object> state) {
         List<String> missing = new ArrayList<>();
+        if (StrUtil.isBlank(ObjUtil.toString(state.get("departure")))) {
+            missing.add("departure");
+        }
         if (StrUtil.isBlank(ObjUtil.toString(state.get("destination")))) {
             missing.add("destination");
         }
@@ -597,24 +646,41 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         String startDate = ObjUtil.toString(state.get("startDate"));
         String endDate = ObjUtil.toString(state.get("endDate"));
+        LocalDate parsedStartDate = null;
         try {
-            if (StrUtil.isNotBlank(startDate) && StrUtil.isNotBlank(endDate)
-                    && LocalDate.parse(endDate).isBefore(LocalDate.parse(startDate))) {
+            if (StrUtil.isNotBlank(startDate)) {
+                parsedStartDate = LocalDate.parse(startDate);
+            }
+        } catch (RuntimeException e) {
+            state.remove("startDate");
+            startDate = null;
+        }
+        try {
+            if (StrUtil.isNotBlank(endDate) && (parsedStartDate == null
+                    || LocalDate.parse(endDate).isBefore(parsedStartDate))) {
                 state.remove("endDate");
                 endDate = null;
             }
         } catch (RuntimeException e) {
-            state.remove("startDate");
             state.remove("endDate");
-            startDate = null;
             endDate = null;
         }
-        if (days == null && StrUtil.isBlank(startDate) && StrUtil.isBlank(endDate)) {
-            missing.add("date_or_days");
+        if (StrUtil.isBlank(startDate)) {
+            missing.add("start_date");
+        }
+        if (days == null) {
+            missing.add("days");
         }
         Integer travelers = MapUtil.getInt(state, "travelerCount");
         if (travelers != null && (travelers < 1 || travelers > 20)) {
             state.remove("travelerCount");
+            travelers = null;
+        }
+        if (travelers == null) {
+            missing.add("traveler_count");
+        }
+        if (StrUtil.isBlank(ObjUtil.toString(state.get("budget")))) {
+            missing.add("budget");
         }
         return missing;
     }
@@ -624,10 +690,12 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (StrUtil.isNotBlank(value)) {
             return value;
         }
-        if (missing.contains("destination")) {
-            return "你想去哪里旅行？";
-        }
-        return "你的出行日期，或计划玩几天？";
+        if (missing.contains("departure")) return "你从哪里出发？";
+        if (missing.contains("destination")) return "你想去哪里旅行？";
+        if (missing.contains("start_date")) return "你的出发日期是？";
+        if (missing.contains("days")) return "这次计划玩几天？";
+        if (missing.contains("traveler_count")) return "这次一共几个人出行？";
+        return "你的预算大约是多少？";
     }
 
     private static String buildIntakeCompletedContent(Map<String, Object> state, List<String> missingRequired) {
@@ -756,7 +824,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             return;
         }
         TripItinerarySlotDO itinerarySlot = new TripItinerarySlotDO();
-        itinerarySlot.setTenantId(itinerary.getTenantId());
+        itinerarySlot.setTenantId(TenantContextHolder.getRequiredTenantId());
         itinerarySlot.setItineraryId(itinerary.getId());
         itinerarySlot.setDay(day);
         itinerarySlot.setSlot(slot);
@@ -772,16 +840,18 @@ public class TripAgentServiceImpl implements TripAgentService {
             detail = "节点正在补充中";
         }
         return new TripItinerarySlotResult().setMessageId(messageId).setDay(slot.getDay()).setSlot(slot.getSlot())
-                .setStatus(slot.getStatus()).setDetail(detail).setCandidates(parseCandidates(slot.getCandidatesJson()))
+                .setSlotId(slot.getId()).setStatus(slot.getStatus()).setDetail(detail)
+                .setCandidates(bindCandidatesToSlot(slot, parseCandidates(slot.getCandidatesJson())))
                 .setCitationIds(parseCitationIds(slot.getCitationIdsJson()));
     }
 
     private static void mergeResolvedSlot(Map<String, Object> itinerary, TripItinerarySlotDO slot) {
         try {
             Map<String, Object> target = findSlot(itinerary, slot.getDay(), slot.getSlot());
+            target.put("slotId", String.valueOf(slot.getId()));
             target.put("status", slot.getStatus());
             target.put("detail", slot.getDetail());
-            target.put("candidates", parseCandidates(slot.getCandidatesJson()));
+            target.put("candidates", bindCandidatesToSlot(slot, parseCandidates(slot.getCandidatesJson())));
             target.put("citationIds", parseCitationIds(slot.getCitationIdsJson()));
         } catch (IllegalArgumentException e) {
             log.warn("[mergeResolvedSlot][itineraryId({}) day({}) slot({}) 节点不存在]",
@@ -796,6 +866,29 @@ public class TripAgentServiceImpl implements TripAgentService {
         List<Map<String, Object>> candidates = JsonUtils.parseObjectQuietly(candidatesJson,
                 new TypeReference<List<Map<String, Object>>>() { });
         return candidates != null ? candidates : List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> bindCandidatesToSlot(TripItinerarySlotDO slot,
+                                                                    List<Map<String, Object>> candidates) {
+        if (CollUtil.isEmpty(candidates)) {
+            return List.of();
+        }
+        String slotId = String.valueOf(slot.getId());
+        List<Map<String, Object>> result = new ArrayList<>(candidates.size());
+        for (Map<String, Object> candidate : candidates) {
+            Map<String, Object> bound = new LinkedHashMap<>(candidate);
+            String externalId = StrUtil.blankToDefault(ObjUtil.toString(bound.get("externalId")),
+                    ObjUtil.toString(bound.get("id")));
+            bound.put("externalId", externalId);
+            bound.put("id", "slot-" + slotId + "-" + externalId);
+            Map<String, Object> metadata = bound.get("metadata") instanceof Map<?, ?> rawMetadata
+                    ? new LinkedHashMap<>((Map<String, Object>) rawMetadata) : new LinkedHashMap<>();
+            metadata.put("slotId", slotId);
+            bound.put("metadata", metadata);
+            result.add(bound);
+        }
+        return result;
     }
 
     private static List<String> parseCitationIds(String citationIdsJson) {

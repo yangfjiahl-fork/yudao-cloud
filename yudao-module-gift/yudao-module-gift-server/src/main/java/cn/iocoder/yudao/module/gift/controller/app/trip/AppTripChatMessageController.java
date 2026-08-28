@@ -78,7 +78,7 @@ public class AppTripChatMessageController {
         log.info("[sendMessageStream][conversationId({}) memberId({}) tenantId({}) 创建 SSE 流]",
                 reqVO.getConversationId(), memberId, tenantId);
         CommonResult<AppTripChatStreamRespVO> accepted = success(new AppTripChatStreamRespVO().setEvent("accepted")
-                .setConversationId(reqVO.getConversationId()));
+                .setConversationId(reqVO.getConversationId()).setContent("正在分析您的需求…"));
         Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> {
             try {
                 TenantUtils.execute(tenantId, () -> {
@@ -122,6 +122,7 @@ public class AppTripChatMessageController {
                 reqVO.getMessageId(), reqVO.getDay(), reqVO.getSlot());
         AppTripItinerarySlotResolveRespVO response = new AppTripItinerarySlotResolveRespVO();
         response.setMessageId(result.getMessageId());
+        response.setSlotId(result.getSlotId());
         response.setDay(result.getDay());
         response.setSlot(result.getSlot());
         response.setStatus(result.getStatus());

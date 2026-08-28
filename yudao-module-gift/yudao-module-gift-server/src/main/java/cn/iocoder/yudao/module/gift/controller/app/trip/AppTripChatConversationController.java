@@ -34,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -47,13 +46,7 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 public class AppTripChatConversationController {
 
     private static final String ENTRY_ROLE_ID_CONFIG_KEY = "trip.agent.composerRoleId";
-    private static final String[] TRAVEL_GUIDE_MESSAGES = {
-            "告诉我目的地、出行日期和同行人数，我来帮你规划旅程。",
-            "还没想好去哪里也没关系，告诉我出发地、时间和偏好即可。",
-            "说说你想玩几天、预算多少，我来帮你安排一段舒心的旅行。",
-            "想看风景、吃美食还是轻松度假？告诉我你的旅行期待。",
-            "把出发城市、旅行天数和同行人告诉我，我们开始定制行程吧。"
-    };
+    private static final String TRAVEL_GUIDE_MESSAGE = "请告诉我出发地、目的地、出发日期、旅行天数、同行人数和预算，我来帮你规划旅程。";
 
     @Resource
     private AiChatApi aiChatApi;
@@ -79,8 +72,12 @@ public class AppTripChatConversationController {
             createReqDTO.setDistrictId(reqVO.getDistrictId());
         }
         Long conversationId = aiChatApi.createConversation(createReqDTO);
-        tripAgentService.createTrip(conversationId, userId);
-        String content = TRAVEL_GUIDE_MESSAGES[ThreadLocalRandom.current().nextInt(TRAVEL_GUIDE_MESSAGES.length)];
+        String defaultDeparture = tripAgentService.createTrip(conversationId, userId,
+                reqVO != null ? reqVO.getProvinceId() : null, reqVO != null ? reqVO.getCityId() : null,
+                reqVO != null ? reqVO.getDistrictId() : null);
+        String content = StrUtil.isNotBlank(defaultDeparture)
+                ? "已根据你所在位置暂定从" + defaultDeparture + "出发；如需修改可直接告诉我。" + TRAVEL_GUIDE_MESSAGE
+                : TRAVEL_GUIDE_MESSAGE;
         AiChatMessageCreateAssistantReqDTO messageReqDTO = new AiChatMessageCreateAssistantReqDTO();
         messageReqDTO.setConversationId(conversationId);
         messageReqDTO.setUserId(userId);

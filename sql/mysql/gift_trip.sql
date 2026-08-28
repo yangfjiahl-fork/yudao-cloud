@@ -148,7 +148,7 @@ ALTER TABLE `gift_trip_plan`
   ADD COLUMN `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号' AFTER `member_id`;
 
 -- 已部署旅行行程的独立节点补充表（历史骨架会在首次节点请求时按需初始化）
-CREATE TABLE `gift_trip_itinerary_slot` (
+CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint NOT NULL,
   `itinerary_id` bigint NOT NULL,
@@ -169,3 +169,9 @@ CREATE TABLE `gift_trip_itinerary_slot` (
   UNIQUE KEY `uk_itinerary_day_slot` (`tenant_id`, `itinerary_id`, `day`, `slot`),
   KEY `idx_itinerary_resolve_status` (`tenant_id`, `itinerary_id`, `resolve_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行行程节点补充结果';
+
+-- 修复初版独立节点表因 INSERT IGNORE 写入的租户编号 0
+UPDATE `gift_trip_itinerary_slot` slot
+INNER JOIN `gift_trip_itinerary` itinerary ON itinerary.id = slot.itinerary_id
+SET slot.tenant_id = itinerary.tenant_id
+WHERE slot.tenant_id = 0 AND itinerary.tenant_id <> 0;

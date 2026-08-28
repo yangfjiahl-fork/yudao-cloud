@@ -12,6 +12,8 @@ public class AppTripItinerarySlotResolveRespVO {
 
     @JsonSerialize(using = ToStringSerializer.class)
     private Long messageId;
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long slotId;
     private Integer day;
     private String slot;
     private String status;

@@ -38,10 +38,14 @@ Gift 旅行规划 C 端接入 API
       "event":"created",
       "conversationId":"1781604279872581776",
       "messageId":"1781604279872581777",
-      "content":"告诉我目的地、出行日期和同行人数，我来帮你规划旅程。"
+      "content":"请告诉我出发地、目的地、出发日期、旅行天数、同行人数和预算，我来帮你规划旅程。"
     }}
 
 前端保存 `conversationId`，并将 `content` 作为第一条助手文本展示。
+
+若创建请求携带 `provinceId`、`cityId` 或 `districtId`，后端会按“省 + 市 + 区”的已知层级组合为默认出发地 `departure`，写入本会话的 TripState。该默认值满足出发地必填条件，后续不再追问出发地；创建引导语会明确告知用户“可直接修改”。用户发送新的明确出发地后，Agent 会以新值覆盖默认值。
+
+首次或重新生成行程成功后，后端会自动将会话标题更新为 `出发日期 目的地`，例如 `2026-09-12 杭州`；前端刷新会话列表后即可显示新标题。
 
 三、发送消息并接收流
 ----------------------
@@ -62,7 +66,7 @@ Gift 旅行规划 C 端接入 API
 
 | 事件 | 关键字段 | 前端处理 |
 | --- | --- | --- |
-| `accepted` | `conversationId` | 创建本轮请求状态，开始 loading。 |
+| `accepted` | `conversationId`、`content` | 创建本轮请求状态，显示 `content` 作为初始 loading 文案。 |
 | `stage` | `stage=INTAKE|COMPOSER`、`content` | 更新 loading 文案；不写入聊天记录。 |
 | `intake_completed` | `content`、`missingRequired` | 本轮需求已完成整理与校验；展示简短摘要，不写入聊天记录。 |
 | `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 插入正式助手消息，并展示可选胶囊；点击胶囊后发送下一轮消息。 |
@@ -78,7 +82,7 @@ Gift 旅行规划 C 端接入 API
 `stage` 只可能为：
 
 - `INTAKE`：正在理解并补全出行需求。
-- `COMPOSER`：正在生成行程骨架。
+- `COMPOSER`：正在生成行程框架。
 
 五、事件顺序
 ------------
@@ -99,12 +103,25 @@ Gift 旅行规划 C 端接入 API
 
 `assistant_delta`、`itinerary_day_started` 和 `itinerary_item` 的先后取决于流内容；前端不得依赖数量或固定顺序。`itinerary_day_started` 只表示已开始生成，最终以 `itinerary_item` 和 `itinerary_skeleton` 为准。
 
-`question.suggestions` 最多 5 项，字段含义如下：
+生成前必须收集以下字段：
+
+- `departure`：出发地。
+- `destination`：目的地。
+- `start_date`：出发日期，对应状态字段 `startDate`，格式为 `yyyy-MM-dd`。
+- `days`：总天数，范围为 1–30。
+- `traveler_count`：总人数，范围为 1–20。
+- `budget`：预算。
+
+`endDate`、成人/儿童/老人构成、兴趣、行程节奏、特殊约束均为选填。即使 `travelerProfile` 已填写，也仍需有 `travelerCount` 总人数。
+
+`question.suggestions` 最多 10 项，字段含义如下：
 
 - `label`：胶囊显示文字。
 - `content`：用户点击后，作为下一轮 `send-stream.content` 原样提交。
 
 胶囊是辅助输入，不替代 `question.content` 中的关键追问。用户仍可自由输入；点击后按正常用户消息展示，不需要额外接口。
+
+当 `missingRequired` 非空时，后端每轮只追问其中一个最关键字段；但 suggestions 会优先覆盖其余缺失的必填项，并在仍有空间时提供人群构成（如“2 大 1 小”）、兴趣、节奏、约束等选填引导。前端应直接按返回顺序展示胶囊，不要自行截断。
 
 当 `missingRequired` 为空时，`question` 表示出行信息已经齐全，等待用户选择“直接生成行程”或继续补充；前端应正常展示该助手消息与胶囊，不能当作错误或空结果。
 
@@ -115,12 +132,12 @@ Gift 旅行规划 C 端接入 API
       "stage":"INTAKE",
       "conversationId":"1781604279872581776",
       "messageId":"1781604279872581780",
-      "content":"你的出行日期，或计划玩几天？",
-      "missingRequired":["date_or_days"],
+      "content":"你的出发日期是？",
+      "missingRequired":["start_date"],
       "suggestions":[
-        {"label":"玩 3 天","content":"计划玩3天"},
-        {"label":"2 人出行","content":"总共2人出行"},
-        {"label":"人均 ¥1,500","content":"人均预算1500元"}
+        {"label":"9 月 12 日出发","content":"2026-09-12出发"},
+        {"label":"2 大 1 小","content":"总共3人出行，其中2位成人、1位儿童"},
+        {"label":"美食与人文","content":"偏好美食和人文"}
       ]
     }
 
@@ -135,11 +152,12 @@ Gift 旅行规划 C 端接入 API
       "missingRequired":[],
       "itinerary":{
         "version":1,
-        "summary":"杭州三日人文美食之旅",
+        "summary":"这趟杭州三日人文美食之旅以西湖与老城慢游为主线，串联湖山景致、宋韵街区和本地风味，在舒缓步调中安排经典景点、自由停留与夜间体验，兼顾初次到访的城市认识和轻松度假感受。",
         "daily_itinerary":[
           {
             "day":1,
             "title":"初识杭州",
+            "summary":"围绕西湖与城市慢游展开，先建立杭州的整体印象，再衔接当地风味与轻松夜游。",
             "slots":[
               {"slot":"MORNING","label":"上午","skeleton":"城市核心区域慢游","status":"PENDING"},
               {"slot":"LUNCH","label":"午餐","skeleton":"安排本地风味午餐","status":"PENDING"},
@@ -199,23 +217,26 @@ Gift 旅行规划 C 端接入 API
       "msg":"",
       "data":{
         "messageId":"1781604279872581790",
+        "slotId":"1781604279872581791",
         "day":1,
         "slot":"MORNING",
         "status":"RESOLVED",
         "detail":"已获取 2 个景点候选",
         "candidates":[
           {
-            "id":"178...",
+            "id":"slot-1781604279872581791-B0...",
             "type":"POI",
             "name":"杭州西湖风景名胜区",
             "provider":"gaode",
             "externalId":"B0...",
-            "metadata":{"address":"...","imageUrl":"..."}
+            "metadata":{"address":"...","imageUrl":"...","slotId":"1781604279872581791"}
           }
         ],
         "citationIds":["178..."]
       }
     }
+
+`slotId` 是当前日程卡片的唯一标识，历史行程恢复时也位于对应的 `daily_itinerary[].slots[]` 中。`candidates[].id` 是绑定到该 `slotId` 的候选标识；相同供应商地点在不同日程卡片中会有不同的 `id`，而 `externalId` 始终是供应商原始实体 ID。前端需要按 `slotId` 定位和修改单个卡片，不能只按候选 `externalId` 作为卡片键。
 
 节点状态：
 
@@ -254,12 +275,128 @@ Gift 旅行规划 C 端接入 API
       "id":"1781604279872581790",
       "type":"ASSISTANT",
       "content":"杭州三日人文美食之旅",
-      "itinerary":{"version":2,"summary":"杭州三日人文美食之旅","daily_itinerary":[]}
+      "itinerary":{"version":2,"summary":"这趟杭州三日人文美食之旅以西湖与老城慢游为主线，串联湖山景致、宋韵街区和本地风味，在舒缓步调中安排经典景点、自由停留与夜间体验，兼顾初次到访的城市认识和轻松度假感受。","daily_itinerary":[]}
     }
 
-有 `itinerary` 时按行程卡片渲染；没有时按普通文本消息渲染。页面恢复历史时不需要重放旧 SSE，也不应再次请求旧行程节点。
+有 `itinerary` 时按行程卡片渲染；没有时按普通文本消息渲染。顶层 `itinerary.summary` 是整个计划的总介绍，当日标题下方的简介使用 `daily_itinerary[].summary`。页面恢复历史时不需要重放旧 SSE，也不应再次请求旧行程节点。
 
-九、流读取要点
+九、真实 Agent 规划流记录（2026-08-28）
+------------------------------------
+
+以下记录由测试库中 `userId=288` 的有效 MEMBER Token 对本地已启动服务实测获得。Token 未记录；请求头为 `tenant-id: 1`。该记录生成于必填规则调整前，仅用于 SSE 字段与事件顺序参考，不能作为当前必填规则示例。为便于阅读，以下保留所有非空业务字段，省略每帧固定为 `null` 的字段。
+
+创建会话：
+
+    POST /app-api/ai/chat/conversation/create
+    {"provinceId":"330000","cityId":"330100","districtId":"330106"}
+
+    data:{"code":0,"msg":"","data":{"event":"created","conversationId":"1781604279872581795","messageId":"2850","content":"把出发城市、旅行天数和同行人告诉我，我们开始定制行程吧。"}}
+
+本轮输入：`我计划2026年9月12日至9月14日去杭州旅行，2人出行，人均预算2000元，喜欢美食和人文，请直接生成完整行程。`
+
+完整事件顺序与 Agent 输出：
+
+    accepted: 正在分析您的需求…
+    stage(INTAKE): 正在提取本轮出行需求…
+    intake_completed: 需求已整理：杭州 · 2 人；missingRequired=[]
+    stage(COMPOSER): 正在生成行程框架…
+    assistant_start(COMPOSER)
+    assistant_delta[1..11]: 杭州三日人文美食之旅，漫步西湖感受江南诗意，探访灵隐寺体悟禅意，品味龙井茶香与地道杭帮美味，节奏舒缓惬意。
+    itinerary_day_started: sequence=12, item={"day":1}
+    itinerary_item: sequence=13, day=1, title=西湖初印象与古刹寻幽
+    itinerary_item: sequence=14, day=2, title=龙井问茶与宋韵文化
+    itinerary_item: sequence=15, day=3, title=西溪湿地与悠闲返程
+    assistant_end(COMPOSER)
+    itinerary_skeleton: messageId=2852
+    done
+
+三个 `itinerary_item` 的实际内容如下。最终 `itinerary_skeleton.daily_itinerary` 是这三个对象按 day 升序组成的数组；为避免在文档中重复三遍相同节点，最终事件中以此引用表示。前端应始终用最后的 `itinerary_skeleton` 覆盖临时日程预览。
+
+    {
+      "event":"itinerary_item",
+      "stage":"COMPOSER",
+      "conversationId":"1781604279872581795",
+      "sequence":13,
+      "itemType":"daily_itinerary",
+      "item":{
+        "day":1,
+        "title":"西湖初印象与古刹寻幽",
+        "summary":"上午环游西湖经典景点，下午游览灵隐寺感受千年禅意，傍晚欣赏湖光山色，晚餐品尝传统杭帮菜。",
+        "slots":[
+          {"slot":"MORNING","label":"上午","skeleton":"抵达杭州，办理入住后前往西湖景区，漫步苏堤或白堤，游览断桥残雪、平湖秋月等标志性景观。","status":"PENDING"},
+          {"slot":"LUNCH","label":"午餐","skeleton":"在湖滨商圈或附近街区享用正宗杭帮菜，推荐尝试东坡肉、叫花鸡等地道风味。","status":"PENDING"},
+          {"slot":"AFTERNOON","label":"下午","skeleton":"前往灵隐寺及飞来峰景区，参观大雄宝殿，感受佛教文化氛围，随后可游览 nearby 的北高峰。","status":"PENDING"},
+          {"slot":"DINNER","label":"晚餐","skeleton":"返回市区或景区附近餐厅，体验杭州特色小吃或精致正餐，补充体力。","status":"PENDING"},
+          {"slot":"EVENING","label":"晚上","skeleton":"夜游西湖，观赏音乐喷泉或乘船夜游，感受灯火阑珊下的西湖美景，随后返回酒店休息。","status":"PENDING"},
+          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"入住西湖周边或市中心舒适型酒店，确保次日出行便利。","status":"PENDING"}
+        ]
+      }
+    }
+
+    {
+      "event":"itinerary_item",
+      "stage":"COMPOSER",
+      "conversationId":"1781604279872581795",
+      "sequence":14,
+      "itemType":"daily_itinerary",
+      "item":{
+        "day":2,
+        "title":"龙井问茶与宋韵文化",
+        "summary":"深入龙井村品茶赏景，下午参观中国丝绸博物馆或南宋御街，体验杭州深厚的历史底蕴与茶文化。",
+        "slots":[
+          {"slot":"MORNING","label":"上午","skeleton":"前往梅家坞或龙井村，漫步茶园，体验采茶或品茶过程，了解龙井茶制作工艺，呼吸清新空气。","status":"PENDING"},
+          {"slot":"LUNCH","label":"午餐","skeleton":"在龙井村农家享用田园风味午餐，品尝新鲜蔬菜与土鸡汤，享受自然馈赠。","status":"PENDING"},
+          {"slot":"AFTERNOON","label":"下午","skeleton":"参观中国丝绸博物馆，了解丝绸历史与织造技艺；或漫步南宋御街，感受古城风貌与现代商业融合。","status":"PENDING"},
+          {"slot":"DINNER","label":"晚餐","skeleton":"在南宋御街或河坊街附近用餐，尝试葱包桧、定胜糕等特色小吃，丰富味蕾体验。","status":"PENDING"},
+          {"slot":"EVENING","label":"晚上","skeleton":"逛河坊街历史文化街区，购买手信或纪念品，欣赏街头表演，感受杭州夜间市井气息。","status":"PENDING"},
+          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"继续入住原酒店，保持行程连贯性。","status":"PENDING"}
+        ]
+      }
+    }
+
+    {
+      "event":"itinerary_item",
+      "stage":"COMPOSER",
+      "conversationId":"1781604279872581795",
+      "sequence":15,
+      "itemType":"daily_itinerary",
+      "item":{
+        "day":3,
+        "title":"西溪湿地与悠闲返程",
+        "summary":"上午游览西溪国家湿地公园，体验水乡生态之美，下午根据航班时间灵活安排，准备返程。",
+        "slots":[
+          {"slot":"MORNING","label":"上午","skeleton":"前往西溪国家湿地公园，乘船游览水道，参观洪园或秋雪庵，欣赏湿地自然风光与人文景观。","status":"PENDING"},
+          {"slot":"LUNCH","label":"午餐","skeleton":"在西溪附近或返回市区途中用餐，选择轻便简餐或当地特色面馆，为下午行程预留精力。","status":"PENDING"},
+          {"slot":"AFTERNOON","label":"下午","skeleton":"根据交通情况，可选择前往京杭大运河畔散步，或返回酒店整理行李，最后采购伴手礼。","status":"PENDING"},
+          {"slot":"DINNER","label":"晚餐","skeleton":"在机场或火车站附近享用最后一顿杭州美食，或提前在市区完成晚餐，避免匆忙。","status":"PENDING"},
+          {"slot":"EVENING","label":"晚上","skeleton":"前往交通枢纽，结束愉快的杭州三日之旅，踏上归途。","status":"PENDING"},
+          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"无住宿，行程结束。","status":"PENDING"}
+        ]
+      }
+    }
+
+    {
+      "event":"itinerary_skeleton",
+      "stage":"COMPOSER",
+      "conversationId":"1781604279872581795",
+      "messageId":"2852",
+      "content":"杭州三日人文美食之旅，漫步西湖感受江南诗意，探访灵隐寺体悟禅意，品味龙井茶香与地道杭帮美味，节奏舒缓惬意。",
+      "itinerary":{
+        "version":1,
+        "summary":"杭州三日人文美食之旅，漫步西湖感受江南诗意，探访灵隐寺体悟禅意，品味龙井茶香与地道杭帮美味，节奏舒缓惬意。",
+        "daily_itinerary":"实际响应为 sequence=13、14、15 三个 item 按 day 升序组成的数组，完整对象见上文",
+        "transport":{
+          "arrival":{"status":"PENDING","skeleton":"抵达杭州萧山国际机场或杭州东站，前往酒店办理入住。"},
+          "departure":{"status":"PENDING","skeleton":"从杭州萧山国际机场或杭州东站离开，结束旅程。"}
+        },
+        "booking_actions":[],
+        "warnings":[],
+        "citation_ids":[]
+      },
+      "missingRequired":[]
+    }
+
+十、流读取要点
 --------------
 
 1. 用 `response.body.getReader()` 和 `TextDecoder` 的 stream 模式读取 UTF-8。

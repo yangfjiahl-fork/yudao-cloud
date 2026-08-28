@@ -12,6 +12,7 @@ import java.util.Map;
 public class TripItinerarySlotResult {
 
     private Long messageId;
+    private Long slotId;
     private Integer day;
     private String slot;
     private String status;

@@ -12,6 +12,8 @@ public interface TripAgentService {
 
     void createTrip(Long conversationId, Long memberId);
 
+    String createTrip(Long conversationId, Long memberId, Long provinceId, Long cityId, Long districtId);
+
     TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
                                   Consumer<TripAgentEvent> eventConsumer);
 

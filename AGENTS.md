@@ -25,6 +25,17 @@ Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast
 
 Always work in the user's current shared checkout and its current branch. Do not create, switch to, or rely on a separate task branch or Git worktree unless the user explicitly asks for one. Before making changes, confirm the repository root and current branch so the work is based on the latest shared code.
 
+## Travel Agent Prompt Responsibilities
+
+The travel planner has two database-managed AI roles. Their identifiers are configured through `infra_config` keys `trip.agent.intakeRoleId` and `trip.agent.composerRoleId`; never hardcode a role's static prompt rules in the business service.
+
+- **INTAKE role**: owns extraction of explicit user facts, the intake JSON contract, follow-up-question rules, and itinerary override intent rules.
+- **COMPOSER role**: owns the itinerary skeleton JSON contract, slot ordering and restrictions, use of `CurrentItinerary` and `itineraryOverrides`, and the top-level `summary` requirements. `summary` is the whole travel plan description displayed at the top of the client, not a single-day preview.
+- **Backend orchestration**: `TripAgentServiceImpl` supplies only dynamic `TripState`, `CurrentItinerary`, and prompt variables; it validates and normalizes model output, persists plans, and never delegates data integrity or authorization to the model.
+- **Prompt delivery**: `AiChatControlledGenerateService` reads `ai_chat_role.system_message`, renders `{{variableName}}` placeholders, and appends the current `Asia/Shanghai` time. The travel flow supplies `provinceName`, `cityName`, and `districtName` as name values.
+
+Key travel modules are `TripAgentServiceImpl` (orchestration), `TripResearchExecutor` (deterministic provider lookups), `TripItinerarySlotDO` / `gift_trip_itinerary_slot` (independent slot state), `AiChatControlledGenerateService` (controlled model invocation), and `gift-trip-sse-api.txt` (C-end SSE and slot-resolve contract).
+
 ## Coding Style & Naming Conventions
 
 Use Java 17 conventions with 4-space indentation. Keep packages under `cn.iocoder.yudao.module.<domain>`. Follow existing layers: `controller`, `service`, `dal`, `api`, `mq`, `framework`. Name implementations `*ServiceImpl`, mappers `*Mapper`, data objects `*DO`, request/response objects `*ReqVO` and `*RespVO`, and DTOs `*DTO`.
