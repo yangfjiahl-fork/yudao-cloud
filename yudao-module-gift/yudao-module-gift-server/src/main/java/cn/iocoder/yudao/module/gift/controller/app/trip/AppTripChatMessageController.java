@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageSen
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatStreamRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripWeatherRespVO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
@@ -129,6 +130,16 @@ public class AppTripChatMessageController {
         response.setDetail(result.getDetail());
         response.setCandidates(result.getCandidates());
         response.setCitationIds(result.getCitationIds());
+        if (result.getWeather() != null) {
+            response.setWeather(new AppTripWeatherRespVO()
+                    .setCity(result.getWeather().city())
+                    .setTemperature(result.getWeather().temperature())
+                    .setCondition(result.getWeather().condition())
+                    .setHumidity(result.getWeather().humidity())
+                    .setWindDirection(result.getWeather().windDirection())
+                    .setWindPower(result.getWeather().windPower())
+                    .setQueryTime(result.getWeather().queryTime()));
+        }
         return success(response);
     }
 

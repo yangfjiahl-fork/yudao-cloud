@@ -30,4 +30,14 @@ public interface TripFactMapper extends BaseMapperX<TripFactDO> {
                 .last("LIMIT 1"));
     }
 
+    default List<TripFactDO> selectActiveByTripIdAndFactKeyPrefix(Long tripId, String factKeyPrefix) {
+        return selectList(new LambdaQueryWrapperX<TripFactDO>()
+                .eq(TripFactDO::getTripId, tripId)
+                .likeRight(TripFactDO::getFactKey, factKeyPrefix)
+                .eq(TripFactDO::getStatus, 1)
+                .and(wrapper -> wrapper.isNull(TripFactDO::getExpiresAt)
+                        .or().gt(TripFactDO::getExpiresAt, LocalDateTime.now()))
+                .orderByDesc(TripFactDO::getUpdateTime));
+    }
+
 }

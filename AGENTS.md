@@ -46,6 +46,8 @@ Use Lombok and existing framework helpers where already used. Avoid unrelated fo
 
 Tests use JUnit 5 with Spring Boot test support from `yudao-spring-boot-starter-test`. Place tests in the affected module under `src/test/java`, with names ending in `Test` or `Tests`. For service logic, prefer focused unit tests with mocked collaborators; for mapper or integration behavior, follow existing resources such as `application-unit-test.yaml` and SQL fixtures.
 
+前端接口联调约定：默认使用 test 数据库中的 `userId=288` 会员账号进行鉴权验证，并从 test 数据库运行时获取有效 access token；不得使用固定的 `288` 字符串作为 Token。Token 仅用于本地验证，不得写入代码、接口文档、测试样例、提交记录或日志输出。
+
 Run at least the affected module’s tests or compile command before handing off.
 
 ## Commit & Pull Request Guidelines

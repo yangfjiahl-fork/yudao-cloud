@@ -42,6 +42,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -67,10 +68,12 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int SLOT_RESOLVE_STATUS_PROCESSING = 1;
     private static final int SLOT_RESOLVE_STATUS_COMPLETED = 2;
     private static final int SLOT_RESOLVE_STATUS_FAILED = 3;
+    private static final int MAX_COMPOSER_REPAIR_ATTEMPTS = 2;
     private static final Set<String> STATE_FIELDS = Set.of("destination", "departure", "startDate", "endDate",
             "days", "travelerCount", "travelerProfile", "budget", "interests", "pace", "constraints");
     private static final Set<String> DAILY_ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "EVENING", "ACCOMMODATION");
+    private static final Set<String> SCENIC_ITINERARY_SLOTS = Set.of("MORNING", "AFTERNOON", "EVENING");
     private static final Set<String> ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "EVENING", "ACCOMMODATION", "ARRIVAL", "DEPARTURE");
 
@@ -91,6 +94,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private TripResearchExecutor tripResearchExecutor;
     @Resource
+    private TripTravelQueryService tripTravelQueryService;
+    @Resource
     private Tracer tracer;
 
     @Override
@@ -103,7 +108,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     public String createTrip(Long conversationId, Long memberId, Long provinceId, Long cityId, Long districtId) {
         TripPlanDO existing = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (existing != null) {
-            return StrUtil.trim(ObjUtil.toString(TripAgentFormatUtils.parseMap(existing.getStateJson()).get("departure")));
+            return trimNullable(TripAgentFormatUtils.parseMap(existing.getStateJson()).get("departure"));
         }
         TripPlanDO trip = new TripPlanDO();
         trip.setConversationId(conversationId);
@@ -188,15 +193,36 @@ public class TripAgentServiceImpl implements TripAgentService {
 
         eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在生成行程框架…"));
         eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
+        Map<String, Object> currentItinerary = getCurrentItinerary(trip);
         TripAgentStreamParser streamParser = new TripAgentStreamParser(eventConsumer);
         AiChatGenerateRespDTO composerResponse = generateStream(conversationId, memberId,
-                buildComposerContext(state, getCurrentItinerary(trip)),
+                buildComposerContext(state, currentItinerary),
                 "COMPOSER", trip.getId(), promptVariables, streamParser::append);
-        Map<String, Object> itinerary = parseItinerarySkeleton(composerResponse.getContent());
+        Map<String, Object> itinerary;
+        int repairAttempt = 0;
+        while (true) {
+            try {
+                itinerary = parseItinerarySkeleton(composerResponse.getContent());
+                break;
+            } catch (IllegalStateException validationError) {
+                if (++repairAttempt > MAX_COMPOSER_REPAIR_ATTEMPTS) {
+                    throw validationError;
+                }
+                // 模型输出是一次性的草稿；将服务端校验结果和原始 JSON 作为下一条 Message，
+                // 让 Composer 按数据库中的角色契约修正，而不是中断整条 SSE 流程。
+                eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在校验并修正行程框架…"));
+                eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
+                TripAgentStreamParser repairParser = new TripAgentStreamParser(eventConsumer);
+                composerResponse = generateStream(conversationId, memberId,
+                        buildComposerRepairContext(state, currentItinerary, composerResponse.getContent(),
+                                validationError.getMessage()),
+                        "COMPOSER", trip.getId(), promptVariables, repairParser::append);
+            }
+        }
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
         int version = (maxVersion == null ? 0 : maxVersion) + 1;
         itinerary.put("version", version);
-        String displayText = StrUtil.blankToDefault(ObjUtil.toString(itinerary.get("summary")), "已为你生成旅行方案。");
+        String displayText = StrUtil.blankToDefault(trimNullable(itinerary.get("summary")), "已为你生成旅行方案。");
         AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, displayText, true);
         TripItineraryDO itineraryDO = new TripItineraryDO();
         itineraryDO.setTripId(trip.getId());
@@ -259,7 +285,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             throw new IllegalArgumentException("只能补充当前生效的行程骨架");
         }
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
-        if (StrUtil.isBlank(ObjUtil.toString(state.get("destination")))) {
+        if (StrUtil.isBlank(trimNullable(state.get("destination")))) {
             throw new IllegalStateException("行程缺少目的地");
         }
         Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(itineraryDO.getContentJson());
@@ -268,13 +294,17 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (!tripItinerarySlotMapper.claimForResolve(itinerarySlot.getId(), SLOT_RESOLVE_STATUS_PENDING,
                 SLOT_RESOLVE_STATUS_FAILED, SLOT_RESOLVE_STATUS_PROCESSING)) {
             TripItinerarySlotDO currentSlot = tripItinerarySlotMapper.selectById(itinerarySlot.getId());
-            return toSlotResult(messageId, currentSlot != null ? currentSlot : itinerarySlot);
+            return withWeather(toSlotResult(messageId, currentSlot != null ? currentSlot : itinerarySlot),
+                    resolveSlotCity(state, skeletonSlot));
         }
         long start = System.currentTimeMillis();
         Long runId = tripRunLogService.create(trip.getId(), "SLOT_RESOLVE", JsonUtils.toJsonString(Map.of(
                 "messageId", String.valueOf(messageId), "day", day, "slot", slot)));
         try {
-            TripResearchExecutor.SlotResearchResult researchResult = tripResearchExecutor.resolveSlot(trip.getId(), state, slot);
+            TripResearchExecutor.SlotResearchResult researchResult = tripResearchExecutor.resolveSlot(trip.getId(), state, day, slot,
+                    trimNullable(skeletonSlot.get("skeleton")), trimNullable(skeletonSlot.get("poiName")),
+                    trimNullable(skeletonSlot.get("area")));
+            String city = resolveSlotCity(state, skeletonSlot);
             List<Map<String, Object>> candidates = bindCandidatesToSlot(itinerarySlot, researchResult.candidates());
             itinerarySlot.setStatus(researchResult.status());
             itinerarySlot.setDetail(researchResult.detail());
@@ -285,7 +315,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             tripRunLogService.complete(runId, null, 0L, 0L, 0L, System.currentTimeMillis() - start,
                     JsonUtils.toJsonString(Map.of("toolPlans", researchResult.toolPlans(), "status", researchResult.status(),
                             "candidateCount", candidates.size(), "citationIds", researchResult.citationIds())));
-            return toSlotResult(messageId, itinerarySlot);
+            return withWeather(toSlotResult(messageId, itinerarySlot), city);
         } catch (RuntimeException e) {
             itinerarySlot.setStatus("PENDING");
             itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_FAILED);
@@ -417,6 +447,15 @@ public class TripAgentServiceImpl implements TripAgentService {
                 + JsonUtils.toJsonString(currentItinerary);
     }
 
+    private static String buildComposerRepairContext(Map<String, Object> state, Map<String, Object> currentItinerary,
+                                                     String previousResponse, String validationMessage) {
+        return "上一版 ItinerarySkeleton 未通过服务端校验。请根据你的 Composer 角色契约修正后重新输出完整 JSON，"
+                + "不得输出解释或 Markdown。\n服务端校验结果：" + StrUtil.blankToDefault(validationMessage, "结果不符合约定")
+                + "\n上一版输出：\n" + StrUtil.blankToDefault(previousResponse, "（空）")
+                + "\n\nTripState：\n" + JsonUtils.toJsonString(state) + "\n\n"
+                + "CurrentItinerary：\n" + JsonUtils.toJsonString(currentItinerary);
+    }
+
     private Map<String, Object> getCurrentItinerary(TripPlanDO trip) {
         if (trip.getCurrentItineraryId() == null) {
             return Map.of();
@@ -440,8 +479,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private void updateConversationTitle(Long conversationId, Long memberId, Map<String, Object> state) {
-        String startDate = StrUtil.trim(ObjUtil.toString(state.get("startDate")));
-        String destination = StrUtil.trim(ObjUtil.toString(state.get("destination")));
+        String startDate = trimNullable(state.get("startDate"));
+        String destination = trimNullable(state.get("destination"));
         if (StrUtil.isBlank(startDate) || StrUtil.isBlank(destination)) {
             return;
         }
@@ -460,25 +499,32 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         patch.forEach((key, value) -> {
             if (key instanceof String field && STATE_FIELDS.contains(field) && value != null) {
-                state.put(field, normalizeField(field, value));
+                Object normalized = normalizeField(field, value);
+                if (normalized == null) {
+                    state.remove(field);
+                } else {
+                    state.put(field, normalized);
+                }
             }
         });
     }
 
     private static Object normalizeField(String field, Object value) {
         if ("days".equals(field) || "travelerCount".equals(field)) {
-            return Integer.parseInt(value.toString());
+            String text = trimNullable(value);
+            return StrUtil.isBlank(text) ? null : Integer.parseInt(text);
         }
         if ("travelerProfile".equals(field)) {
             return normalizeTravelerProfile(value);
         }
         if ("interests".equals(field) || "constraints".equals(field)) {
             if (value instanceof List<?> list) {
-                return list.stream().map(String::valueOf).filter(StrUtil::isNotBlank).toList();
+                return list.stream().map(TripAgentServiceImpl::trimNullable).filter(StrUtil::isNotBlank).toList();
             }
-            return List.of(String.valueOf(value));
+            String text = trimNullable(value);
+            return StrUtil.isBlank(text) ? List.of() : List.of(text);
         }
-        return StrUtil.trim(value.toString());
+        return trimNullable(value);
     }
 
     private static Map<String, Object> normalizeTravelerProfile(Object value) {
@@ -527,7 +573,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (!hasValues(state.get("interests"))) {
             addSuggestion(suggestions, "美食与人文", "偏好美食和人文");
         }
-        if (StrUtil.isBlank(ObjUtil.toString(state.get("pace")))) {
+        if (StrUtil.isBlank(trimNullable(state.get("pace")))) {
             addSuggestion(suggestions, "轻松慢游", "希望行程节奏轻松，不要太赶");
         }
         if (!hasValues(state.get("constraints"))) {
@@ -633,10 +679,10 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static List<String> validateState(Map<String, Object> state) {
         List<String> missing = new ArrayList<>();
-        if (StrUtil.isBlank(ObjUtil.toString(state.get("departure")))) {
+        if (StrUtil.isBlank(trimNullable(state.get("departure")))) {
             missing.add("departure");
         }
-        if (StrUtil.isBlank(ObjUtil.toString(state.get("destination")))) {
+        if (StrUtil.isBlank(trimNullable(state.get("destination")))) {
             missing.add("destination");
         }
         Integer days = MapUtil.getInt(state, "days");
@@ -644,8 +690,8 @@ public class TripAgentServiceImpl implements TripAgentService {
             state.remove("days");
             days = null;
         }
-        String startDate = ObjUtil.toString(state.get("startDate"));
-        String endDate = ObjUtil.toString(state.get("endDate"));
+        String startDate = trimNullable(state.get("startDate"));
+        String endDate = trimNullable(state.get("endDate"));
         LocalDate parsedStartDate = null;
         try {
             if (StrUtil.isNotBlank(startDate)) {
@@ -679,7 +725,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (travelers == null) {
             missing.add("traveler_count");
         }
-        if (StrUtil.isBlank(ObjUtil.toString(state.get("budget")))) {
+        if (StrUtil.isBlank(trimNullable(state.get("budget")))) {
             missing.add("budget");
         }
         return missing;
@@ -700,7 +746,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static String buildIntakeCompletedContent(Map<String, Object> state, List<String> missingRequired) {
         List<String> values = new ArrayList<>();
-        String destination = StrUtil.trim(ObjUtil.toString(state.get("destination")));
+        String destination = trimNullable(state.get("destination"));
         if (StrUtil.isNotBlank(destination)) {
             values.add(destination);
         }
@@ -719,10 +765,11 @@ public class TripAgentServiceImpl implements TripAgentService {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parseItinerarySkeleton(String content) {
         Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(content);
-        if (StrUtil.isBlank(ObjUtil.toString(itinerary.get("summary"))) || !(itinerary.get("daily_itinerary") instanceof List<?>)) {
+        if (StrUtil.isBlank(trimNullable(itinerary.get("summary"))) || !(itinerary.get("daily_itinerary") instanceof List<?>)) {
             throw new IllegalStateException("行程生成结果不符合约定 JSON");
         }
         normalizeSkeleton(itinerary);
+        validateItinerarySlotFields(itinerary);
         itinerary.put("citation_ids", List.of());
         return itinerary;
     }
@@ -753,6 +800,10 @@ public class TripAgentServiceImpl implements TripAgentService {
                         slotMap.putIfAbsent("status", "PENDING");
                         slotMap.putIfAbsent("label", slotLabel(ObjUtil.toString(slotMap.get("slot"))));
                         slotMap.putIfAbsent("skeleton", "待补充");
+                        String city = trimNullable(slotMap.get("city"));
+                        if (StrUtil.isNotBlank(city)) {
+                            slotMap.put("city", city);
+                        }
                     }
                 });
             }
@@ -763,6 +814,58 @@ public class TripAgentServiceImpl implements TripAgentService {
             transport.put("departure", Map.of("status", "PENDING", "skeleton", "返程交通待确认"));
             itinerary.put("transport", transport);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void validateItinerarySlotFields(Map<String, Object> itinerary) {
+        Set<String> poiNames = new HashSet<>();
+        Object dailyItinerary = itinerary.get("daily_itinerary");
+        if (!(dailyItinerary instanceof List<?> days)) {
+            return;
+        }
+        for (Object day : days) {
+            if (!(day instanceof Map<?, ?> dayMap) || !(dayMap.get("slots") instanceof List<?> slots)) {
+                continue;
+            }
+            Integer dayNumber = MapUtil.getInt(dayMap, "day");
+            for (Object slot : slots) {
+                if (!(slot instanceof Map<?, ?> rawSlot)) {
+                    continue;
+                }
+                Map<String, Object> slotMap = (Map<String, Object>) rawSlot;
+                String slotType = trimNullable(slotMap.get("slot")).toUpperCase(Locale.ROOT);
+                String city = trimNullable(slotMap.get("city"));
+                if (StrUtil.isBlank(city)) {
+                    throw new IllegalStateException("第" + dayNumber + "天" + slotType + "缺少所在城市");
+                }
+                if (!SCENIC_ITINERARY_SLOTS.contains(slotType)) {
+                    continue;
+                }
+                String poiName = trimNullable(slotMap.get("poiName"));
+                if (StrUtil.isBlank(poiName)) {
+                    throw new IllegalStateException("第" + dayNumber + "天" + slotType + "缺少景点名称");
+                }
+                String area = trimNullable(slotMap.get("area"));
+                if (StrUtil.isBlank(area)) {
+                    throw new IllegalStateException("第" + dayNumber + "天" + slotType + "缺少景点片区");
+                }
+                slotMap.put("poiName", poiName);
+                slotMap.put("area", area);
+                slotMap.put("city", city);
+                if (!poiNames.add(poiName.replaceAll("\\s+", ""))) {
+                    log.warn("[validateItinerarySlotFields][第{}天{}重复景点({})，保留当前行程继续生成]",
+                            dayNumber, slotType, poiName);
+                }
+            }
+        }
+    }
+
+    private static String trimNullable(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = StrUtil.trim(String.valueOf(value));
+        return "null".equalsIgnoreCase(text) ? "" : text;
     }
 
     @SuppressWarnings("unchecked")
@@ -832,6 +935,23 @@ public class TripAgentServiceImpl implements TripAgentService {
         itinerarySlot.setStatus(StrUtil.blankToDefault(ObjUtil.toString(slotData.get("status")), "PENDING"));
         itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_PENDING);
         tripItinerarySlotMapper.insertIgnore(itinerarySlot);
+    }
+
+    private TripItinerarySlotResult withWeather(TripItinerarySlotResult result, String city) {
+        if (StrUtil.isBlank(city)) {
+            return result;
+        }
+        try {
+            result.setWeather(tripTravelQueryService.getCurrentWeather(city));
+        } catch (RuntimeException e) {
+            log.warn("[resolveItinerarySlot][city({}) 天气查询失败，不影响节点结果]", city, e);
+        }
+        return result;
+    }
+
+    private static String resolveSlotCity(Map<String, Object> state, Map<String, Object> skeletonSlot) {
+        String city = trimNullable(skeletonSlot.get("city"));
+        return StrUtil.blankToDefault(city, trimNullable(state.get("destination")));
     }
 
     private static TripItinerarySlotResult toSlotResult(Long messageId, TripItinerarySlotDO slot) {

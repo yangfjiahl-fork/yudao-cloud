@@ -1,7 +1,7 @@
 Gift 旅行规划 C 端接入 API
 ==========================
 
-更新日期：2026-08-25
+更新日期：2026-08-29
 
 一、通用约定
 ------------
@@ -43,9 +43,9 @@ Gift 旅行规划 C 端接入 API
 
 前端保存 `conversationId`，并将 `content` 作为第一条助手文本展示。
 
-若创建请求携带 `provinceId`、`cityId` 或 `districtId`，后端会按“省 + 市 + 区”的已知层级组合为默认出发地 `departure`，写入本会话的 TripState。该默认值满足出发地必填条件，后续不再追问出发地；创建引导语会明确告知用户“可直接修改”。用户发送新的明确出发地后，Agent 会以新值覆盖默认值。
+若创建请求携带 `provinceId`、`cityId` 或 `districtId`，会按“省 + 市 + 区”的已知层级组合默认出发地 `departure`。该默认值满足出发地必填条件，用户发送新的明确出发地后会覆盖默认值。
 
-首次或重新生成行程成功后，后端会自动将会话标题更新为 `出发日期 目的地`，例如 `2026-09-12 杭州`；前端刷新会话列表后即可显示新标题。
+首次或重新生成行程成功后，会话标题更新为 `出发日期 目的地`，例如 `2026-09-12 杭州`；前端刷新会话列表后即可显示新标题。
 
 三、发送消息并接收流
 ----------------------
@@ -68,7 +68,7 @@ Gift 旅行规划 C 端接入 API
 | --- | --- | --- |
 | `accepted` | `conversationId`、`content` | 创建本轮请求状态，显示 `content` 作为初始 loading 文案。 |
 | `stage` | `stage=INTAKE|COMPOSER`、`content` | 更新 loading 文案；不写入聊天记录。 |
-| `intake_completed` | `content`、`missingRequired` | 本轮需求已完成整理与校验；展示简短摘要，不写入聊天记录。 |
+| `intake_completed` | `content`、`missingRequired` | 本轮需求已完成整理；展示简短摘要，不写入聊天记录。 |
 | `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 插入正式助手消息，并展示可选胶囊；点击胶囊后发送下一轮消息。 |
 | `assistant_start` | `stage=COMPOSER` | 创建临时的行程摘要/骨架区域。 |
 | `assistant_delta` | `content`、`sequence` | 追加到临时摘要，实现逐字展示；不能单独成为聊天消息。 |
@@ -83,6 +83,30 @@ Gift 旅行规划 C 端接入 API
 
 - `INTAKE`：正在理解并补全出行需求。
 - `COMPOSER`：正在生成行程框架。
+
+生成成功时的原始 SSE 片段（每帧均以空行结束；`itinerary_item` 只展示一个半天节点的缩略内容）如下：
+
+    data:{"code":0,"msg":"","data":{"event":"accepted","conversationId":"1781604279872581803","content":"正在分析您的需求…"}}
+
+    data:{"code":0,"msg":"","data":{"event":"stage","stage":"INTAKE","content":"正在提取本轮出行需求…"}}
+
+    data:{"code":0,"msg":"","data":{"event":"intake_completed","stage":"INTAKE","content":"需求已整理：杭州 · 3 天 · 2 人","missingRequired":[]}}
+
+    data:{"code":0,"msg":"","data":{"event":"stage","stage":"COMPOSER","content":"正在生成行程框架…"}}
+
+    data:{"code":0,"msg":"","data":{"event":"assistant_start","stage":"COMPOSER"}}
+
+    data:{"code":0,"msg":"","data":{"event":"itinerary_day_started","stage":"COMPOSER","sequence":1,"itemType":"daily_itinerary","item":{"day":1}}}
+
+    data:{"code":0,"msg":"","data":{"event":"itinerary_item","stage":"COMPOSER","sequence":2,"itemType":"daily_itinerary","item":{"day":1,"slots":[{"slot":"MORNING","poiName":"断桥残雪","area":"北山街","city":"杭州市","status":"PENDING"}]}}}
+
+    data:{"code":0,"msg":"","data":{"event":"assistant_end","stage":"COMPOSER"}}
+
+    data:{"code":0,"msg":"","data":{"event":"itinerary_skeleton","stage":"COMPOSER","messageId":"2879","content":"杭州三日深度游…","missingRequired":[],"itinerary":{"version":1,"daily_itinerary":[/* 完整 3 天对象 */]}}}
+
+    data:{"code":0,"msg":"","data":{"event":"done","conversationId":"1781604279872581803"}}
+
+生成过程中可能出现多轮 `stage(COMPOSER)`、`assistant_start` 及后续 Composer 事件；前端应以最新一轮的 `itinerary_skeleton` 覆盖旧预览。
 
 五、事件顺序
 ------------
@@ -103,6 +127,8 @@ Gift 旅行规划 C 端接入 API
 
 `assistant_delta`、`itinerary_day_started` 和 `itinerary_item` 的先后取决于流内容；前端不得依赖数量或固定顺序。`itinerary_day_started` 只表示已开始生成，最终以 `itinerary_item` 和 `itinerary_skeleton` 为准。
 
+如果流中再次出现 `assistant_start`，前端应清空当前临时摘要和日程预览，按新一轮事件重新渲染；最终只以最新的 `itinerary_skeleton` 为准。若最终收到 `event=error`，结束 loading 并保留错误提示。
+
 生成前必须收集以下字段：
 
 - `departure`：出发地。
@@ -121,7 +147,7 @@ Gift 旅行规划 C 端接入 API
 
 胶囊是辅助输入，不替代 `question.content` 中的关键追问。用户仍可自由输入；点击后按正常用户消息展示，不需要额外接口。
 
-当 `missingRequired` 非空时，后端每轮只追问其中一个最关键字段；但 suggestions 会优先覆盖其余缺失的必填项，并在仍有空间时提供人群构成（如“2 大 1 小”）、兴趣、节奏、约束等选填引导。前端应直接按返回顺序展示胶囊，不要自行截断。
+当 `missingRequired` 非空时，`question` 会追问缺失信息；`suggestions` 提供可直接发送的辅助输入。前端应直接按返回顺序展示胶囊，不要自行截断。
 
 当 `missingRequired` 为空时，`question` 表示出行信息已经齐全，等待用户选择“直接生成行程”或继续补充；前端应正常展示该助手消息与胶囊，不能当作错误或空结果。
 
@@ -159,12 +185,12 @@ Gift 旅行规划 C 端接入 API
             "title":"初识杭州",
             "summary":"围绕西湖与城市慢游展开，先建立杭州的整体印象，再衔接当地风味与轻松夜游。",
             "slots":[
-              {"slot":"MORNING","label":"上午","skeleton":"城市核心区域慢游","status":"PENDING"},
-              {"slot":"LUNCH","label":"午餐","skeleton":"安排本地风味午餐","status":"PENDING"},
-              {"slot":"AFTERNOON","label":"下午","skeleton":"人文景点与街区活动","status":"PENDING"},
-              {"slot":"DINNER","label":"晚餐","skeleton":"晚餐与休息安排","status":"PENDING"},
-              {"slot":"EVENING","label":"晚上","skeleton":"轻松夜间活动","status":"PENDING"},
-              {"slot":"ACCOMMODATION","label":"住宿","skeleton":"住宿候选待补充","status":"PENDING"}
+              {"slot":"MORNING","label":"上午","skeleton":"游览断桥与白堤，感受西湖湖岸风景","poiName":"断桥残雪","area":"西湖东岸","city":"杭州市","status":"PENDING"},
+              {"slot":"LUNCH","label":"午餐","skeleton":"安排本地风味午餐","city":"杭州市","status":"PENDING"},
+              {"slot":"AFTERNOON","label":"下午","skeleton":"参观丝绸展陈并了解织造文化","poiName":"中国丝绸博物馆","area":"玉皇山南麓","city":"杭州市","status":"PENDING"},
+              {"slot":"DINNER","label":"晚餐","skeleton":"晚餐与休息安排","city":"杭州市","status":"PENDING"},
+              {"slot":"EVENING","label":"晚上","skeleton":"沿运河夜间散步，观赏古桥与灯光","poiName":"拱宸桥","area":"运河北段","city":"杭州市","status":"PENDING"},
+              {"slot":"ACCOMMODATION","label":"住宿","skeleton":"住宿候选待补充","city":"杭州市","status":"PENDING"}
             ]
           }
         ],
@@ -181,7 +207,7 @@ Gift 旅行规划 C 端接入 API
 六、并行补充行程节点
 --------------------
 
-收到 `itinerary_skeleton` 后，前端可先展示文字骨架，再对当前可见卡片并行请求补充信息。MVP 中每个半天节点最多返回 2 个地点；它们是同一段行程的推荐组合，不是要求用户二选一。
+收到 `itinerary_skeleton` 后，前端可先展示文字骨架，再对当前可见卡片并行请求补充信息。每个日内 Slot 都必须包含非空 `city`（所在城市，例如“杭州市”）；`MORNING`、`AFTERNOON`、`EVENING` 还必须包含非空 `poiName`（单一主景点名称）和 `area`（所属片区）。`poiName` 建议全行程唯一；当前发现重复时仅记录后端告警，不会阻断整份行程生成。MVP 中每个半天节点最多返回 2 个地点；它们是同一段行程的推荐组合，不是要求用户二选一。
 
 `POST /app-api/ai/chat/message/itinerary/slot/resolve`
 
@@ -232,7 +258,16 @@ Gift 旅行规划 C 端接入 API
             "metadata":{"address":"...","imageUrl":"...","slotId":"1781604279872581791"}
           }
         ],
-        "citationIds":["178..."]
+        "citationIds":["178..."],
+        "weather":{
+          "city":"杭州市",
+          "temperature":31,
+          "condition":"多云",
+          "humidity":72,
+          "windDirection":"东南风",
+          "windPower":"3",
+          "queryTime":"2026-08-29 11:35:33"
+        }
       }
     }
 
@@ -243,7 +278,13 @@ Gift 旅行规划 C 端接入 API
 - `PENDING`：暂无可展示的补充结果。保留骨架并显示“待确认”。
 - `RESOLVED`：有可展示候选；日内景点节点最多 2 个，按返回顺序展示为同一时段的推荐地点。候选不表示已预订或最终确定。
 
-收到响应后，按 `(messageId, day, slot)` 覆盖对应卡片的 `status`、`detail`、`candidates`、`citationIds`。图片只在 `candidate.metadata.imageUrl` 非空时加载，失败时显示占位图。
+候选仅表示地点信息，不表示酒店房价、库存、可预订性，也不表示餐厅排队、订座或营业状态。若接口返回 `PENDING`，前端应保留骨架并显示待确认。
+
+收到响应后，按 `(messageId, day, slot)` 覆盖对应卡片的 `status`、`detail`、`candidates`、`citationIds` 和 `weather`。图片只在 `candidate.metadata.imageUrl` 非空时加载，失败时显示占位图。
+
+天气与景点、酒店、餐厅使用同一个 Slot 接口，不存在独立的天气 HTTP 接口。前端请求任意日程节点时，响应会同时返回该节点所在城市的当前天气；`city` 取行程节点的 `city` 字段。天气查询失败时，前端保留行程内容，天气卡片显示“天气暂不可用”，不影响景点、酒店和餐厅候选展示。
+
+天气字段位于上方 Slot 成功响应的 `weather` 中；天气不可用时该字段为空或不返回。
 
 七、修改已生成行程
 ------------------
@@ -280,10 +321,10 @@ Gift 旅行规划 C 端接入 API
 
 有 `itinerary` 时按行程卡片渲染；没有时按普通文本消息渲染。顶层 `itinerary.summary` 是整个计划的总介绍，当日标题下方的简介使用 `daily_itinerary[].summary`。页面恢复历史时不需要重放旧 SSE，也不应再次请求旧行程节点。
 
-九、真实 Agent 规划流记录（2026-08-28）
-------------------------------------
+九、规划流联调示例
+------------------
 
-以下记录由测试库中 `userId=288` 的有效 MEMBER Token 对本地已启动服务实测获得。Token 未记录；请求头为 `tenant-id: 1`。该记录生成于必填规则调整前，仅用于 SSE 字段与事件顺序参考，不能作为当前必填规则示例。为便于阅读，以下保留所有非空业务字段，省略每帧固定为 `null` 的字段。
+以下为接口联调示例，仅用于说明 SSE 字段与事件顺序。为便于阅读，以下保留业务字段，省略每帧固定为 `null` 的字段。
 
 创建会话：
 
@@ -323,12 +364,12 @@ Gift 旅行规划 C 端接入 API
         "title":"西湖初印象与古刹寻幽",
         "summary":"上午环游西湖经典景点，下午游览灵隐寺感受千年禅意，傍晚欣赏湖光山色，晚餐品尝传统杭帮菜。",
         "slots":[
-          {"slot":"MORNING","label":"上午","skeleton":"抵达杭州，办理入住后前往西湖景区，漫步苏堤或白堤，游览断桥残雪、平湖秋月等标志性景观。","status":"PENDING"},
-          {"slot":"LUNCH","label":"午餐","skeleton":"在湖滨商圈或附近街区享用正宗杭帮菜，推荐尝试东坡肉、叫花鸡等地道风味。","status":"PENDING"},
-          {"slot":"AFTERNOON","label":"下午","skeleton":"前往灵隐寺及飞来峰景区，参观大雄宝殿，感受佛教文化氛围，随后可游览 nearby 的北高峰。","status":"PENDING"},
-          {"slot":"DINNER","label":"晚餐","skeleton":"返回市区或景区附近餐厅，体验杭州特色小吃或精致正餐，补充体力。","status":"PENDING"},
-          {"slot":"EVENING","label":"晚上","skeleton":"夜游西湖，观赏音乐喷泉或乘船夜游，感受灯火阑珊下的西湖美景，随后返回酒店休息。","status":"PENDING"},
-          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"入住西湖周边或市中心舒适型酒店，确保次日出行便利。","status":"PENDING"}
+          {"slot":"MORNING","label":"上午","skeleton":"抵达杭州，办理入住后前往西湖景区，漫步苏堤或白堤，游览断桥残雪、平湖秋月等标志性景观。","poiName":"断桥残雪","area":"西湖东岸","city":"杭州市","status":"PENDING"},
+          {"slot":"LUNCH","label":"午餐","skeleton":"在湖滨商圈或附近街区享用正宗杭帮菜，推荐尝试东坡肉、叫花鸡等地道风味。","city":"杭州市","status":"PENDING"},
+          {"slot":"AFTERNOON","label":"下午","skeleton":"前往灵隐寺及飞来峰景区，参观大雄宝殿，感受佛教文化氛围，随后可游览 nearby 的北高峰。","city":"杭州市","status":"PENDING"},
+          {"slot":"DINNER","label":"晚餐","skeleton":"返回市区或景区附近餐厅，体验杭州特色小吃或精致正餐，补充体力。","city":"杭州市","status":"PENDING"},
+          {"slot":"EVENING","label":"晚上","skeleton":"夜游西湖，观赏音乐喷泉或乘船夜游，感受灯火阑珊下的西湖美景，随后返回酒店休息。","city":"杭州市","status":"PENDING"},
+          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"入住西湖周边或市中心舒适型酒店，确保次日出行便利。","city":"杭州市","status":"PENDING"}
         ]
       }
     }
@@ -344,12 +385,12 @@ Gift 旅行规划 C 端接入 API
         "title":"龙井问茶与宋韵文化",
         "summary":"深入龙井村品茶赏景，下午参观中国丝绸博物馆或南宋御街，体验杭州深厚的历史底蕴与茶文化。",
         "slots":[
-          {"slot":"MORNING","label":"上午","skeleton":"前往梅家坞或龙井村，漫步茶园，体验采茶或品茶过程，了解龙井茶制作工艺，呼吸清新空气。","status":"PENDING"},
-          {"slot":"LUNCH","label":"午餐","skeleton":"在龙井村农家享用田园风味午餐，品尝新鲜蔬菜与土鸡汤，享受自然馈赠。","status":"PENDING"},
-          {"slot":"AFTERNOON","label":"下午","skeleton":"参观中国丝绸博物馆，了解丝绸历史与织造技艺；或漫步南宋御街，感受古城风貌与现代商业融合。","status":"PENDING"},
-          {"slot":"DINNER","label":"晚餐","skeleton":"在南宋御街或河坊街附近用餐，尝试葱包桧、定胜糕等特色小吃，丰富味蕾体验。","status":"PENDING"},
-          {"slot":"EVENING","label":"晚上","skeleton":"逛河坊街历史文化街区，购买手信或纪念品，欣赏街头表演，感受杭州夜间市井气息。","status":"PENDING"},
-          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"继续入住原酒店，保持行程连贯性。","status":"PENDING"}
+          {"slot":"MORNING","label":"上午","skeleton":"前往梅家坞或龙井村，漫步茶园，体验采茶或品茶过程，了解龙井茶制作工艺，呼吸清新空气。","city":"杭州市","status":"PENDING"},
+          {"slot":"LUNCH","label":"午餐","skeleton":"在龙井村农家享用田园风味午餐，品尝新鲜蔬菜与土鸡汤，享受自然馈赠。","city":"杭州市","status":"PENDING"},
+          {"slot":"AFTERNOON","label":"下午","skeleton":"参观中国丝绸博物馆，了解丝绸历史与织造技艺；或漫步南宋御街，感受古城风貌与现代商业融合。","city":"杭州市","status":"PENDING"},
+          {"slot":"DINNER","label":"晚餐","skeleton":"在南宋御街或河坊街附近用餐，尝试葱包桧、定胜糕等特色小吃，丰富味蕾体验。","city":"杭州市","status":"PENDING"},
+          {"slot":"EVENING","label":"晚上","skeleton":"逛河坊街历史文化街区，购买手信或纪念品，欣赏街头表演，感受杭州夜间市井气息。","city":"杭州市","status":"PENDING"},
+          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"继续入住原酒店，保持行程连贯性。","city":"杭州市","status":"PENDING"}
         ]
       }
     }
@@ -365,12 +406,12 @@ Gift 旅行规划 C 端接入 API
         "title":"西溪湿地与悠闲返程",
         "summary":"上午游览西溪国家湿地公园，体验水乡生态之美，下午根据航班时间灵活安排，准备返程。",
         "slots":[
-          {"slot":"MORNING","label":"上午","skeleton":"前往西溪国家湿地公园，乘船游览水道，参观洪园或秋雪庵，欣赏湿地自然风光与人文景观。","status":"PENDING"},
-          {"slot":"LUNCH","label":"午餐","skeleton":"在西溪附近或返回市区途中用餐，选择轻便简餐或当地特色面馆，为下午行程预留精力。","status":"PENDING"},
-          {"slot":"AFTERNOON","label":"下午","skeleton":"根据交通情况，可选择前往京杭大运河畔散步，或返回酒店整理行李，最后采购伴手礼。","status":"PENDING"},
-          {"slot":"DINNER","label":"晚餐","skeleton":"在机场或火车站附近享用最后一顿杭州美食，或提前在市区完成晚餐，避免匆忙。","status":"PENDING"},
-          {"slot":"EVENING","label":"晚上","skeleton":"前往交通枢纽，结束愉快的杭州三日之旅，踏上归途。","status":"PENDING"},
-          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"无住宿，行程结束。","status":"PENDING"}
+          {"slot":"MORNING","label":"上午","skeleton":"前往西溪国家湿地公园，乘船游览水道，参观洪园或秋雪庵，欣赏湿地自然风光与人文景观。","city":"杭州市","status":"PENDING"},
+          {"slot":"LUNCH","label":"午餐","skeleton":"在西溪附近或返回市区途中用餐，选择轻便简餐或当地特色面馆，为下午行程预留精力。","city":"杭州市","status":"PENDING"},
+          {"slot":"AFTERNOON","label":"下午","skeleton":"根据交通情况，可选择前往京杭大运河畔散步，或返回酒店整理行李，最后采购伴手礼。","city":"杭州市","status":"PENDING"},
+          {"slot":"DINNER","label":"晚餐","skeleton":"在机场或火车站附近享用最后一顿杭州美食，或提前在市区完成晚餐，避免匆忙。","city":"杭州市","status":"PENDING"},
+          {"slot":"EVENING","label":"晚上","skeleton":"前往交通枢纽，结束愉快的杭州三日之旅，踏上归途。","city":"杭州市","status":"PENDING"},
+          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"无住宿，行程结束。","city":"杭州市","status":"PENDING"}
         ]
       }
     }
@@ -395,6 +436,8 @@ Gift 旅行规划 C 端接入 API
       },
       "missingRequired":[]
     }
+
+接口联调确认：规划流最终返回 `itinerary_skeleton` 和 `done`；收到骨架后，景点、餐厅、酒店和天气统一调用 `POST /app-api/ai/chat/message/itinerary/slot/resolve`，候选在 `candidates`，天气在 `weather`。
 
 十、流读取要点
 --------------

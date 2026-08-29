@@ -293,20 +293,6 @@ yudao:
     web-search:
       enable: true
       api-key: ${WEB_SEARCH_API_KEY:sk-xxxx}
-    weather:
-      app-code: ${ALIYUN_WEATHER_APP_CODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}} # 默认复用阿里云快递 100 AppCode
-      url: ${ALIYUN_WEATHER_URL:https://ali-weather.showapi.com/area-to-weather}
-      amap:
-        api-key: ${yudao.gift.amap.key:} # 统一复用旅行高德 Web 服务 Key
-        geocode-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
-        weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
-    scenic-spot:
-      base-url: ${ALIYUN_SCENIC_SPOT_BASE_URL:https://jmqgjdcx.market.alicloudapi.com}
-      app-code: ${ALIYUN_SCENIC_SPOT_APPCODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}} # 默认复用阿里云快递 100 AppCode
-      amap-url: ${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}
-      amap-key: ${yudao.gift.amap.key:}
-      amap-types: ${AMAP_SCENIC_SPOT_TYPES:110000} # 风景名胜
-
 --- #################### 芋道相关配置 ####################
 
 yudao:
@@ -356,6 +342,23 @@ yudao:
     amap:
       key: ${AMAP_WEB_SERVICE_KEY:}
       reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}
+    trip-provider:
+      weather:
+        app-code: ${ALIYUN_WEATHER_APP_CODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}}
+        url: ${ALIYUN_WEATHER_URL:https://ali-weather.showapi.com/area-to-weather}
+        amap:
+          api-key: ${AMAP_WEATHER_API_KEY:${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}}
+          geocode-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
+          weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
+      scenic-spot:
+        base-url: ${ALIYUN_SCENIC_SPOT_BASE_URL:https://jmqgjdcx.market.alicloudapi.com}
+        app-code: ${ALIYUN_SCENIC_SPOT_APPCODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}}
+        amap-url: ${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}
+        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
+        amap-types: ${AMAP_SCENIC_SPOT_TYPES:110000}
+      travel-place:
+        amap-url: ${AMAP_TRAVEL_PLACE_URL:https://restapi.amap.com/v5/place/text}
+        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
   codegen:
     base-package: ${yudao.info.base-package}
     db-schemas: ${spring.datasource.dynamic.datasource.master.name}

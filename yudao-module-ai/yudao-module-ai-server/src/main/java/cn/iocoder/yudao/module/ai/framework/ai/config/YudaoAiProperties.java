@@ -89,16 +89,6 @@ public class YudaoAiProperties {
      */
     private WebSearch webSearch;
 
-    /**
-     * 天气查询
-     */
-    private Weather weather = new Weather();
-
-    /**
-     * 全国景点查询
-     */
-    private ScenicSpot scenicSpot;
-
     @Data
     public static class Gemini {
 
@@ -288,64 +278,6 @@ public class YudaoAiProperties {
         private boolean enable;
 
         private String apiKey;
-
-    }
-
-    @Data
-    public static class Weather {
-
-        /**
-         * 阿里云市场分配的 AppCode
-         */
-        private String appCode;
-
-        /**
-         * 地名查询天气预报接口地址
-         */
-        private String url = "https://ali-weather.showapi.com/area-to-weather";
-
-        /**
-         * 高德天气配置
-         */
-        private Amap amap = new Amap();
-
-        @Data
-        public static class Amap {
-
-            /**
-             * 高德 Web 服务 API Key
-             */
-            private String apiKey;
-
-            /**
-             * 地理编码接口地址
-             */
-            private String geocodeUrl = "https://restapi.amap.com/v3/geocode/geo";
-
-            /**
-             * 天气查询接口地址
-             */
-            private String weatherUrl = "https://restapi.amap.com/v3/weather/weatherInfo";
-
-        }
-
-    }
-
-    @Data
-    public static class ScenicSpot {
-
-        private String baseUrl;
-
-        private String appCode;
-
-        private String amapUrl = "https://restapi.amap.com/v5/place/text";
-
-        private String amapKey;
-
-        /**
-         * 高德 POI 分类编码，110000 为风景名胜
-         */
-        private String amapTypes = "110000";
 
     }
 

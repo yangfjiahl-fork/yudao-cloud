@@ -123,6 +123,23 @@ yudao:
     amap:
       key: ${AMAP_WEB_SERVICE_KEY:}
       reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}
+    trip-provider:
+      weather:
+        app-code: ${ALIYUN_WEATHER_APP_CODE:}
+        url: ${ALIYUN_WEATHER_URL:https://ali-weather.showapi.com/area-to-weather}
+        amap:
+          api-key: ${AMAP_WEATHER_API_KEY:${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}}
+          geocode-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
+          weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
+      scenic-spot:
+        base-url: ${ALIYUN_SCENIC_SPOT_BASE_URL:https://jmqgjdcx.market.alicloudapi.com}
+        app-code: ${ALIYUN_SCENIC_SPOT_APPCODE:}
+        amap-url: ${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}
+        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
+        amap-types: ${AMAP_SCENIC_SPOT_TYPES:110000}
+      travel-place:
+        amap-url: ${AMAP_TRAVEL_PLACE_URL:https://restapi.amap.com/v5/place/text}
+        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:

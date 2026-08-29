@@ -19,15 +19,8 @@ import cn.iocoder.yudao.module.ai.framework.ai.core.model.suno.api.SunoApi;
 import cn.iocoder.yudao.module.ai.framework.ai.core.model.xinghuo.XingHuoChatModel;
 import cn.iocoder.yudao.module.ai.framework.ai.core.model.yiyan.YiYanChatModel;
 import cn.iocoder.yudao.module.ai.framework.ai.core.model.zhipu.ZhiPuChatModel;
-import cn.iocoder.yudao.module.ai.framework.ai.core.scenic.ScenicSpotQueryClientFacade;
-import cn.iocoder.yudao.module.ai.framework.ai.core.scenic.aliyun.AliyunScenicSpotQueryClient;
-import cn.iocoder.yudao.module.ai.framework.ai.core.scenic.gaode.GaodeScenicSpotQueryClient;
 import cn.iocoder.yudao.module.ai.framework.ai.core.webserch.AiWebSearchClient;
 import cn.iocoder.yudao.module.ai.framework.ai.core.webserch.bocha.AiBoChaWebSearchClient;
-import cn.iocoder.yudao.module.ai.framework.ai.core.weather.WeatherClientFacade;
-import cn.iocoder.yudao.module.ai.framework.ai.core.weather.amap.AmapWeatherClient;
-import cn.iocoder.yudao.module.ai.framework.ai.core.weather.aliyun.AliyunWeatherClient;
-import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.ai.tool.method.PersonService;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +47,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
@@ -430,46 +422,6 @@ public class AiAutoConfiguration {
     @ConditionalOnProperty(value = "yudao.ai.web-search.enable", havingValue = "true")
     public AiWebSearchClient webSearchClient(YudaoAiProperties yudaoAiProperties) {
         return new AiBoChaWebSearchClient(yudaoAiProperties.getWebSearch().getApiKey());
-    }
-
-    // ========== Weather 相关 ==========
-
-    @Bean
-    public AliyunWeatherClient aliyunWeatherClient(RestTemplate restTemplate,
-                                                   YudaoAiProperties yudaoAiProperties) {
-        return new AliyunWeatherClient(restTemplate, yudaoAiProperties.getWeather());
-    }
-
-    @Bean
-    public AmapWeatherClient amapWeatherClient(RestTemplate restTemplate,
-                                               YudaoAiProperties yudaoAiProperties) {
-        return new AmapWeatherClient(restTemplate, yudaoAiProperties.getWeather().getAmap());
-    }
-
-    @Bean
-    public WeatherClientFacade weatherClientFacade(ConfigApi configApi, AliyunWeatherClient aliyunWeatherClient,
-                                                   AmapWeatherClient amapWeatherClient) {
-        return new WeatherClientFacade(configApi, aliyunWeatherClient, amapWeatherClient);
-    }
-
-    // ========== Scenic Spot 相关 ==========
-
-    @Bean
-    public AliyunScenicSpotQueryClient aliyunScenicSpotQueryClient(RestTemplate restTemplate,
-                                                                   YudaoAiProperties yudaoAiProperties) {
-        return new AliyunScenicSpotQueryClient(restTemplate, yudaoAiProperties.getScenicSpot());
-    }
-
-    @Bean
-    public GaodeScenicSpotQueryClient gaodeScenicSpotQueryClient(RestTemplate restTemplate,
-                                                                 YudaoAiProperties yudaoAiProperties) {
-        return new GaodeScenicSpotQueryClient(restTemplate, yudaoAiProperties.getScenicSpot());
-    }
-
-    @Bean
-    public ScenicSpotQueryClientFacade scenicSpotQueryClientFacade(ConfigApi configApi,
-            AliyunScenicSpotQueryClient aliyunClient, GaodeScenicSpotQueryClient gaodeClient) {
-        return new ScenicSpotQueryClientFacade(configApi, aliyunClient, gaodeClient);
     }
 
     // ========== MCP 相关 ==========

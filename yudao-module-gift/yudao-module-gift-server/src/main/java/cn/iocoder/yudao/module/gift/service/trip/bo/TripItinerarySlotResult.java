@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip.bo;
 
+import cn.iocoder.yudao.module.gift.service.trip.TripTravelQueryService;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -19,5 +20,6 @@ public class TripItinerarySlotResult {
     private String detail;
     private List<Map<String, Object>> candidates;
     private List<String> citationIds;
+    private TripTravelQueryService.Weather weather;
 
 }
