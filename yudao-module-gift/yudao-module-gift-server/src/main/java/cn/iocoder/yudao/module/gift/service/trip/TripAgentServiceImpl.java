@@ -59,6 +59,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int STATUS_ACTIVE = 1;
     private static final int STATUS_GENERATED = 1;
     private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
+    private static final String QUESTION_COUNT_CONFIG_KEY = "trip.question.cnt";
+    private static final int MAX_SUGGESTION_COUNT = 5;
     private static final String STATE_ITINERARY_OVERRIDES = "itineraryOverrides";
     private static final int SLOT_RESOLVE_STATUS_PENDING = 0;
     private static final int SLOT_RESOLVE_STATUS_PROCESSING = 1;
@@ -157,8 +159,9 @@ public class TripAgentServiceImpl implements TripAgentService {
         log.info("[handleMessage][tripId({}) 状态字段({}) 缺失字段({})]",
                 trip.getId(), state.keySet(), missingRequired);
         eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
+        int questionCount = getQuestionCount();
         TripInteraction interaction = generateInteraction(conversationId, memberId, state, missingRequired, trip.getId(),
-                promptVariables);
+                promptVariables, questionCount);
         List<Map<String, String>> suggestions = interaction.suggestions();
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
                 .setMissingRequired(missingRequired).setSuggestions(suggestions));
@@ -380,6 +383,17 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
+    private int getQuestionCount() {
+        try {
+            String value = configApi.getConfigValueByKey(QUESTION_COUNT_CONFIG_KEY).getCheckedData();
+            int questionCount = Integer.parseInt(StrUtil.blankToDefault(value, "1").trim());
+            return Math.min(MAX_SUGGESTION_COUNT, Math.max(1, questionCount));
+        } catch (RuntimeException e) {
+            log.warn("[getQuestionCount][系统配置 {} 无效，使用默认值 1]", QUESTION_COUNT_CONFIG_KEY, e);
+            return 1;
+        }
+    }
+
     private Map<String, Object> buildPromptVariables(Long conversationId, Long memberId) {
         AiChatConversationRespDTO conversation = aiChatApi.getConversation(conversationId, memberId,
                 UserTypeEnum.MEMBER.getValue());
@@ -442,15 +456,18 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private TripInteraction generateInteraction(Long conversationId, Long memberId, Map<String, Object> state,
                                                 List<String> missingRequired, Long tripId,
-                                                Map<String, Object> promptVariables) {
+                                                Map<String, Object> promptVariables, int questionCount) {
         List<Map<String, String>> fallbackSuggestions = buildInformationSuggestions(state, missingRequired);
-        String fallbackQuestion = CollUtil.isNotEmpty(missingRequired) ? questionFor(missingRequired.get(0))
-                : "你还可以补充偏好、同行人或特殊约束，让推荐更贴合你。";
+        String fallbackQuestion = composeQuestions(buildFallbackQuestions(state, missingRequired, questionCount));
         try {
             AiChatGenerateRespDTO response = generateStream(conversationId, memberId,
-                    buildInteractionContext(state, missingRequired), "FOLLOW_UP", tripId, promptVariables);
+                    buildInteractionContext(state, missingRequired, questionCount), "FOLLOW_UP", tripId, promptVariables);
             Map<String, Object> interaction = TripAgentFormatUtils.parseMap(response.getContent());
-            String question = StrUtil.blankToDefault(trimNullable(interaction.get("question")), fallbackQuestion);
+            List<String> questions = parseQuestions(interaction.get("questions"), questionCount);
+            if (CollUtil.isEmpty(questions)) {
+                questions = parseQuestions(interaction.get("question"), questionCount);
+            }
+            String question = CollUtil.isNotEmpty(questions) ? composeQuestions(questions) : fallbackQuestion;
             List<Map<String, String>> suggestions = parseSuggestions(interaction.get("suggestions"));
             return new TripInteraction(question, CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions);
         } catch (RuntimeException e) {
@@ -459,7 +476,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private static String buildInteractionContext(Map<String, Object> state, List<String> missingRequired) {
+    private static String buildInteractionContext(Map<String, Object> state, List<String> missingRequired, int questionCount) {
         List<TripInformationSchema.Field> candidates = new ArrayList<>();
         missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
                 .forEach(candidates::add);
@@ -467,6 +484,8 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .filter(field -> !candidates.contains(field)).forEach(candidates::add);
         return "InteractionType: FOLLOW_UP\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
                 + "MissingRequiredFields:\n" + JsonUtils.toJsonString(missingRequired) + "\n\n"
+                + "QuestionCount:\n" + questionCount + "\n\n"
+                + "MaximumSuggestionCount:\n" + MAX_SUGGESTION_COUNT + "\n\n"
                 + "CandidateFields:\n" + JsonUtils.toJsonString(informationFields(candidates));
     }
 
@@ -558,6 +577,38 @@ public class TripAgentServiceImpl implements TripAgentService {
         return suggestions;
     }
 
+    private static List<String> buildFallbackQuestions(Map<String, Object> state, List<String> missingRequired,
+                                                       int questionCount) {
+        List<TripInformationSchema.Field> fields = new ArrayList<>();
+        missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
+                .forEach(fields::add);
+        TripInformationSchema.getFields().stream().filter(field -> !hasValue(state.get(field.stateKey())))
+                .filter(field -> !fields.contains(field)).forEach(fields::add);
+        List<String> questions = fields.stream().map(TripInformationSchema.Field::question).limit(questionCount).toList();
+        return CollUtil.isNotEmpty(questions) ? questions
+                : List.of("你还可以补充偏好、同行人或特殊约束，让推荐更贴合你。");
+    }
+
+    private static List<String> parseQuestions(Object value, int questionCount) {
+        if (value instanceof List<?> list) {
+            return list.stream().map(TripAgentServiceImpl::trimNullable).filter(StrUtil::isNotBlank)
+                    .limit(questionCount).toList();
+        }
+        String question = trimNullable(value);
+        return StrUtil.isNotBlank(question) ? List.of(question) : List.of();
+    }
+
+    private static String composeQuestions(List<String> questions) {
+        if (questions.size() == 1) {
+            return questions.getFirst();
+        }
+        List<String> items = new ArrayList<>();
+        for (int i = 0; i < questions.size(); i++) {
+            items.add((i + 1) + ". " + questions.get(i));
+        }
+        return String.join("\n", items);
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, String>> parseSuggestions(Object value) {
         if (!(value instanceof List<?> list)) {
@@ -575,11 +626,6 @@ public class TripAgentServiceImpl implements TripAgentService {
             }
         }
         return suggestions;
-    }
-
-    private static String questionFor(String missingKey) {
-        TripInformationSchema.Field field = TripInformationSchema.getByMissingKey(missingKey);
-        return field != null ? field.question() : "请补充你的出行信息。";
     }
 
     private static boolean hasValue(Object value) {
@@ -606,7 +652,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private static void addSuggestion(List<Map<String, String>> suggestions, String label, String content) {
-        if (suggestions.size() < 5) {
+        if (suggestions.size() < MAX_SUGGESTION_COUNT) {
             suggestions.add(Map.of("label", label, "content", content));
         }
     }
