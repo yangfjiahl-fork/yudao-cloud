@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 /**
  * 旅行规划收集信息的唯一字段定义。
  *
- * <p>提取模型、必填校验和前端追问胶囊都从这里取值，避免三处各自维护字段。</p>
+ * <p>提取模型、必填校验和模型生成追问时的字段语义都从这里取值，避免三处各自维护字段。</p>
  */
 public final class TripInformationSchema {
 

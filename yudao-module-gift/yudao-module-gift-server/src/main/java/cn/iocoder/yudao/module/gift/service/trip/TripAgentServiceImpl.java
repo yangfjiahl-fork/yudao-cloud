@@ -156,12 +156,15 @@ public class TripAgentServiceImpl implements TripAgentService {
         tripPlanMapper.updateById(trip);
         log.info("[handleMessage][tripId({}) 状态字段({}) 缺失字段({})]",
                 trip.getId(), state.keySet(), missingRequired);
-        List<Map<String, String>> suggestions = buildInformationSuggestions(state, missingRequired);
+        eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
+        TripInteraction interaction = generateInteraction(conversationId, memberId, state, missingRequired, trip.getId(),
+                promptVariables);
+        List<Map<String, String>> suggestions = interaction.suggestions();
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
                 .setMissingRequired(missingRequired).setSuggestions(suggestions));
 
         if (CollUtil.isNotEmpty(missingRequired)) {
-            String question = questionFor(missingRequired.get(0));
+            String question = interaction.question();
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
             log.info("[handleMessage][tripId({}) 返回追问 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
@@ -173,7 +176,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
         boolean hasCurrentItinerary = trip.getCurrentItineraryId() != null;
         if (hasCurrentItinerary && !stateChanged) {
-            String question = "已记录这条信息。你还可以继续补充偏好、同行人或特殊约束，让推荐更贴合你。";
+            String question = interaction.question();
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
             log.info("[handleMessage][tripId({}) 信息未变化，返回补充建议 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
@@ -363,7 +366,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private Long getRoleId(String stage) {
-        if (!"INTAKE".equals(stage)) {
+        if (!"INTAKE".equals(stage) && !"FOLLOW_UP".equals(stage)) {
             throw new IllegalArgumentException("旅行规划只允许调用信息提取引擎");
         }
         String configValue = configApi.getConfigValueByKey(INTAKE_ROLE_ID_CONFIG_KEY).getCheckedData();
@@ -432,15 +435,50 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private static String buildIntakeContext(Map<String, Object> state, String content) {
-        List<Map<String, Object>> fields = TripInformationSchema.getFields().stream().map(field -> {
+        List<Map<String, Object>> fields = informationFields(TripInformationSchema.getFields());
+        return "InteractionType: EXTRACTION\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
+                + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\nUser message:\n" + content;
+    }
+
+    private TripInteraction generateInteraction(Long conversationId, Long memberId, Map<String, Object> state,
+                                                List<String> missingRequired, Long tripId,
+                                                Map<String, Object> promptVariables) {
+        List<Map<String, String>> fallbackSuggestions = buildInformationSuggestions(state, missingRequired);
+        String fallbackQuestion = CollUtil.isNotEmpty(missingRequired) ? questionFor(missingRequired.get(0))
+                : "你还可以补充偏好、同行人或特殊约束，让推荐更贴合你。";
+        try {
+            AiChatGenerateRespDTO response = generateStream(conversationId, memberId,
+                    buildInteractionContext(state, missingRequired), "FOLLOW_UP", tripId, promptVariables);
+            Map<String, Object> interaction = TripAgentFormatUtils.parseMap(response.getContent());
+            String question = StrUtil.blankToDefault(trimNullable(interaction.get("question")), fallbackQuestion);
+            List<Map<String, String>> suggestions = parseSuggestions(interaction.get("suggestions"));
+            return new TripInteraction(question, CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions);
+        } catch (RuntimeException e) {
+            log.warn("[generateInteraction][tripId({}) 追问文案生成失败，使用字段默认文案]", tripId, e);
+            return new TripInteraction(fallbackQuestion, fallbackSuggestions);
+        }
+    }
+
+    private static String buildInteractionContext(Map<String, Object> state, List<String> missingRequired) {
+        List<TripInformationSchema.Field> candidates = new ArrayList<>();
+        missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
+                .forEach(candidates::add);
+        TripInformationSchema.getFields().stream().filter(field -> !hasValue(state.get(field.stateKey())))
+                .filter(field -> !candidates.contains(field)).forEach(candidates::add);
+        return "InteractionType: FOLLOW_UP\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
+                + "MissingRequiredFields:\n" + JsonUtils.toJsonString(missingRequired) + "\n\n"
+                + "CandidateFields:\n" + JsonUtils.toJsonString(informationFields(candidates));
+    }
+
+    private static List<Map<String, Object>> informationFields(List<TripInformationSchema.Field> fields) {
+        return fields.stream().map(field -> {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("stateKey", field.stateKey());
             item.put("label", field.label());
             item.put("required", TripInformationSchema.getRequiredStateKeys().contains(field.stateKey()));
+            item.put("questionHint", field.question());
             return item;
         }).toList();
-        return "Current TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
-                + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\nUser message:\n" + content;
     }
 
     private static Object extractState(Map<String, Object> intake) {
@@ -520,6 +558,25 @@ public class TripAgentServiceImpl implements TripAgentService {
         return suggestions;
     }
 
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, String>> parseSuggestions(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Map<String, String>> suggestions = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> suggestion)) {
+                continue;
+            }
+            String label = trimNullable(suggestion.get("label"));
+            String content = trimNullable(suggestion.get("content"));
+            if (StrUtil.isNotBlank(label) && StrUtil.isNotBlank(content)) {
+                addSuggestion(suggestions, label, content);
+            }
+        }
+        return suggestions;
+    }
+
     private static String questionFor(String missingKey) {
         TripInformationSchema.Field field = TripInformationSchema.getByMissingKey(missingKey);
         return field != null ? field.question() : "请补充你的出行信息。";
@@ -552,6 +609,9 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (suggestions.size() < 5) {
             suggestions.add(Map.of("label", label, "content", content));
         }
+    }
+
+    private record TripInteraction(String question, List<Map<String, String>> suggestions) {
     }
 
     @SuppressWarnings("unchecked")
