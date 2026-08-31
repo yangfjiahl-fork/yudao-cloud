@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQue
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -29,6 +30,9 @@ public class AliyunScenicSpotQueryClient implements ScenicSpotQueryClient {
     private final TripProviderProperties.ScenicSpot config;
 
     @Override
+    @Cacheable(cacheNames = "tripScenicAliyun#10m",
+            key = "#request == null ? '' : #request.toString()",
+            unless = "#result == null || #result.success != true")
     public Response query(Request request) {
         QueryType type = request == null || request.getType() == null ? QueryType.SCENIC_SPOT : request.getType();
         if (config == null || StrUtil.isBlank(config.getAppCode())) {

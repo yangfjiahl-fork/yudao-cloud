@@ -9,12 +9,10 @@ import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClien
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClientFacade;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Resource;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /** 旅行业务使用的统一查询服务；供应商选择和协议细节由 framework 层负责。 */
 @Service
@@ -27,21 +25,11 @@ public class TripTravelQueryService {
     @Resource
     private TravelPlaceQueryClientFacade travelPlaceQueryClientFacade;
 
-    /**
-     * 查询城市当前天气。天气在短时间内变化有限，按城市缓存 10 分钟，避免每个 Slot 重复调用供应商。
-     * 供应商失败会抛出异常，不会写入缓存；城市键统一按小写规范化。
-     */
-    @Cacheable(cacheNames = "tripWeather#10m",
-            key = "T(cn.iocoder.yudao.module.gift.service.trip.TripTravelQueryService).weatherCacheKey(#city)",
-            unless = "#result == null")
+    /** 查询城市当前天气。 */
     public Weather getCurrentWeather(String city) {
         WeatherClient.CurrentWeather weather = weatherClientFacade.getCurrentWeather(city);
         return new Weather(weatherClientFacade.provider(), weather.city(), weather.temperature(), weather.condition(),
                 weather.humidity(), weather.windDirection(), weather.windPower(), weather.queryTime());
-    }
-
-    public static String weatherCacheKey(String city) {
-        return city == null ? "" : city.trim().toLowerCase(Locale.ROOT);
     }
 
     public List<ScenicSpot> queryScenicSpots(String city, String keyword, int limit) {

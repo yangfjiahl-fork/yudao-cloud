@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClien
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherProvider;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -41,6 +42,9 @@ public class AmapWeatherClient implements WeatherClient {
     }
 
     @Override
+    @Cacheable(cacheNames = "tripWeatherGaode#10m",
+            key = "#city == null ? '' : #city.trim().toLowerCase()",
+            unless = "#result == null")
     public CurrentWeather getCurrentWeather(String city) {
         validateConfig();
         if (StrUtil.isBlank(city)) {

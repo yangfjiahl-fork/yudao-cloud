@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -26,6 +27,9 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
     private final TripProviderProperties.ScenicSpot config;
 
     @Override
+    @Cacheable(cacheNames = "tripScenicGaode#10m",
+            key = "#request == null ? '' : #request.toString()",
+            unless = "#result == null || #result.success != true")
     public Response query(Request request) {
         QueryType type = request == null || request.getType() == null ? QueryType.SCENIC_SPOT : request.getType();
         if (type != QueryType.SCENIC_SPOT) {

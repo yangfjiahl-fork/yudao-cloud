@@ -6,6 +6,7 @@ import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClien
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherProvider;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -52,6 +53,9 @@ public class AliyunWeatherClient implements WeatherClient {
      * @return 当前天气
      */
     @Override
+    @Cacheable(cacheNames = "tripWeatherAliyun#10m",
+            key = "#city == null ? '' : #city.trim().toLowerCase()",
+            unless = "#result == null")
     public CurrentWeather getCurrentWeather(String city) {
         validateConfig();
         if (StrUtil.isBlank(city)) {

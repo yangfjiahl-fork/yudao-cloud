@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQue
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -34,6 +35,9 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
     }
 
     @Override
+    @Cacheable(cacheNames = "tripPlaceGaode#10m",
+            key = "#request == null ? '' : #request.toString()",
+            unless = "#result == null || #result.success != true")
     public Response query(Request request) {
         if (request == null || request.getType() == null || StrUtil.isBlank(request.getRegion())) {
             return Response.failure("旅行地点查询缺少类型或城市");
