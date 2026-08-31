@@ -143,7 +143,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
         sanitizeTravelerProfile(state);
         state.remove("destinationEntityId"); // 兼容已存的旧状态，不再持久化外部实体副本
-        String stateBeforeIntake = JsonUtils.toJsonString(state);
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
         AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
                 buildIntakeContext(state, content),
@@ -152,7 +151,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         mergeInformationState(state, extractState(intake));
         applyItineraryPatch(state, intake.get("itinerary_patch"));
         List<String> missingRequired = validateState(state);
-        boolean stateChanged = !StrUtil.equals(stateBeforeIntake, JsonUtils.toJsonString(state));
+        boolean generateRequested = isGenerateRequested(intake);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
         tripPlanMapper.updateById(trip);
@@ -177,11 +176,10 @@ public class TripAgentServiceImpl implements TripAgentService {
             return result;
         }
 
-        boolean hasCurrentItinerary = trip.getCurrentItineraryId() != null;
-        if (hasCurrentItinerary && !stateChanged) {
+        if (!generateRequested) {
             String question = interaction.question();
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
-            log.info("[handleMessage][tripId({}) 信息未变化，返回补充建议 messageId({})]", trip.getId(), assistant.getId());
+            log.info("[handleMessage][tripId({}) 等待用户确认生成或继续补充 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(List.of());
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
@@ -510,6 +508,10 @@ public class TripAgentServiceImpl implements TripAgentService {
         return Map.of();
     }
 
+    private static boolean isGenerateRequested(Map<String, Object> intake) {
+        return "GENERATE".equalsIgnoreCase(trimNullable(intake.get("action")));
+    }
+
     @SuppressWarnings("unchecked")
     private static void mergeInformationState(Map<String, Object> state, Object extractedState) {
         if (!(extractedState instanceof Map<?, ?> patch)) {
@@ -566,6 +568,9 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static List<Map<String, String>> buildInformationSuggestions(Map<String, Object> state,
                                                                            List<String> missingRequired) {
         List<Map<String, String>> suggestions = new ArrayList<>();
+        if (CollUtil.isEmpty(missingRequired)) {
+            addSuggestion(suggestions, "立即生成行程", "请立即生成行程");
+        }
         List<TripInformationSchema.Field> orderedFields = new ArrayList<>();
         missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
                 .forEach(orderedFields::add);
