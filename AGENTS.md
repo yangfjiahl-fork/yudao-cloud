@@ -27,11 +27,11 @@ Always work in the user's current shared checkout and its current branch. Do not
 
 ## Travel Agent Prompt Responsibilities
 
-The travel planner has two database-managed AI roles. Their identifiers are configured through `infra_config` keys `trip.agent.intakeRoleId` and `trip.agent.composerRoleId`; never hardcode a role's static prompt rules in the business service.
+The travel planner has one database-managed information-extraction role. Its identifier is configured through `infra_config` key `trip.agent.intakeRoleId`; never hardcode a role's static prompt rules in the business service.
 
-- **INTAKE role**: owns extraction of explicit user facts, the intake JSON contract, follow-up-question rules, and itinerary override intent rules.
-- **COMPOSER role**: owns the itinerary skeleton JSON contract, slot ordering and restrictions, use of `CurrentItinerary` and `itineraryOverrides`, and the top-level `summary` requirements. `summary` is the whole travel plan description displayed at the top of the client, not a single-day preview.
-- **Backend orchestration**: `TripAgentServiceImpl` supplies only dynamic `TripState`, `CurrentItinerary`, and prompt variables; it validates and normalizes model output, persists plans, and never delegates data integrity or authorization to the model.
+- **INTAKE role**: owns extracting the complete `TripState` from the user message, including updates to existing values and itinerary override intent. Its JSON contract lives in `ai_chat_role.system_message`.
+- **Backend orchestration**: `TripAgentServiceImpl` supplies the current `TripState`, the supported field metadata and prompt variables; it validates and normalizes model output, persists plans, and never delegates data integrity or authorization to the model. `TripItineraryAssembler` deterministically queries travel providers and builds the itinerary skeleton after required information is complete.
+- **Information schema**: `TripInformationSchema` is the single source of truth for collected fields, required fields, follow-up questions and suggestion pills. Optional fields remain writable after first generation and cause a more personalized new itinerary version.
 - **Prompt delivery**: `AiChatControlledGenerateService` reads `ai_chat_role.system_message`, renders `{{variableName}}` placeholders, and appends the current `Asia/Shanghai` time. The travel flow supplies `provinceName`, `cityName`, and `districtName` as name values.
 
 Key travel modules are `TripAgentServiceImpl` (orchestration), `TripResearchExecutor` (deterministic provider lookups), `TripItinerarySlotDO` / `gift_trip_itinerary_slot` (independent slot state), `AiChatControlledGenerateService` (controlled model invocation), and `gift-trip-sse-api.txt` (C-end SSE and slot-resolve contract).

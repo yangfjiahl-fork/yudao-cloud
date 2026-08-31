@@ -42,7 +42,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -60,20 +59,13 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int STATUS_ACTIVE = 1;
     private static final int STATUS_GENERATED = 1;
     private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
-    private static final String COMPOSER_ROLE_ID_CONFIG_KEY = "trip.agent.composerRoleId";
     private static final String STATE_ITINERARY_OVERRIDES = "itineraryOverrides";
-    private static final String INTAKE_ACTION_GENERATE = "GENERATE";
-    private static final String INTAKE_ACTION_CONTINUE = "CONTINUE";
     private static final int SLOT_RESOLVE_STATUS_PENDING = 0;
     private static final int SLOT_RESOLVE_STATUS_PROCESSING = 1;
     private static final int SLOT_RESOLVE_STATUS_COMPLETED = 2;
     private static final int SLOT_RESOLVE_STATUS_FAILED = 3;
-    private static final int MAX_COMPOSER_REPAIR_ATTEMPTS = 2;
-    private static final Set<String> STATE_FIELDS = Set.of("destination", "departure", "startDate", "endDate",
-            "days", "travelerCount", "travelerProfile", "budget", "interests", "pace", "constraints");
     private static final Set<String> DAILY_ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "EVENING", "ACCOMMODATION");
-    private static final Set<String> SCENIC_ITINERARY_SLOTS = Set.of("MORNING", "AFTERNOON", "EVENING");
     private static final Set<String> ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "EVENING", "ACCOMMODATION", "ARRIVAL", "DEPARTURE");
 
@@ -95,6 +87,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     private TripResearchExecutor tripResearchExecutor;
     @Resource
     private TripTravelQueryService tripTravelQueryService;
+    @Resource
+    private TripItineraryAssembler tripItineraryAssembler;
     @Resource
     private Tracer tracer;
 
@@ -150,75 +144,47 @@ public class TripAgentServiceImpl implements TripAgentService {
         String stateBeforeIntake = JsonUtils.toJsonString(state);
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
         AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
-                "Current TripState:\n" + JsonUtils.toJsonString(state) + "\n\nUser message:\n" + content,
+                buildIntakeContext(state, content),
                 "INTAKE", trip.getId(), promptVariables);
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
-        mergeExplicitPatch(state, intake.get("patch"));
+        mergeInformationState(state, extractState(intake));
         applyItineraryPatch(state, intake.get("itinerary_patch"));
         List<String> missingRequired = validateState(state);
         boolean stateChanged = !StrUtil.equals(stateBeforeIntake, JsonUtils.toJsonString(state));
-        String intakeAction = normalizeIntakeAction(intake.get("action"));
-        boolean generateRequested = INTAKE_ACTION_GENERATE.equals(intakeAction);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
         tripPlanMapper.updateById(trip);
         log.info("[handleMessage][tripId({}) 状态字段({}) 缺失字段({})]",
                 trip.getId(), state.keySet(), missingRequired);
+        List<Map<String, String>> suggestions = buildInformationSuggestions(state, missingRequired);
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
-                .setMissingRequired(missingRequired));
+                .setMissingRequired(missingRequired).setSuggestions(suggestions));
 
         if (CollUtil.isNotEmpty(missingRequired)) {
-            String question = safeQuestion(intake.get("question"), missingRequired);
+            String question = questionFor(missingRequired.get(0));
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
             log.info("[handleMessage][tripId({}) 返回追问 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(missingRequired);
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
-                    .setMissingRequired(missingRequired).setSuggestions(buildQuestionSuggestions(state, missingRequired)));
+                    .setMissingRequired(missingRequired).setSuggestions(suggestions));
             return result;
         }
 
         boolean hasCurrentItinerary = trip.getCurrentItineraryId() != null;
-        if (!generateRequested && (!hasCurrentItinerary || !stateChanged)) {
-            String question = readyQuestion(hasCurrentItinerary, INTAKE_ACTION_CONTINUE.equals(intakeAction));
+        if (hasCurrentItinerary && !stateChanged) {
+            String question = "已记录这条信息。你还可以继续补充偏好、同行人或特殊约束，让推荐更贴合你。";
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
-            log.info("[handleMessage][tripId({}) 等待生成确认 messageId({}) hasCurrentItinerary({})]",
-                    trip.getId(), assistant.getId(), hasCurrentItinerary);
+            log.info("[handleMessage][tripId({}) 信息未变化，返回补充建议 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(List.of());
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
-                    .setMissingRequired(List.of()).setSuggestions(buildGenerationSuggestions(state, hasCurrentItinerary)));
+                    .setMissingRequired(List.of()).setSuggestions(suggestions));
             return result;
         }
 
-        eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在生成行程框架…"));
-        eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
-        Map<String, Object> currentItinerary = getCurrentItinerary(trip);
-        TripAgentStreamParser streamParser = new TripAgentStreamParser(eventConsumer);
-        AiChatGenerateRespDTO composerResponse = generateStream(conversationId, memberId,
-                buildComposerContext(state, currentItinerary),
-                "COMPOSER", trip.getId(), promptVariables, streamParser::append);
-        Map<String, Object> itinerary;
-        int repairAttempt = 0;
-        while (true) {
-            try {
-                itinerary = parseItinerarySkeleton(composerResponse.getContent());
-                break;
-            } catch (IllegalStateException validationError) {
-                if (++repairAttempt > MAX_COMPOSER_REPAIR_ATTEMPTS) {
-                    throw validationError;
-                }
-                // 模型输出是一次性的草稿；将服务端校验结果和原始 JSON 作为下一条 Message，
-                // 让 Composer 按数据库中的角色契约修正，而不是中断整条 SSE 流程。
-                eventConsumer.accept(TripAgentEvent.of("stage", "COMPOSER", "正在校验并修正行程框架…"));
-                eventConsumer.accept(TripAgentEvent.of("assistant_start", "COMPOSER", null));
-                TripAgentStreamParser repairParser = new TripAgentStreamParser(eventConsumer);
-                composerResponse = generateStream(conversationId, memberId,
-                        buildComposerRepairContext(state, currentItinerary, composerResponse.getContent(),
-                                validationError.getMessage()),
-                        "COMPOSER", trip.getId(), promptVariables, repairParser::append);
-            }
-        }
+        eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", "正在查询并组装行程框架…"));
+        Map<String, Object> itinerary = tripItineraryAssembler.assemble(state);
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
         int version = (maxVersion == null ? 0 : maxVersion) + 1;
         itinerary.put("version", version);
@@ -241,9 +207,8 @@ public class TripAgentServiceImpl implements TripAgentService {
                 trip.getId(), itineraryDO.getId(), version, assistant.getId(), ((List<?>) itinerary.get("citation_ids")).size());
         TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON").setMessageId(assistant.getId()).setContent(displayText)
                 .setItinerary(itinerary).setMissingRequired(List.of());
-        eventConsumer.accept(TripAgentEvent.of("assistant_end", "COMPOSER", null));
-        eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "COMPOSER", displayText).setMessageId(assistant.getId())
-                .setItinerary(itinerary).setMissingRequired(List.of()));
+        eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", displayText).setMessageId(assistant.getId())
+                .setItinerary(itinerary).setMissingRequired(List.of()).setSuggestions(suggestions));
         return result;
     }
 
@@ -398,15 +363,17 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private Long getRoleId(String stage) {
-        String configKey = "INTAKE".equals(stage) ? INTAKE_ROLE_ID_CONFIG_KEY : COMPOSER_ROLE_ID_CONFIG_KEY;
-        String configValue = configApi.getConfigValueByKey(configKey).getCheckedData();
+        if (!"INTAKE".equals(stage)) {
+            throw new IllegalArgumentException("旅行规划只允许调用信息提取引擎");
+        }
+        String configValue = configApi.getConfigValueByKey(INTAKE_ROLE_ID_CONFIG_KEY).getCheckedData();
         if (StrUtil.isBlank(configValue)) {
-            throw new IllegalStateException("系统配置 " + configKey + " 未配置");
+            throw new IllegalStateException("系统配置 " + INTAKE_ROLE_ID_CONFIG_KEY + " 未配置");
         }
         try {
             return Long.parseLong(configValue.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("系统配置 " + configKey + " 必须是角色编号", e);
+            throw new IllegalStateException("系统配置 " + INTAKE_ROLE_ID_CONFIG_KEY + " 必须是角色编号", e);
         }
     }
 
@@ -441,34 +408,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         return String.join("", names);
     }
 
-    private static String buildComposerContext(Map<String, Object> state, Map<String, Object> currentItinerary) {
-        return "TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
-                + "CurrentItinerary（首次生成时为空；有值时仅作为上一版参考）：\n"
-                + JsonUtils.toJsonString(currentItinerary);
-    }
-
-    private static String buildComposerRepairContext(Map<String, Object> state, Map<String, Object> currentItinerary,
-                                                     String previousResponse, String validationMessage) {
-        return "上一版 ItinerarySkeleton 未通过服务端校验。请根据你的 Composer 角色契约修正后重新输出完整 JSON，"
-                + "不得输出解释或 Markdown。\n服务端校验结果：" + StrUtil.blankToDefault(validationMessage, "结果不符合约定")
-                + "\n上一版输出：\n" + StrUtil.blankToDefault(previousResponse, "（空）")
-                + "\n\nTripState：\n" + JsonUtils.toJsonString(state) + "\n\n"
-                + "CurrentItinerary：\n" + JsonUtils.toJsonString(currentItinerary);
-    }
-
-    private Map<String, Object> getCurrentItinerary(TripPlanDO trip) {
-        if (trip.getCurrentItineraryId() == null) {
-            return Map.of();
-        }
-        TripItineraryDO itinerary = tripItineraryMapper.selectById(trip.getCurrentItineraryId());
-        if (itinerary == null || !trip.getId().equals(itinerary.getTripId())) {
-            log.warn("[getCurrentItinerary][tripId({}) currentItineraryId({}) 不存在或归属不匹配]",
-                    trip.getId(), trip.getCurrentItineraryId());
-            return Map.of();
-        }
-        return TripAgentFormatUtils.parseMap(itinerary.getContentJson());
-    }
-
     private AiChatMessageRespDTO createTranscriptMessage(Long conversationId, Long memberId, String content, boolean assistant) {
         AiChatMessageCreateAssistantReqDTO req = new AiChatMessageCreateAssistantReqDTO();
         req.setConversationId(conversationId);
@@ -492,13 +431,35 @@ public class TripAgentServiceImpl implements TripAgentService {
         aiChatApi.updateConversation(updateReq);
     }
 
+    private static String buildIntakeContext(Map<String, Object> state, String content) {
+        List<Map<String, Object>> fields = TripInformationSchema.getFields().stream().map(field -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("stateKey", field.stateKey());
+            item.put("label", field.label());
+            item.put("required", TripInformationSchema.getRequiredStateKeys().contains(field.stateKey()));
+            return item;
+        }).toList();
+        return "Current TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
+                + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\nUser message:\n" + content;
+    }
+
+    private static Object extractState(Map<String, Object> intake) {
+        for (String key : List.of("state", "tripState", "patch")) {
+            Object value = intake.get(key);
+            if (value instanceof Map<?, ?>) {
+                return value;
+            }
+        }
+        return Map.of();
+    }
+
     @SuppressWarnings("unchecked")
-    private static void mergeExplicitPatch(Map<String, Object> state, Object patchValue) {
-        if (!(patchValue instanceof Map<?, ?> patch)) {
+    private static void mergeInformationState(Map<String, Object> state, Object extractedState) {
+        if (!(extractedState instanceof Map<?, ?> patch)) {
             return;
         }
         patch.forEach((key, value) -> {
-            if (key instanceof String field && STATE_FIELDS.contains(field) && value != null) {
+            if (key instanceof String field && TripInformationSchema.supports(field) && value != null) {
                 Object normalized = normalizeField(field, value);
                 if (normalized == null) {
                     state.remove(field);
@@ -545,69 +506,33 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private static List<Map<String, String>> buildQuestionSuggestions(Map<String, Object> state, List<String> missingRequired) {
+    private static List<Map<String, String>> buildInformationSuggestions(Map<String, Object> state,
+                                                                           List<String> missingRequired) {
         List<Map<String, String>> suggestions = new ArrayList<>();
-        if (missingRequired.contains("departure")) {
-            addSuggestion(suggestions, "从上海出发", "我从上海出发");
+        List<TripInformationSchema.Field> orderedFields = new ArrayList<>();
+        missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
+                .forEach(orderedFields::add);
+        TripInformationSchema.getFields().stream().filter(field -> !hasValue(state.get(field.stateKey())))
+                .filter(field -> !orderedFields.contains(field)).forEach(orderedFields::add);
+        for (TripInformationSchema.Field field : orderedFields) {
+            field.suggestions().forEach(suggestion -> addSuggestion(suggestions, suggestion.label(), suggestion.content()));
         }
-        if (missingRequired.contains("destination")) {
-            addSuggestion(suggestions, "去杭州", "目的地是杭州");
-        }
-        if (missingRequired.contains("start_date")) {
-            LocalDate suggestedDate = LocalDate.now().plusWeeks(2);
-            addSuggestion(suggestions, suggestedDate.getMonthValue() + " 月 " + suggestedDate.getDayOfMonth() + " 日出发",
-                    suggestedDate + "出发");
-        }
-        if (missingRequired.contains("days")) {
-            addSuggestion(suggestions, "玩 3 天", "计划玩3天");
-        }
-        if (missingRequired.contains("traveler_count")) {
-            addSuggestion(suggestions, "2 人出行", "总共2人出行");
-        }
-        if (missingRequired.contains("budget")) {
-            addSuggestion(suggestions, "人均 ¥1,500", "人均预算1500元");
-        }
-        if (!hasValues(state.get("travelerProfile"))) {
-            addSuggestion(suggestions, "2 大 1 小", "总共3人出行，其中2位成人、1位儿童");
-        }
-        if (!hasValues(state.get("interests"))) {
-            addSuggestion(suggestions, "美食与人文", "偏好美食和人文");
-        }
-        if (StrUtil.isBlank(trimNullable(state.get("pace")))) {
-            addSuggestion(suggestions, "轻松慢游", "希望行程节奏轻松，不要太赶");
-        }
-        if (!hasValues(state.get("constraints"))) {
-            addSuggestion(suggestions, "亲子友好", "希望行程亲子友好");
-        }
-        return suggestions.stream().limit(10).toList();
-    }
-
-    private static List<Map<String, String>> buildGenerationSuggestions(Map<String, Object> state,
-                                                                          boolean hasCurrentItinerary) {
-        List<Map<String, String>> suggestions = new ArrayList<>();
-        addSuggestion(suggestions, hasCurrentItinerary ? "重新生成行程" : "直接生成行程",
-                hasCurrentItinerary ? "请重新生成当前行程" : "请直接生成行程");
-        addSuggestion(suggestions, "继续补充", "我想继续补充旅行偏好");
-        buildQuestionSuggestions(state, List.of()).forEach(suggestion ->
-                addSuggestion(suggestions, suggestion.get("label"), suggestion.get("content")));
         return suggestions;
     }
 
-    private static String readyQuestion(boolean hasCurrentItinerary, boolean continueRequested) {
-        if (hasCurrentItinerary) {
-            return "当前行程已经生成。你可以直接告诉我想调整的内容，或选择重新生成。";
+    private static String questionFor(String missingKey) {
+        TripInformationSchema.Field field = TripInformationSchema.getByMissingKey(missingKey);
+        return field != null ? field.question() : "请补充你的出行信息。";
+    }
+
+    private static boolean hasValue(Object value) {
+        if (value instanceof List<?> list) {
+            return CollUtil.isNotEmpty(list);
         }
-        return continueRequested ? "好的，你还可以补充预算、人数、偏好或约束；准备好后可直接生成行程。"
-                : "出行的关键信息已经齐全。你想继续补充偏好，还是现在直接生成行程？";
-    }
-
-    private static String normalizeIntakeAction(Object action) {
-        String value = StrUtil.trim(ObjUtil.toString(action)).toUpperCase(Locale.ROOT);
-        return INTAKE_ACTION_GENERATE.equals(value) || INTAKE_ACTION_CONTINUE.equals(value) ? value : "NONE";
-    }
-
-    private static boolean hasValues(Object value) {
-        return value instanceof List<?> list && CollUtil.isNotEmpty(list);
+        if (value instanceof Map<?, ?> map) {
+            return MapUtil.isNotEmpty(map);
+        }
+        return StrUtil.isNotBlank(trimNullable(value));
     }
 
     private static void sanitizeTravelerProfile(Map<String, Object> state) {
@@ -731,19 +656,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         return missing;
     }
 
-    private static String safeQuestion(Object question, List<String> missing) {
-        String value = question != null ? StrUtil.trim(question.toString()) : null;
-        if (StrUtil.isNotBlank(value)) {
-            return value;
-        }
-        if (missing.contains("departure")) return "你从哪里出发？";
-        if (missing.contains("destination")) return "你想去哪里旅行？";
-        if (missing.contains("start_date")) return "你的出发日期是？";
-        if (missing.contains("days")) return "这次计划玩几天？";
-        if (missing.contains("traveler_count")) return "这次一共几个人出行？";
-        return "你的预算大约是多少？";
-    }
-
     private static String buildIntakeCompletedContent(Map<String, Object> state, List<String> missingRequired) {
         List<String> values = new ArrayList<>();
         String destination = trimNullable(state.get("destination"));
@@ -760,104 +672,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         String summary = CollUtil.isEmpty(values) ? "当前需求" : String.join(" · ", values);
         return CollUtil.isEmpty(missingRequired) ? "需求已整理：" + summary : "已整理：" + summary;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> parseItinerarySkeleton(String content) {
-        Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(content);
-        if (StrUtil.isBlank(trimNullable(itinerary.get("summary"))) || !(itinerary.get("daily_itinerary") instanceof List<?>)) {
-            throw new IllegalStateException("行程生成结果不符合约定 JSON");
-        }
-        normalizeSkeleton(itinerary);
-        validateItinerarySlotFields(itinerary);
-        itinerary.put("citation_ids", List.of());
-        return itinerary;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void normalizeSkeleton(Map<String, Object> itinerary) {
-        List<?> days = (List<?>) itinerary.get("daily_itinerary");
-        for (Object day : days) {
-            if (!(day instanceof Map<?, ?> rawDay)) {
-                continue;
-            }
-            Map<String, Object> dayMap = (Map<String, Object>) rawDay;
-            if (!(dayMap.get("slots") instanceof List<?>)) {
-                List<Map<String, Object>> slots = new ArrayList<>();
-                for (String slot : List.of("MORNING", "LUNCH", "AFTERNOON", "DINNER", "EVENING", "ACCOMMODATION")) {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("slot", slot);
-                    item.put("label", slotLabel(slot));
-                    item.put("skeleton", "待补充");
-                    item.put("status", "PENDING");
-                    slots.add(item);
-                }
-                dayMap.put("slots", slots);
-            } else {
-                ((List<?>) dayMap.get("slots")).forEach(slot -> {
-                    if (slot instanceof Map<?, ?> rawSlot) {
-                        Map<String, Object> slotMap = (Map<String, Object>) rawSlot;
-                        slotMap.putIfAbsent("status", "PENDING");
-                        slotMap.putIfAbsent("label", slotLabel(ObjUtil.toString(slotMap.get("slot"))));
-                        slotMap.putIfAbsent("skeleton", "待补充");
-                        String city = trimNullable(slotMap.get("city"));
-                        if (StrUtil.isNotBlank(city)) {
-                            slotMap.put("city", city);
-                        }
-                    }
-                });
-            }
-        }
-        if (!(itinerary.get("transport") instanceof Map<?, ?>)) {
-            Map<String, Object> transport = new LinkedHashMap<>();
-            transport.put("arrival", Map.of("status", "PENDING", "skeleton", "抵达交通待确认"));
-            transport.put("departure", Map.of("status", "PENDING", "skeleton", "返程交通待确认"));
-            itinerary.put("transport", transport);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void validateItinerarySlotFields(Map<String, Object> itinerary) {
-        Set<String> poiNames = new HashSet<>();
-        Object dailyItinerary = itinerary.get("daily_itinerary");
-        if (!(dailyItinerary instanceof List<?> days)) {
-            return;
-        }
-        for (Object day : days) {
-            if (!(day instanceof Map<?, ?> dayMap) || !(dayMap.get("slots") instanceof List<?> slots)) {
-                continue;
-            }
-            Integer dayNumber = MapUtil.getInt(dayMap, "day");
-            for (Object slot : slots) {
-                if (!(slot instanceof Map<?, ?> rawSlot)) {
-                    continue;
-                }
-                Map<String, Object> slotMap = (Map<String, Object>) rawSlot;
-                String slotType = trimNullable(slotMap.get("slot")).toUpperCase(Locale.ROOT);
-                String city = trimNullable(slotMap.get("city"));
-                if (StrUtil.isBlank(city)) {
-                    throw new IllegalStateException("第" + dayNumber + "天" + slotType + "缺少所在城市");
-                }
-                if (!SCENIC_ITINERARY_SLOTS.contains(slotType)) {
-                    continue;
-                }
-                String poiName = trimNullable(slotMap.get("poiName"));
-                if (StrUtil.isBlank(poiName)) {
-                    throw new IllegalStateException("第" + dayNumber + "天" + slotType + "缺少景点名称");
-                }
-                String area = trimNullable(slotMap.get("area"));
-                if (StrUtil.isBlank(area)) {
-                    throw new IllegalStateException("第" + dayNumber + "天" + slotType + "缺少景点片区");
-                }
-                slotMap.put("poiName", poiName);
-                slotMap.put("area", area);
-                slotMap.put("city", city);
-                if (!poiNames.add(poiName.replaceAll("\\s+", ""))) {
-                    log.warn("[validateItinerarySlotFields][第{}天{}重复景点({})，保留当前行程继续生成]",
-                            dayNumber, slotType, poiName);
-                }
-            }
-        }
     }
 
     private static String trimNullable(Object value) {
