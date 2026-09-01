@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 
 import java.util.Collection;
@@ -19,6 +20,9 @@ public interface TripAgentService {
 
     /** 按已授权的聊天消息编号批量恢复完整行程。 */
     Map<Long, Map<String, Object>> getItineraryMapByMessageIds(Collection<Long> messageIds);
+
+    /** 按需解析某一天的交通段与动态地图路线点。 */
+    TripItineraryRouteResult resolveItineraryRoute(Long conversationId, Long memberId, Long messageId, Integer day);
 
     TripItinerarySlotResult resolveItinerarySlot(Long conversationId, Long memberId, Long messageId,
                                                   Integer day, String slot);

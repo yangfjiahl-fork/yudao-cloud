@@ -24,6 +24,7 @@ import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItinerarySlotMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.system.api.area.AreaApi;
@@ -240,6 +241,24 @@ public class TripAgentServiceImpl implements TripAgentService {
         });
         itineraryMapById.values().forEach(itinerary -> itinerary.put("citation_ids", collectCitationIds(itinerary)));
         return itineraryMap;
+    }
+
+    @Override
+    public TripItineraryRouteResult resolveItineraryRoute(Long conversationId, Long memberId, Long messageId, Integer day) {
+        TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
+        TripItineraryDO itinerary = tripItineraryMapper.selectByMessageId(messageId);
+        if (trip == null || itinerary == null || !trip.getId().equals(itinerary.getTripId())) {
+            throw new IllegalArgumentException("行程路线不存在或不属于当前会话");
+        }
+        if (!itinerary.getId().equals(trip.getCurrentItineraryId())) {
+            throw new IllegalArgumentException("只能解析当前生效的行程路线");
+        }
+        List<Map<String, Object>> segments = tripItineraryAssembler.resolveTransportSegments(
+                TripAgentFormatUtils.parseMap(itinerary.getContentJson()), day);
+        String status = segments.isEmpty() ? "PENDING" : segments.stream()
+                .allMatch(segment -> "VERIFIED".equals(segment.get("status"))) ? "VERIFIED" : "ESTIMATED";
+        return new TripItineraryRouteResult().setMessageId(messageId).setDay(day).setStatus(status)
+                .setTransportSegments(segments);
     }
 
     @Override
@@ -629,7 +648,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static String composeQuestions(List<String> questions) {
         if (questions.size() == 1) {
-            return questions.getFirst();
+            return questions.get(0);
         }
         List<String> items = new ArrayList<>();
         for (int i = 0; i < questions.size(); i++) {

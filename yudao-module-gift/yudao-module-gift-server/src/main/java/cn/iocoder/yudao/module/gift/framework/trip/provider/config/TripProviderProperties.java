@@ -11,6 +11,7 @@ public class TripProviderProperties {
     private Weather weather = new Weather();
     private ScenicSpot scenicSpot = new ScenicSpot();
     private TravelPlace travelPlace = new TravelPlace();
+    private Route route = new Route();
 
     @Data
     public static class Weather {
@@ -39,6 +40,15 @@ public class TripProviderProperties {
     @Data
     public static class TravelPlace {
         private String amapUrl = "https://restapi.amap.com/v5/place/text";
+        private String amapAroundUrl = "https://restapi.amap.com/v5/place/around";
         private String amapKey;
     }
+
+    @Data
+    public static class Route {
+        private String amapKey;
+        private String walkingUrl = "https://restapi.amap.com/v3/direction/walking";
+        private String transitUrl = "https://restapi.amap.com/v3/direction/transit/integrated";
+    }
+
 }

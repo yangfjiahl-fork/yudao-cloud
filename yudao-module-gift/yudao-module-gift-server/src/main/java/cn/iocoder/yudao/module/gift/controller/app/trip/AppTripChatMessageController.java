@@ -8,6 +8,8 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageSendReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatStreamRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryRouteResolveReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryRouteResolveRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripWeatherRespVO;
@@ -15,6 +17,7 @@ import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -140,6 +143,26 @@ public class AppTripChatMessageController {
                     .setWindPower(result.getWeather().windPower())
                     .setQueryTime(result.getWeather().queryTime()));
         }
+        return success(response);
+    }
+
+    @PostMapping("/itinerary/route/resolve")
+    @Operation(summary = "按需解析某一天的交通路线")
+    public CommonResult<AppTripItineraryRouteResolveRespVO> resolveItineraryRoute(
+            @Valid @RequestBody AppTripItineraryRouteResolveReqVO reqVO) {
+        Long memberId = getLoginUserId();
+        AiChatConversationRespDTO conversation = aiChatApi.getConversation(reqVO.getConversationId(), memberId,
+                UserTypeEnum.MEMBER.getValue());
+        if (conversation == null) {
+            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+        }
+        TripItineraryRouteResult result = tripAgentService.resolveItineraryRoute(reqVO.getConversationId(), memberId,
+                reqVO.getMessageId(), reqVO.getDay());
+        AppTripItineraryRouteResolveRespVO response = new AppTripItineraryRouteResolveRespVO();
+        response.setMessageId(result.getMessageId());
+        response.setDay(result.getDay());
+        response.setStatus(result.getStatus());
+        response.setTransportSegments(result.getTransportSegments());
         return success(response);
     }
 

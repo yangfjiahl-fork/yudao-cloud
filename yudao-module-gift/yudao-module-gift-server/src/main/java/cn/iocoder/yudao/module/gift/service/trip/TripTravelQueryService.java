@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClientFacade;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.route.amap.AmapRouteQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClientFacade;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClient;
@@ -24,6 +25,8 @@ public class TripTravelQueryService {
     private ScenicSpotQueryClientFacade scenicSpotQueryClientFacade;
     @Resource
     private TravelPlaceQueryClientFacade travelPlaceQueryClientFacade;
+    @Resource
+    private AmapRouteQueryClient amapRouteQueryClient;
 
     /** 查询城市当前天气。 */
     public Weather getCurrentWeather(String city) {
@@ -69,6 +72,36 @@ public class TripTravelQueryService {
         return queryPlaces(TravelPlaceQueryClient.PlaceType.RESTAURANT, city, limit);
     }
 
+    /** 以已选景点为中心查询餐厅；坐标必须是高德 GCJ-02。 */
+    public List<Place> queryRestaurantsAround(String city, String longitude, String latitude, int limit) {
+        TravelPlaceQueryClient.Response response = travelPlaceQueryClientFacade.query(new TravelPlaceQueryClient.Request()
+                .setType(TravelPlaceQueryClient.PlaceType.RESTAURANT).setRegion(city).setLocation(longitude + ',' + latitude)
+                .setRadius(1_500).setLimit(limit));
+        if (!Boolean.TRUE.equals(response.getSuccess())) {
+            throw new IllegalStateException(StrUtil.blankToDefault(response.getMessage(), "周边餐厅查询失败"));
+        }
+        String provider = travelPlaceQueryClientFacade.provider(TravelPlaceQueryClient.PlaceType.RESTAURANT);
+        return response.getPlaces().stream()
+                .map(place -> new Place(provider, place.getExternalId(), place.getName(), place.getAddress(),
+                        place.getLongitude(), place.getLatitude(), place.getImageUrl(), place.getTelephone(),
+                        place.getRating(), place.getCost(), place.getTag()))
+                .toList();
+    }
+
+    public boolean isRouteAvailable() {
+        return amapRouteQueryClient.isConfigured();
+    }
+
+    /** 查询同城单段路径；调用方决定是否在失败时回退为本地估算。 */
+    public Route queryRoute(String city, String origin, String destination, RouteMode mode) {
+        AmapRouteQueryClient.Mode amapMode = mode == RouteMode.WALKING
+                ? AmapRouteQueryClient.Mode.WALKING : AmapRouteQueryClient.Mode.TRANSIT;
+        AmapRouteQueryClient.Route route = amapRouteQueryClient.query(new AmapRouteQueryClient.Request(city, origin, destination, amapMode));
+        List<RoutePoint> routePoints = route.routePoints().stream()
+                .map(point -> new RoutePoint(point.longitude(), point.latitude())).toList();
+        return new Route("gaode", mode, route.distanceMeters(), route.durationSeconds(), routePoints);
+    }
+
     private List<Place> queryPlaces(TravelPlaceQueryClient.PlaceType type, String city, int limit) {
         TravelPlaceQueryClient.Response response = travelPlaceQueryClientFacade.query(new TravelPlaceQueryClient.Request()
                 .setType(type).setRegion(city).setLimit(limit));
@@ -112,5 +145,17 @@ public class TripTravelQueryService {
 
     public record Place(String provider, String externalId, String name, String address, String longitude,
                         String latitude, String imageUrl, String telephone, String rating, String cost, String tag) {
+    }
+
+    public enum RouteMode {
+        WALKING,
+        TRANSIT
+    }
+
+    public record Route(String provider, RouteMode mode, int distanceMeters, int durationSeconds, List<RoutePoint> routePoints) {
+    }
+
+    /** 路线点为高德 GCJ-02 坐标，供 uni-app、Android 与 iOS 地图 SDK 绘制折线。 */
+    public record RoutePoint(double longitude, double latitude) {
     }
 }

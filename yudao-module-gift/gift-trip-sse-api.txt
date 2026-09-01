@@ -1,30 +1,25 @@
-Gift 旅行规划 C 端接入 API
-==========================
+Gift 旅行规划 C 端接口
+=====================
 
-更新日期：2026-08-29
+更新日期：2026-09-01
 
 一、通用约定
 ------------
 
 - API 前缀：`/app-api`。
-- `conversationId`、`messageId` 及候选实体的 `id` 均按字符串保存，不能转为 JavaScript `number`。
-- 发送消息是 POST SSE。请使用 `fetch + ReadableStream`，不要使用仅支持 GET 的 `EventSource`。
-- SSE 每帧格式为：`data:{"code":0,"msg":"","data":{...}}\n\n`；业务事件读取 `data.event`。
-- SSE 建立前的参数、鉴权或权限错误可能返回普通 JSON 错误；SSE 已建立后的执行错误会以 `event=error` 返回。
+- 全部接口需要会员登录态：`Authorization: Bearer <accessToken>`；多租户请求同时传 `tenant-id`。
+- 所有编号字段（如 `conversationId`、`messageId`、`slotId`）按字符串处理，不要转成 JavaScript `number`。
+- 普通接口统一返回：`{"code":0,"msg":"","data":...}`。
+- 流式接口使用 `POST + text/event-stream`。建议使用 `fetch + ReadableStream`；每帧格式为 `data:{...}\n\n`，业务内容位于 `data`。
 
-建议请求头：
-
-    Content-Type: application/json
-    Accept: text/event-stream
-    Authorization: Bearer <member access token>
-    tenant-id: <tenant id>
-
-二、创建会话
+二、会话接口
 ------------
+
+### 1. 创建会话
 
 `POST /app-api/ai/chat/conversation/create`
 
-请求体可为空。创建时已知省市区可传：
+请求体可为空；已知所在地时可传：
 
     {
       "provinceId":"330000",
@@ -32,7 +27,7 @@ Gift 旅行规划 C 端接入 API
       "districtId":"330106"
     }
 
-成功后返回单帧 SSE：
+响应为单帧 SSE：
 
     data:{"code":0,"msg":"","data":{
       "event":"created",
@@ -41,177 +36,162 @@ Gift 旅行规划 C 端接入 API
       "content":"请告诉我出发地、目的地、出发日期、旅行天数、同行人数和预算，我来帮你规划旅程。"
     }}
 
-前端保存 `conversationId`，并将 `content` 作为第一条助手文本展示。
+保存 `conversationId`；`content` 可作为首条助手消息展示。
 
-若创建请求携带 `provinceId`、`cityId` 或 `districtId`，会按“省 + 市 + 区”的已知层级组合默认出发地 `departure`。该默认值满足出发地必填条件，用户发送新的明确出发地后会覆盖默认值。
+### 2. 会话列表
 
-首次或重新生成行程成功后，会话标题更新为 `出发日期 目的地`，例如 `2026-09-12 杭州`；前端刷新会话列表后即可显示新标题。
+`GET /app-api/ai/chat/conversation/list`
 
-三、发送消息并接收流
-----------------------
+`data` 为数组，单项字段：
+
+    {
+      "id":"1781604279872581776",
+      "title":"2026-10-01 杭州",
+      "pinned":false,
+      "provinceId":"330000",
+      "cityId":"330100",
+      "districtId":"330106",
+      "createTime":"2026-09-01 21:30:00"
+    }
+
+### 3. 更新会话
+
+`PUT /app-api/ai/chat/conversation/update`
+
+    {
+      "id":"1781604279872581776",
+      "title":"国庆杭州亲子游",
+      "pinned":true
+    }
+
+`title`、`pinned` 均为可选字段。成功时 `data=true`。
+
+### 4. 删除会话
+
+`DELETE /app-api/ai/chat/conversation/delete?id=1781604279872581776`
+
+成功时 `data=true`。
+
+三、消息与 SSE
+---------------
+
+### 1. 查询消息历史
+
+`GET /app-api/ai/chat/message/list-by-conversation-id?conversationId=1781604279872581776`
+
+`data` 为消息数组：
+
+    {
+      "id":"1781604279872581780",
+      "replyId":"0",
+      "type":"assistant",
+      "content":"已为你生成杭州三日行程。",
+      "itinerary": { },
+      "createTime":"2026-09-01 21:31:00"
+    }
+
+- `itinerary` 仅行程消息存在；前端用它直接恢复行程卡片。
+- 普通文本消息的 `itinerary` 为 `null` 或不存在。
+
+### 2. 发送消息
 
 `POST /app-api/ai/chat/message/send-stream`
 
+请求头增加：
+
+    Accept: text/event-stream
+
+请求体：
+
     {
       "conversationId":"1781604279872581776",
-      "content":"10 月去杭州玩 3 天，两个人，喜欢美食和人文"
+      "content":"我计划10月1日从上海去杭州，玩3天，2人，人均预算2000元"
     }
 
-用户发言由前端先乐观插入；本接口流只处理助手侧的 loading、追问和行程结果。
+前端可先乐观展示用户 `content`；助手侧内容以 SSE 事件为准。
 
-四、SSE 事件
-------------
+### 3. SSE 事件
 
-所有字段均位于外层响应的 `data` 内。
-
-| 事件 | 关键字段 | 前端处理 |
+| 事件 | 前端需要处理的字段 | 处理方式 |
 | --- | --- | --- |
-| `accepted` | `conversationId`、`content` | 创建本轮请求状态，显示 `content` 作为初始 loading 文案。 |
-| `stage` | `stage=INTAKE|COMPOSER`、`content` | 更新 loading 文案；不写入聊天记录。 |
-| `intake_completed` | `content`、`missingRequired` | 本轮需求已完成整理；展示简短摘要，不写入聊天记录。 |
-| `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 插入正式助手消息，并展示可选胶囊；点击胶囊后发送下一轮消息。 |
-| `assistant_start` | `stage=COMPOSER` | 创建临时的行程摘要/骨架区域。 |
-| `assistant_delta` | `content`、`sequence` | 追加到临时摘要，实现逐字展示；不能单独成为聊天消息。 |
-| `itinerary_day_started` | `sequence`、`item.day` | 已开始流式生成第 N 天；显示“正在规划第 N 天”，不创建日程卡。 |
-| `itinerary_item` | `item`、`sequence` | 按 `item.day` 更新临时的单日预览；不能简单追加。 |
-| `assistant_end` | - | 停止摘要光标，继续等待最终骨架。 |
-| `itinerary_skeleton` | `messageId`、`content`、`itinerary` | 用完整骨架替换临时预览，插入正式助手行程消息，并发加载可见节点。 |
-| `done` | - | 结束本轮 loading，清理临时请求状态。 |
-| `error` | `content` | 显示错误并结束 loading；该分支后不会再有 `done`。 |
+| `accepted` | `conversationId`、`content` | 开始本轮 loading。 |
+| `stage` | `stage`、`content` | 更新 loading 文案，不写入聊天记录。`stage` 可能为 `INTAKE`、`FOLLOW_UP`、`ASSEMBLE`。 |
+| `intake_completed` | `content`、`missingRequired`、`suggestions` | 可展示本轮摘要；不创建正式聊天消息。 |
+| `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 创建一条助手文本消息并展示胶囊。 |
+| `itinerary_skeleton` | `messageId`、`content`、`itinerary`、`suggestions` | 创建一条助手行程消息，用 `itinerary` 渲染或替换行程卡。 |
+| `done` | `conversationId` | 结束 loading。 |
+| `error` | `conversationId`、`content` | 展示错误并结束 loading。 |
 
-`stage` 只可能为：
-
-- `INTAKE`：正在理解并补全出行需求。
-- `COMPOSER`：正在生成行程框架。
-
-生成成功时的原始 SSE 片段（每帧均以空行结束；`itinerary_item` 只展示一个半天节点的缩略内容）如下：
-
-    data:{"code":0,"msg":"","data":{"event":"accepted","conversationId":"1781604279872581803","content":"正在分析您的需求…"}}
-
-    data:{"code":0,"msg":"","data":{"event":"stage","stage":"INTAKE","content":"正在提取本轮出行需求…"}}
-
-    data:{"code":0,"msg":"","data":{"event":"intake_completed","stage":"INTAKE","content":"需求已整理：杭州 · 3 天 · 2 人","missingRequired":[]}}
-
-    data:{"code":0,"msg":"","data":{"event":"stage","stage":"COMPOSER","content":"正在生成行程框架…"}}
-
-    data:{"code":0,"msg":"","data":{"event":"assistant_start","stage":"COMPOSER"}}
-
-    data:{"code":0,"msg":"","data":{"event":"itinerary_day_started","stage":"COMPOSER","sequence":1,"itemType":"daily_itinerary","item":{"day":1}}}
-
-    data:{"code":0,"msg":"","data":{"event":"itinerary_item","stage":"COMPOSER","sequence":2,"itemType":"daily_itinerary","item":{"day":1,"slots":[{"slot":"MORNING","poiName":"断桥残雪","area":"北山街","city":"杭州市","status":"PENDING"}]}}}
-
-    data:{"code":0,"msg":"","data":{"event":"assistant_end","stage":"COMPOSER"}}
-
-    data:{"code":0,"msg":"","data":{"event":"itinerary_skeleton","stage":"COMPOSER","messageId":"2879","content":"杭州三日深度游…","missingRequired":[],"itinerary":{"version":1,"daily_itinerary":[/* 完整 3 天对象 */]}}}
-
-    data:{"code":0,"msg":"","data":{"event":"done","conversationId":"1781604279872581803"}}
-
-生成过程中可能出现多轮 `stage(COMPOSER)`、`assistant_start` 及后续 Composer 事件；前端应以最新一轮的 `itinerary_skeleton` 覆盖旧预览。
-
-五、事件顺序
-------------
-
-信息不完整时：
-
-    accepted -> stage(INTAKE) -> intake_completed -> question -> done
-
-首次信息已齐、等待用户确认时：
-
-    accepted -> stage(INTAKE) -> intake_completed -> question(missingRequired=[]) -> done
-
-用户点击“直接生成行程”或明确要求生成后：
-
-    accepted -> stage(INTAKE) -> intake_completed -> stage(COMPOSER) -> assistant_start
-             -> (assistant_delta | itinerary_day_started | itinerary_item)*
-             -> assistant_end -> itinerary_skeleton -> done
-
-`assistant_delta`、`itinerary_day_started` 和 `itinerary_item` 的先后取决于流内容；前端不得依赖数量或固定顺序。`itinerary_day_started` 只表示已开始生成，最终以 `itinerary_item` 和 `itinerary_skeleton` 为准。
-
-如果流中再次出现 `assistant_start`，前端应清空当前临时摘要和日程预览，按新一轮事件重新渲染；最终只以最新的 `itinerary_skeleton` 为准。若最终收到 `event=error`，结束 loading 并保留错误提示。
-
-生成前必须收集以下字段：
-
-- `departure`：出发地。
-- `destination`：目的地。
-- `start_date`：出发日期，对应状态字段 `startDate`，格式为 `yyyy-MM-dd`。
-- `days`：总天数，范围为 1–30。
-- `traveler_count`：总人数，范围为 1–20。
-- `budget`：预算。
-
-`endDate`、成人/儿童/老人构成、兴趣、行程节奏、特殊约束均为选填。即使 `travelerProfile` 已填写，也仍需有 `travelerCount` 总人数。
-
-`question.suggestions` 最多 10 项，字段含义如下：
-
-- `label`：胶囊显示文字。
-- `content`：用户点击后，作为下一轮 `send-stream.content` 原样提交。
-
-胶囊是辅助输入，不替代 `question.content` 中的关键追问。用户仍可自由输入；点击后按正常用户消息展示，不需要额外接口。
-
-当 `missingRequired` 非空时，`question` 会追问缺失信息；`suggestions` 提供可直接发送的辅助输入。前端应直接按返回顺序展示胶囊，不要自行截断。
-
-当 `missingRequired` 为空时，`question` 表示出行信息已经齐全，等待用户选择“直接生成行程”或继续补充；前端应正常展示该助手消息与胶囊，不能当作错误或空结果。
-
-`question` 示例：
+事件字段示例：
 
     {
       "event":"question",
       "stage":"INTAKE",
       "conversationId":"1781604279872581776",
       "messageId":"1781604279872581780",
-      "content":"你的出发日期是？",
-      "missingRequired":["start_date"],
+      "content":"你还想补充旅行偏好或同行人情况吗？",
+      "missingRequired":[],
       "suggestions":[
-        {"label":"9 月 12 日出发","content":"2026-09-12出发"},
-        {"label":"2 大 1 小","content":"总共3人出行，其中2位成人、1位儿童"},
-        {"label":"美食与人文","content":"偏好美食和人文"}
+        {"label":"亲子友好","content":"希望行程亲子友好"},
+        {"label":"美食与人文","content":"偏好美食和人文"},
+        {"label":"立即生成行程","content":"请立即生成行程"}
       ]
     }
 
-`itinerary_skeleton` 示例：
+### 4. 胶囊交互
+
+- `suggestions` 最多 5 项；每项都有 `label`（展示文案）和 `content`（发送内容）。
+- 点击胶囊后，将其 `content` 原样作为下一次 `/send-stream` 的 `content` 提交。
+- 当 `missingRequired` 为空时，前端仍应展示 `question` 及胶囊；其中会包含“立即生成行程”，用户也可以继续自由输入补充信息。
+- 用户选择“立即生成行程”后，等待本轮的 `itinerary_skeleton`；不要自行拼装行程。
+
+四、行程骨架
+------------
+
+`itinerary_skeleton.itinerary` 和消息历史中的 `itinerary` 使用同一结构：
 
     {
-      "event":"itinerary_skeleton",
-      "stage":"COMPOSER",
-      "conversationId":"1781604279872581776",
-      "messageId":"1781604279872581790",
-      "content":"杭州三日人文美食之旅",
-      "missingRequired":[],
-      "itinerary":{
-        "version":1,
-        "summary":"这趟杭州三日人文美食之旅以西湖与老城慢游为主线，串联湖山景致、宋韵街区和本地风味，在舒缓步调中安排经典景点、自由停留与夜间体验，兼顾初次到访的城市认识和轻松度假感受。",
-        "daily_itinerary":[
-          {
-            "day":1,
-            "title":"初识杭州",
-            "summary":"围绕西湖与城市慢游展开，先建立杭州的整体印象，再衔接当地风味与轻松夜游。",
-            "slots":[
-              {"slot":"MORNING","label":"上午","skeleton":"游览断桥与白堤，感受西湖湖岸风景","poiName":"断桥残雪","area":"西湖东岸","city":"杭州市","status":"PENDING"},
-              {"slot":"LUNCH","label":"午餐","skeleton":"安排本地风味午餐","city":"杭州市","status":"PENDING"},
-              {"slot":"AFTERNOON","label":"下午","skeleton":"参观丝绸展陈并了解织造文化","poiName":"中国丝绸博物馆","area":"玉皇山南麓","city":"杭州市","status":"PENDING"},
-              {"slot":"DINNER","label":"晚餐","skeleton":"晚餐与休息安排","city":"杭州市","status":"PENDING"},
-              {"slot":"EVENING","label":"晚上","skeleton":"沿运河夜间散步，观赏古桥与灯光","poiName":"拱宸桥","area":"运河北段","city":"杭州市","status":"PENDING"},
-              {"slot":"ACCOMMODATION","label":"住宿","skeleton":"住宿候选待补充","city":"杭州市","status":"PENDING"}
-            ]
-          }
-        ],
-        "transport":{
-          "arrival":{"status":"PENDING","skeleton":"抵达交通待确认"},
-          "departure":{"status":"PENDING","skeleton":"返程交通待确认"}
-        },
-        "booking_actions":[],
-        "warnings":[],
-        "citation_ids":[]
-      }
+      "version":1,
+      "summary":"已根据你的信息生成杭州3天行程。",
+      "daily_itinerary":[
+        {
+          "day":1,
+          "date":"2026-10-01",
+          "slots":[
+            {
+              "slot":"MORNING",
+              "label":"上午",
+              "status":"PENDING",
+              "city":"杭州",
+              "poiId":"B0...",
+              "poiName":"西湖",
+              "area":"杭州",
+              "longitude":"120.15",
+              "latitude":"30.25",
+              "suggestedStayMinutes":150,
+              "skeleton":"游览西湖"
+            }
+          ]
+        }
+      ],
+      "transport":{
+        "arrival":{"status":"PENDING","city":"杭州","skeleton":"抵达杭州的交通待确认"},
+        "departure":{"status":"PENDING","city":"杭州","skeleton":"从杭州返程的交通待确认"}
+      },
+      "citation_ids":[]
     }
 
-六、并行补充行程节点
---------------------
+- `daily_itinerary` 按 `day` 展示；`date` 可能不存在。
+- 每日 `slots` 的类型为 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`EVENING`、`ACCOMMODATION`。
+- 节点字段可能因暂无候选而缺失 `poiId`、`poiName`、经纬度或停留时长；前端应使用 `skeleton` 兜底展示。
+- `status` 初始为 `PENDING`；补全成功后以节点补全接口响应为准。
 
-收到 `itinerary_skeleton` 后，前端可先展示文字骨架，再对当前可见卡片并行请求补充信息。每个日内 Slot 都必须包含非空 `city`（所在城市，例如“杭州市”）；`MORNING`、`AFTERNOON`、`EVENING` 还必须包含非空 `poiName`（单一主景点名称）和 `area`（所属片区）。`poiName` 建议全行程唯一；当前发现重复时仅记录后端告警，不会阻断整份行程生成。MVP 中每个半天节点最多返回 2 个地点；它们是同一段行程的推荐组合，不是要求用户二选一。
+五、节点补全
+------------
+
+用户展开行程节点时调用：
 
 `POST /app-api/ai/chat/message/itinerary/slot/resolve`
-
-日内节点：
 
     {
       "conversationId":"1781604279872581776",
@@ -220,23 +200,10 @@ Gift 旅行规划 C 端接入 API
       "slot":"MORNING"
     }
 
-首尾交通：
+- `day`：日程从 `1` 开始；交通节点使用 `0`。
+- `slot`：日程节点使用 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`EVENING`、`ACCOMMODATION`；交通节点使用 `ARRIVAL`、`DEPARTURE`。
 
-    {
-      "conversationId":"1781604279872581776",
-      "messageId":"1781604279872581790",
-      "day":0,
-      "slot":"ARRIVAL"
-    }
-
-支持的节点：
-
-- 日内：`MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`EVENING`、`ACCOMMODATION`。
-- 交通：`ARRIVAL`、`DEPARTURE`，`day` 必须为 `0`。
-
-该接口只能请求当前行程骨架。建议并发上限为 4，离屏节点延迟加载。
-
-成功响应：
+响应：
 
     {
       "code":0,
@@ -247,203 +214,79 @@ Gift 旅行规划 C 端接入 API
         "day":1,
         "slot":"MORNING",
         "status":"RESOLVED",
-        "detail":"已获取 2 个景点候选",
-        "candidates":[
-          {
-            "id":"slot-1781604279872581791-B0...",
-            "type":"POI",
-            "name":"杭州西湖风景名胜区",
-            "provider":"gaode",
-            "externalId":"B0...",
-            "metadata":{"address":"...","imageUrl":"...","slotId":"1781604279872581791"}
-          }
-        ],
-        "citationIds":["178..."],
+        "detail":"西湖游览建议",
+        "candidates":[{}],
+        "citationIds":[],
         "weather":{
-          "city":"杭州市",
-          "temperature":31,
-          "condition":"多云",
-          "humidity":72,
-          "windDirection":"东南风",
-          "windPower":"3",
-          "queryTime":"2026-08-29 11:35:33"
+          "city":"杭州",
+          "temperature":"24",
+          "condition":"晴",
+          "humidity":"55",
+          "windDirection":"东风",
+          "windPower":"3级",
+          "queryTime":"2026-09-01 21:31:00"
         }
       }
     }
 
-`slotId` 是当前日程卡片的唯一标识，历史行程恢复时也位于对应的 `daily_itinerary[].slots[]` 中。`candidates[].id` 是绑定到该 `slotId` 的候选标识；相同供应商地点在不同日程卡片中会有不同的 `id`，而 `externalId` 始终是供应商原始实体 ID。前端需要按 `slotId` 定位和修改单个卡片，不能只按候选 `externalId` 作为卡片键。
+- `candidates`、`citationIds`、`weather` 可为空或不存在，前端需兼容。
+- `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`；失败时保留骨架展示并允许重试。
 
-节点状态：
+六、按天获取交通路线
+--------------------
 
-- `PENDING`：暂无可展示的补充结果。保留骨架并显示“待确认”。
-- `RESOLVED`：有可展示候选；日内景点节点最多 2 个，按返回顺序展示为同一时段的推荐地点。候选不表示已预订或最终确定。
+用户打开某一天的地图时调用：
 
-候选仅表示地点信息，不表示酒店房价、库存、可预订性，也不表示餐厅排队、订座或营业状态。若接口返回 `PENDING`，前端应保留骨架并显示待确认。
-
-收到响应后，按 `(messageId, day, slot)` 覆盖对应卡片的 `status`、`detail`、`candidates`、`citationIds` 和 `weather`。图片只在 `candidate.metadata.imageUrl` 非空时加载，失败时显示占位图。
-
-天气与景点、酒店、餐厅使用同一个 Slot 接口，不存在独立的天气 HTTP 接口。前端请求任意日程节点时，响应会同时返回该节点所在城市的当前天气；`city` 取行程节点的 `city` 字段。天气查询失败时，前端保留行程内容，天气卡片显示“天气暂不可用”，不影响景点、酒店和餐厅候选展示。
-
-天气字段位于上方 Slot 成功响应的 `weather` 中；天气不可用时该字段为空或不返回。
-
-七、修改已生成行程
-------------------
-
-首次信息齐全后，前端应等待用户点击“直接生成行程”或用自然语言明确要求生成。生成过计划后，修改仍使用“发送消息”接口，前端只传自然语言，无需也不能传 Agent、行程版本或节点操作：
+`POST /app-api/ai/chat/message/itinerary/route/resolve`
 
     {
       "conversationId":"1781604279872581776",
-      "content":"第 2 天下午改成轻松的室内活动，晚餐保留"
+      "messageId":"1781604279872581790",
+      "day":1
     }
 
-有效修改会生成一个新版本，返回事件序列与首次生成骨架完全一致；最终会收到新的 `itinerary_skeleton`、新的 `messageId` 和递增的 `itinerary.version`。
+响应：
 
-前端处理：
+    {
+      "code":0,
+      "msg":"",
+      "data":{
+        "messageId":"1781604279872581790",
+        "day":1,
+        "status":"VERIFIED",
+        "transportSegments":[
+          {
+            "fromPoiId":"B0...",
+            "fromPoiName":"西湖国宾馆",
+            "fromLongitude":"120.0900",
+            "fromLatitude":"30.1950",
+            "toPoiId":"B0...",
+            "toPoiName":"断桥残雪",
+            "toLongitude":"120.1000",
+            "toLatitude":"30.2000",
+            "mode":"WALKING",
+            "distanceMeters":840,
+            "durationMinutes":12,
+            "provider":"gaode",
+            "status":"VERIFIED",
+            "routePoints":[
+              {"longitude":120.0900,"latitude":30.1950},
+              {"longitude":120.1000,"latitude":30.2000}
+            ]
+          }
+        ]
+      }
+    }
 
-1. 将本轮用户修改作为普通用户消息展示。
-2. 收到新的 `itinerary_skeleton` 后，用其整体替换“当前行程”视图；`itinerary.version` 仅用于展示或标记历史版本，不作为下一次请求参数。
-3. 使用新的 `messageId` 重新加载可见节点；不要复用旧行程的节点请求和结果。
-4. 历史聊天中旧行程仍按旧消息和旧版本展示，不需要被替换。
+- 坐标均为高德 GCJ-02；`routePoints` 可直接绘制地图折线。
+- 顶层和单段 `status` 为 `VERIFIED`、`ESTIMATED` 或 `PENDING`。`ESTIMATED` 时可使用虚线或“预估路线”样式；`PENDING` 时显示无路线提示。
+- `transportSegments` 可能为空，前端须兼容。
 
-八、历史消息恢复
+七、前端调用顺序
 ----------------
 
-`GET /app-api/ai/chat/message/list-by-conversation-id?conversationId=...`
-
-正常聊天消息按 `content` 显示。助手行程消息会带可选 `itinerary` 字段：
-
-    {
-      "id":"1781604279872581790",
-      "type":"ASSISTANT",
-      "content":"杭州三日人文美食之旅",
-      "itinerary":{"version":2,"summary":"这趟杭州三日人文美食之旅以西湖与老城慢游为主线，串联湖山景致、宋韵街区和本地风味，在舒缓步调中安排经典景点、自由停留与夜间体验，兼顾初次到访的城市认识和轻松度假感受。","daily_itinerary":[]}
-    }
-
-有 `itinerary` 时按行程卡片渲染；没有时按普通文本消息渲染。顶层 `itinerary.summary` 是整个计划的总介绍，当日标题下方的简介使用 `daily_itinerary[].summary`。页面恢复历史时不需要重放旧 SSE，也不应再次请求旧行程节点。
-
-九、规划流联调示例
-------------------
-
-以下为接口联调示例，仅用于说明 SSE 字段与事件顺序。为便于阅读，以下保留业务字段，省略每帧固定为 `null` 的字段。
-
-创建会话：
-
-    POST /app-api/ai/chat/conversation/create
-    {"provinceId":"330000","cityId":"330100","districtId":"330106"}
-
-    data:{"code":0,"msg":"","data":{"event":"created","conversationId":"1781604279872581795","messageId":"2850","content":"把出发城市、旅行天数和同行人告诉我，我们开始定制行程吧。"}}
-
-本轮输入：`我计划2026年9月12日至9月14日去杭州旅行，2人出行，人均预算2000元，喜欢美食和人文，请直接生成完整行程。`
-
-完整事件顺序与 Agent 输出：
-
-    accepted: 正在分析您的需求…
-    stage(INTAKE): 正在提取本轮出行需求…
-    intake_completed: 需求已整理：杭州 · 2 人；missingRequired=[]
-    stage(COMPOSER): 正在生成行程框架…
-    assistant_start(COMPOSER)
-    assistant_delta[1..11]: 杭州三日人文美食之旅，漫步西湖感受江南诗意，探访灵隐寺体悟禅意，品味龙井茶香与地道杭帮美味，节奏舒缓惬意。
-    itinerary_day_started: sequence=12, item={"day":1}
-    itinerary_item: sequence=13, day=1, title=西湖初印象与古刹寻幽
-    itinerary_item: sequence=14, day=2, title=龙井问茶与宋韵文化
-    itinerary_item: sequence=15, day=3, title=西溪湿地与悠闲返程
-    assistant_end(COMPOSER)
-    itinerary_skeleton: messageId=2852
-    done
-
-三个 `itinerary_item` 的实际内容如下。最终 `itinerary_skeleton.daily_itinerary` 是这三个对象按 day 升序组成的数组；为避免在文档中重复三遍相同节点，最终事件中以此引用表示。前端应始终用最后的 `itinerary_skeleton` 覆盖临时日程预览。
-
-    {
-      "event":"itinerary_item",
-      "stage":"COMPOSER",
-      "conversationId":"1781604279872581795",
-      "sequence":13,
-      "itemType":"daily_itinerary",
-      "item":{
-        "day":1,
-        "title":"西湖初印象与古刹寻幽",
-        "summary":"上午环游西湖经典景点，下午游览灵隐寺感受千年禅意，傍晚欣赏湖光山色，晚餐品尝传统杭帮菜。",
-        "slots":[
-          {"slot":"MORNING","label":"上午","skeleton":"抵达杭州，办理入住后前往西湖景区，漫步苏堤或白堤，游览断桥残雪、平湖秋月等标志性景观。","poiName":"断桥残雪","area":"西湖东岸","city":"杭州市","status":"PENDING"},
-          {"slot":"LUNCH","label":"午餐","skeleton":"在湖滨商圈或附近街区享用正宗杭帮菜，推荐尝试东坡肉、叫花鸡等地道风味。","city":"杭州市","status":"PENDING"},
-          {"slot":"AFTERNOON","label":"下午","skeleton":"前往灵隐寺及飞来峰景区，参观大雄宝殿，感受佛教文化氛围，随后可游览 nearby 的北高峰。","city":"杭州市","status":"PENDING"},
-          {"slot":"DINNER","label":"晚餐","skeleton":"返回市区或景区附近餐厅，体验杭州特色小吃或精致正餐，补充体力。","city":"杭州市","status":"PENDING"},
-          {"slot":"EVENING","label":"晚上","skeleton":"夜游西湖，观赏音乐喷泉或乘船夜游，感受灯火阑珊下的西湖美景，随后返回酒店休息。","city":"杭州市","status":"PENDING"},
-          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"入住西湖周边或市中心舒适型酒店，确保次日出行便利。","city":"杭州市","status":"PENDING"}
-        ]
-      }
-    }
-
-    {
-      "event":"itinerary_item",
-      "stage":"COMPOSER",
-      "conversationId":"1781604279872581795",
-      "sequence":14,
-      "itemType":"daily_itinerary",
-      "item":{
-        "day":2,
-        "title":"龙井问茶与宋韵文化",
-        "summary":"深入龙井村品茶赏景，下午参观中国丝绸博物馆或南宋御街，体验杭州深厚的历史底蕴与茶文化。",
-        "slots":[
-          {"slot":"MORNING","label":"上午","skeleton":"前往梅家坞或龙井村，漫步茶园，体验采茶或品茶过程，了解龙井茶制作工艺，呼吸清新空气。","city":"杭州市","status":"PENDING"},
-          {"slot":"LUNCH","label":"午餐","skeleton":"在龙井村农家享用田园风味午餐，品尝新鲜蔬菜与土鸡汤，享受自然馈赠。","city":"杭州市","status":"PENDING"},
-          {"slot":"AFTERNOON","label":"下午","skeleton":"参观中国丝绸博物馆，了解丝绸历史与织造技艺；或漫步南宋御街，感受古城风貌与现代商业融合。","city":"杭州市","status":"PENDING"},
-          {"slot":"DINNER","label":"晚餐","skeleton":"在南宋御街或河坊街附近用餐，尝试葱包桧、定胜糕等特色小吃，丰富味蕾体验。","city":"杭州市","status":"PENDING"},
-          {"slot":"EVENING","label":"晚上","skeleton":"逛河坊街历史文化街区，购买手信或纪念品，欣赏街头表演，感受杭州夜间市井气息。","city":"杭州市","status":"PENDING"},
-          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"继续入住原酒店，保持行程连贯性。","city":"杭州市","status":"PENDING"}
-        ]
-      }
-    }
-
-    {
-      "event":"itinerary_item",
-      "stage":"COMPOSER",
-      "conversationId":"1781604279872581795",
-      "sequence":15,
-      "itemType":"daily_itinerary",
-      "item":{
-        "day":3,
-        "title":"西溪湿地与悠闲返程",
-        "summary":"上午游览西溪国家湿地公园，体验水乡生态之美，下午根据航班时间灵活安排，准备返程。",
-        "slots":[
-          {"slot":"MORNING","label":"上午","skeleton":"前往西溪国家湿地公园，乘船游览水道，参观洪园或秋雪庵，欣赏湿地自然风光与人文景观。","city":"杭州市","status":"PENDING"},
-          {"slot":"LUNCH","label":"午餐","skeleton":"在西溪附近或返回市区途中用餐，选择轻便简餐或当地特色面馆，为下午行程预留精力。","city":"杭州市","status":"PENDING"},
-          {"slot":"AFTERNOON","label":"下午","skeleton":"根据交通情况，可选择前往京杭大运河畔散步，或返回酒店整理行李，最后采购伴手礼。","city":"杭州市","status":"PENDING"},
-          {"slot":"DINNER","label":"晚餐","skeleton":"在机场或火车站附近享用最后一顿杭州美食，或提前在市区完成晚餐，避免匆忙。","city":"杭州市","status":"PENDING"},
-          {"slot":"EVENING","label":"晚上","skeleton":"前往交通枢纽，结束愉快的杭州三日之旅，踏上归途。","city":"杭州市","status":"PENDING"},
-          {"slot":"ACCOMMODATION","label":"住宿","skeleton":"无住宿，行程结束。","city":"杭州市","status":"PENDING"}
-        ]
-      }
-    }
-
-    {
-      "event":"itinerary_skeleton",
-      "stage":"COMPOSER",
-      "conversationId":"1781604279872581795",
-      "messageId":"2852",
-      "content":"杭州三日人文美食之旅，漫步西湖感受江南诗意，探访灵隐寺体悟禅意，品味龙井茶香与地道杭帮美味，节奏舒缓惬意。",
-      "itinerary":{
-        "version":1,
-        "summary":"杭州三日人文美食之旅，漫步西湖感受江南诗意，探访灵隐寺体悟禅意，品味龙井茶香与地道杭帮美味，节奏舒缓惬意。",
-        "daily_itinerary":"实际响应为 sequence=13、14、15 三个 item 按 day 升序组成的数组，完整对象见上文",
-        "transport":{
-          "arrival":{"status":"PENDING","skeleton":"抵达杭州萧山国际机场或杭州东站，前往酒店办理入住。"},
-          "departure":{"status":"PENDING","skeleton":"从杭州萧山国际机场或杭州东站离开，结束旅程。"}
-        },
-        "booking_actions":[],
-        "warnings":[],
-        "citation_ids":[]
-      },
-      "missingRequired":[]
-    }
-
-接口联调确认：规划流最终返回 `itinerary_skeleton` 和 `done`；收到骨架后，景点、餐厅、酒店和天气统一调用 `POST /app-api/ai/chat/message/itinerary/slot/resolve`，候选在 `candidates`，天气在 `weather`。
-
-十、流读取要点
---------------
-
-1. 用 `response.body.getReader()` 和 `TextDecoder` 的 stream 模式读取 UTF-8。
-2. 缓存未完成文本，按空行切分 SSE 帧；兼容 `\n\n` 和 `\r\n\r\n`。
-3. 一个网络 chunk 不等于一帧 SSE：一帧可能跨多个 chunk，多帧也可能合并在同一 chunk。
-4. 解析每帧时先判断外层 `code`，再分发 `data.event`。
-5. 页面卸载或用户取消时，用 `AbortController` 中止 fetch，并清理本轮 loading。
+1. 创建或选择会话。
+2. 使用 `/send-stream` 发送用户消息，按 SSE 渲染 `question` 或 `itinerary_skeleton`。
+3. 收到 `question` 时展示 `suggestions`；点击后继续调用 `/send-stream`。
+4. 收到 `itinerary_skeleton` 后保存 `messageId`，按可见卡片调用 `/itinerary/slot/resolve`，用户打开地图时调用 `/itinerary/route/resolve`。
+5. 冷启动或返回页面时，使用消息历史接口恢复聊天和行程卡。

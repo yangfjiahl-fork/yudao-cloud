@@ -21,6 +21,7 @@ import java.util.List;
 public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
 
     private static final String DEFAULT_URL = "https://restapi.amap.com/v5/place/text";
+    private static final String DEFAULT_AROUND_URL = "https://restapi.amap.com/v5/place/around";
     private static final String HOTEL_TYPES = "100000";
     private static final String RESTAURANT_TYPES = "050000";
     private static final int DEFAULT_LIMIT = 2;
@@ -48,16 +49,20 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         }
         int limit = Math.min(Math.max(request.getLimit() == null ? DEFAULT_LIMIT : request.getLimit(), 1), MAX_LIMIT);
         String types = request.getType() == PlaceType.HOTEL ? HOTEL_TYPES : RESTAURANT_TYPES;
+        boolean around = StrUtil.isNotBlank(request.getLocation());
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
-                .fromUriString(StrUtil.blankToDefault(config.getAmapUrl(), DEFAULT_URL))
+                .fromUriString(around ? StrUtil.blankToDefault(config.getAmapAroundUrl(), DEFAULT_AROUND_URL)
+                        : StrUtil.blankToDefault(config.getAmapUrl(), DEFAULT_URL))
                 .queryParam("key", config.getAmapKey())
-                .queryParam("types", types)
-                .queryParam("region", request.getRegion())
-                .queryParam("city_limit", true)
-                .queryParam("show_fields", "business,photos")
-                .queryParam("page_size", limit)
-                .queryParam("page_num", 1)
-                .queryParam("output", "json");
+                .queryParam("types", types);
+        if (around) {
+            uriBuilder.queryParam("location", request.getLocation())
+                    .queryParam("radius", Math.min(Math.max(request.getRadius() == null ? 1_500 : request.getRadius(), 1), 50_000));
+        } else {
+            uriBuilder.queryParam("region", request.getRegion()).queryParam("city_limit", true);
+        }
+        uriBuilder.queryParam("show_fields", "business,photos").queryParam("page_size", limit)
+                .queryParam("page_num", 1).queryParam("output", "json");
         long startTime = System.currentTimeMillis();
         try {
             ResponseEntity<String> responseEntity = restTemplate.getForEntity(uriBuilder.build().encode().toUri(), String.class);

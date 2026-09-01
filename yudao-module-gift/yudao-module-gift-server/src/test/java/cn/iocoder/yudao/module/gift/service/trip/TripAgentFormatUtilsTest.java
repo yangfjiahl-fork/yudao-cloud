@@ -21,7 +21,7 @@ class TripAgentFormatUtilsTest {
 
         assertEquals("三日行程", result.get("summary"));
         List<?> dailyItinerary = (List<?>) result.get("daily_itinerary");
-        assertEquals(List.of("抵达"), ((Map<?, ?>) dailyItinerary.getFirst()).get("activities"));
+        assertEquals(List.of("抵达"), ((Map<?, ?>) dailyItinerary.get(0)).get("activities"));
     }
 
     @Test

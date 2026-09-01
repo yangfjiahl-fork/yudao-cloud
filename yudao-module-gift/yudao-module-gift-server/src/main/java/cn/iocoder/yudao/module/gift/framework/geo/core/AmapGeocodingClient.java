@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -26,6 +27,8 @@ public class AmapGeocodingClient {
     /**
      * 将高德坐标系的经纬度转换为行政区信息。
      */
+    @Cacheable(cacheNames = "giftGeoAmap#1h",
+            key = "#longitude == null || #latitude == null ? '' : #longitude.stripTrailingZeros().toPlainString() + ',' + #latitude.stripTrailingZeros().toPlainString()")
     public Location reverseGeocode(BigDecimal longitude, BigDecimal latitude) {
         validateConfig();
         URI uri = UriComponentsBuilder.fromUriString(properties.getReverseGeocodingUrl())

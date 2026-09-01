@@ -28,6 +28,10 @@ public interface TravelPlaceQueryClient {
         private PlaceType type;
         private String region;
         private Integer limit;
+        /** 高德坐标系中心点，经度在前纬度在后；为空时使用城市文本搜索。 */
+        private String location;
+        /** 周边搜索半径，单位米。 */
+        private Integer radius;
 
     }
 

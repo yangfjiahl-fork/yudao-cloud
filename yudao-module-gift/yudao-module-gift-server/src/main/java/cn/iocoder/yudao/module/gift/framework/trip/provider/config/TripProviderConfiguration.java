@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.config;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClientFacade;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.gaode.GaodeTravelPlaceQueryClient;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.route.amap.AmapRouteQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClientFacade;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.aliyun.AliyunScenicSpotQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.gaode.GaodeScenicSpotQueryClient;
@@ -66,4 +67,10 @@ public class TripProviderConfiguration {
             List<TravelPlaceQueryClient> clients) {
         return new TravelPlaceQueryClientFacade(configApi, clients);
     }
+
+    @Bean
+    public AmapRouteQueryClient amapRouteQueryClient(RestTemplate restTemplate, TripProviderProperties properties) {
+        return new AmapRouteQueryClient(restTemplate, properties.getRoute());
+    }
+
 }
