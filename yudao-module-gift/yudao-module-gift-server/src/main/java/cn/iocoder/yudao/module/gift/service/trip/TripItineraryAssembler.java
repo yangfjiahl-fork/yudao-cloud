@@ -32,16 +32,16 @@ public class TripItineraryAssembler {
         String destination = text(state.get("destination"));
         int days = MapUtil.getInt(state, "days", 1);
         List<String> interests = texts(state.get("interests"));
-        int scenicCountPerDay = scenicCountPerDay(text(state.get("pace")));
+        int scenicCountPerDay = scenicCountPerDay();
         List<ScenicCandidate> scenicCandidates = collectScenicCandidates(destination, interests, days, scenicCountPerDay);
         List<List<ScenicCandidate>> dailyScenicPlans = allocateDays(scenicCandidates, days, scenicCountPerDay);
         List<TripTravelQueryService.Place> restaurants = queryPlaces(destination, false, Math.max(days * 2, MIN_PLACE_QUERY_LIMIT));
         List<TripTravelQueryService.Place> hotels = queryPlaces(destination, true, MIN_PLACE_QUERY_LIMIT);
-        TripTravelQueryService.Place hotel = selectHotel(hotels);
 
         Map<String, Object> itinerary = new LinkedHashMap<>();
-        itinerary.put("summary", buildSummary(state));
-        itinerary.put("daily_itinerary", buildDays(state, days, destination, dailyScenicPlans, restaurants, hotel));
+        List<Map<String, Object>> dailyItinerary = buildDays(state, days, destination, dailyScenicPlans, restaurants, hotels);
+        itinerary.put("overview", buildOverviewSlot(0, destination));
+        itinerary.put("daily_itinerary", dailyItinerary);
         itinerary.put("transport", buildTransport(destination));
         itinerary.put("citation_ids", List.of());
         applyOverrides(itinerary, state.get("itineraryOverrides"));
@@ -51,7 +51,7 @@ public class TripItineraryAssembler {
     private List<Map<String, Object>> buildDays(Map<String, Object> state, int days, String destination,
                                                  List<List<ScenicCandidate>> dailyScenicPlans,
                                                  List<TripTravelQueryService.Place> restaurants,
-                                                 TripTravelQueryService.Place hotel) {
+                                                 List<TripTravelQueryService.Place> fallbackHotels) {
         List<Map<String, Object>> result = new ArrayList<>();
         LocalDate startDate = parseDate(text(state.get("startDate")));
         Set<String> usedRestaurantIds = new HashSet<>();
@@ -62,7 +62,9 @@ public class TripItineraryAssembler {
                 dayItem.put("date", startDate.plusDays(day - 1).toString());
             }
             List<ScenicCandidate> scenicPlan = dailyScenicPlans.get(day - 1);
-            List<Map<String, Object>> slots = buildSlots(destination, scenicPlan, restaurants, hotel, usedRestaurantIds);
+            List<Map<String, Object>> slots = buildSlots(destination, scenicPlan, restaurants,
+                    selectHotel(destination, last(scenicPlan), fallbackHotels), usedRestaurantIds);
+            dayItem.put("overview", buildOverviewSlot(day, destination));
             dayItem.put("slots", slots);
             result.add(dayItem);
         }
@@ -100,7 +102,6 @@ public class TripItineraryAssembler {
                                                   TripTravelQueryService.Place hotel, Set<String> usedRestaurantIds) {
         ScenicCandidate morning = pick(scenicPlan, 0);
         ScenicCandidate afternoon = pick(scenicPlan, 1);
-        ScenicCandidate evening = pick(scenicPlan, 2);
         TripTravelQueryService.Place lunch = selectMeal(destination, morning, restaurants, usedRestaurantIds);
         TripTravelQueryService.Place dinner = selectMeal(destination,
                 afternoon != null ? afternoon : morning, restaurants, usedRestaurantIds);
@@ -109,7 +110,6 @@ public class TripItineraryAssembler {
                 buildMealSlot("LUNCH", destination, lunch),
                 buildScenicSlot("AFTERNOON", destination, afternoon),
                 buildMealSlot("DINNER", destination, dinner),
-                buildScenicSlot("EVENING", destination, evening),
                 buildAccommodationSlot(destination, hotel)
         );
     }
@@ -121,7 +121,7 @@ public class TripItineraryAssembler {
         result.put("status", "PENDING");
         result.put("city", destination);
         if (candidate == null) {
-            result.put("skeleton", "EVENING".equals(slot) ? "自由活动或夜间休息" : "待补充游览地点");
+            result.put("skeleton", "待补充游览地点");
             return result;
         }
         result.put("poiId", candidate.spot().externalId());
@@ -129,7 +129,7 @@ public class TripItineraryAssembler {
         result.put("area", destination);
         result.put("longitude", candidate.spot().longitude());
         result.put("latitude", candidate.spot().latitude());
-        result.put("suggestedStayMinutes", "EVENING".equals(slot) ? 90 : 150);
+        result.put("suggestedStayMinutes", 150);
         result.put("skeleton", "游览" + candidate.spot().name());
         return result;
     }
@@ -167,6 +167,9 @@ public class TripItineraryAssembler {
         result.put("poiName", hotel.name());
         result.put("longitude", hotel.longitude());
         result.put("latitude", hotel.latitude());
+        result.put("cost", hotel.cost());
+        result.put("rating", hotel.rating());
+        result.put("tag", hotel.tag());
         result.put("skeleton", "入住" + hotel.name());
         return result;
     }
@@ -233,8 +236,26 @@ public class TripItineraryAssembler {
         return result;
     }
 
-    private static TripTravelQueryService.Place selectHotel(List<TripTravelQueryService.Place> hotels) {
-        return hotels.stream().max(Comparator.comparingDouble(TripItineraryAssembler::rating)).orElse(null);
+    private TripTravelQueryService.Place selectHotel(String city, ScenicCandidate anchor,
+                                                      List<TripTravelQueryService.Place> fallbackHotels) {
+        if (anchor != null) {
+            try {
+                List<TripTravelQueryService.Place> nearbyHotels = tripTravelQueryService.queryHotelsAround(city,
+                        anchor.spot().longitude(), anchor.spot().latitude(), 10);
+                if (nearbyHotels != null && !nearbyHotels.isEmpty()) {
+                    return selectHotelByPreference(nearbyHotels);
+                }
+            } catch (RuntimeException ignored) {
+                // 城市级酒店候选已在组装前获取，周边检索失败时无需中断整份行程。
+            }
+        }
+        return selectHotelByPreference(fallbackHotels);
+    }
+
+    private static TripTravelQueryService.Place selectHotelByPreference(List<TripTravelQueryService.Place> hotels) {
+        return hotels.stream().min(Comparator.comparingDouble(TripItineraryAssembler::cost)
+                .thenComparing(Comparator.comparingInt(TripItineraryAssembler::starLevel).reversed())
+                .thenComparing(Comparator.comparingDouble(TripItineraryAssembler::rating).reversed())).orElse(null);
     }
 
     private TripTravelQueryService.Place selectMeal(String city, ScenicCandidate anchor,
@@ -397,11 +418,8 @@ public class TripItineraryAssembler {
         return 8 + Math.max(1, (int) Math.ceil(distanceMeters / 333D));
     }
 
-    private static int scenicCountPerDay(String pace) {
-        if (pace.contains("轻松") || pace.contains("慢")) {
-            return 2;
-        }
-        return 3;
+    private static int scenicCountPerDay() {
+        return 2;
     }
 
     private static int preferenceScore(int index) {
@@ -418,6 +436,43 @@ public class TripItineraryAssembler {
         } catch (RuntimeException ignored) {
             return 0D;
         }
+    }
+
+    private static double cost(TripTravelQueryService.Place place) {
+        try {
+            return Double.parseDouble(StrUtil.blankToDefault(place.cost(), "").replaceAll("[^0-9.]", ""));
+        } catch (RuntimeException ignored) {
+            return Double.MAX_VALUE;
+        }
+    }
+
+    private static int starLevel(TripTravelQueryService.Place place) {
+        String tag = text(place.tag());
+        if (tag.contains("5星") || tag.contains("五星")) {
+            return 5;
+        }
+        if (tag.contains("4星") || tag.contains("四星")) {
+            return 4;
+        }
+        if (tag.contains("3星") || tag.contains("三星")) {
+            return 3;
+        }
+        if (tag.contains("2星") || tag.contains("二星")) {
+            return 2;
+        }
+        if (tag.contains("1星") || tag.contains("一星")) {
+            return 1;
+        }
+        if (tag.contains("豪华")) {
+            return 5;
+        }
+        if (tag.contains("高档")) {
+            return 4;
+        }
+        if (tag.contains("舒适")) {
+            return 3;
+        }
+        return 0;
     }
 
     @SuppressWarnings("unchecked")
@@ -471,16 +526,16 @@ public class TripItineraryAssembler {
         return null;
     }
 
-    private static String buildSummary(Map<String, Object> state) {
-        String destination = text(state.get("destination"));
-        int days = MapUtil.getInt(state, "days", 1);
-        String pace = text(state.get("pace"));
-        List<String> interests = texts(state.get("interests"));
-        String summary = "已根据你的信息生成" + destination + days + "天行程。";
-        if (!interests.isEmpty()) {
-            summary += "优先安排" + String.join("、", interests) + "体验。";
-        }
-        return StrUtil.isNotBlank(pace) ? summary + "行程节奏按“" + pace + "”安排。" : summary;
+    private static Map<String, Object> buildOverviewSlot(int day, String destination) {
+        String slot = day == 0 ? "TRIP_OVERVIEW" : "DAY_OVERVIEW";
+        String label = day == 0 ? "行程总览" : "每日总览";
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("slot", slot);
+        result.put("label", label);
+        result.put("status", "PENDING");
+        result.put("city", destination);
+        result.put("skeleton", label + "待生成");
+        return result;
     }
 
     private static String slotLabel(String slot) {
@@ -497,6 +552,10 @@ public class TripItineraryAssembler {
 
     private static <T> T pick(List<T> values, int index) {
         return values.isEmpty() ? null : values.get(Math.floorMod(index, values.size()));
+    }
+
+    private static <T> T last(List<T> values) {
+        return values.isEmpty() ? null : values.get(values.size() - 1);
     }
 
     private static String pick(List<String> values, int index, String fallback) {

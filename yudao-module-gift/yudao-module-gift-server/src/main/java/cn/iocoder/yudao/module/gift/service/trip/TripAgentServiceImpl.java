@@ -51,7 +51,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * 旅行规划的显式编排器。LLM 仅负责需求抽取和行程组织；状态、缺失字段、事实及引用均由服务端控制。
+ * 旅行规划的显式编排器。LLM 负责需求交互和总览表达；状态、骨架、事实及引用均由服务端控制。
  */
 @Service
 @Slf4j
@@ -68,9 +68,9 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int SLOT_RESOLVE_STATUS_COMPLETED = 2;
     private static final int SLOT_RESOLVE_STATUS_FAILED = 3;
     private static final Set<String> DAILY_ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
-            "EVENING", "ACCOMMODATION");
+            "ACCOMMODATION");
     private static final Set<String> ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
-            "EVENING", "ACCOMMODATION", "ARRIVAL", "DEPARTURE");
+            "EVENING", "ACCOMMODATION", "ARRIVAL", "DEPARTURE", "TRIP_OVERVIEW", "DAY_OVERVIEW");
 
     @Resource
     private AiChatApi aiChatApi;
@@ -282,8 +282,12 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (!tripItinerarySlotMapper.claimForResolve(itinerarySlot.getId(), SLOT_RESOLVE_STATUS_PENDING,
                 SLOT_RESOLVE_STATUS_FAILED, SLOT_RESOLVE_STATUS_PROCESSING)) {
             TripItinerarySlotDO currentSlot = tripItinerarySlotMapper.selectById(itinerarySlot.getId());
-            return withWeather(toSlotResult(messageId, currentSlot != null ? currentSlot : itinerarySlot),
-                    resolveSlotCity(state, skeletonSlot));
+            TripItinerarySlotResult result = toSlotResult(messageId, currentSlot != null ? currentSlot : itinerarySlot);
+            return isOverviewSlot(slot) ? result : withWeather(result, resolveSlotCity(state, skeletonSlot));
+        }
+        if (isOverviewSlot(slot)) {
+            return resolveItineraryOverviewSlot(conversationId, memberId, messageId, trip, itineraryDO, itinerary,
+                    itinerarySlot, day, slot);
         }
         long start = System.currentTimeMillis();
         Long runId = tripRunLogService.create(trip.getId(), "SLOT_RESOLVE", JsonUtils.toJsonString(Map.of(
@@ -310,6 +314,35 @@ public class TripAgentServiceImpl implements TripAgentService {
             itinerarySlot.setDetail("节点补充失败，请重试");
             tripItinerarySlotMapper.updateById(itinerarySlot);
             tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage());
+            throw e;
+        }
+    }
+
+    private TripItinerarySlotResult resolveItineraryOverviewSlot(Long conversationId, Long memberId, Long messageId,
+                                                                   TripPlanDO trip, TripItineraryDO itineraryDO,
+                                                                   Map<String, Object> itinerary,
+                                                                   TripItinerarySlotDO itinerarySlot,
+                                                                   Integer day, String slot) {
+        try {
+            AiChatGenerateRespDTO response = generateStream(conversationId, memberId,
+                    buildOverviewContext(TripAgentFormatUtils.parseMap(trip.getStateJson()), itinerary, day, slot),
+                    "OVERVIEW", trip.getId(), buildPromptVariables(conversationId, memberId));
+            String detail = trimNullable(TripAgentFormatUtils.parseMap(response.getContent()).get("overview"));
+            if (StrUtil.isBlank(detail)) {
+                throw new IllegalStateException("行程总览生成结果为空");
+            }
+            itinerarySlot.setStatus("RESOLVED");
+            itinerarySlot.setDetail(detail);
+            itinerarySlot.setCandidatesJson(JsonUtils.toJsonString(List.of()));
+            itinerarySlot.setCitationIdsJson(JsonUtils.toJsonString(List.of()));
+            itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_COMPLETED);
+            tripItinerarySlotMapper.updateById(itinerarySlot);
+            return toSlotResult(messageId, itinerarySlot);
+        } catch (RuntimeException e) {
+            itinerarySlot.setStatus("PENDING");
+            itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_FAILED);
+            itinerarySlot.setDetail("总览生成失败，请重试");
+            tripItinerarySlotMapper.updateById(itinerarySlot);
             throw e;
         }
     }
@@ -386,8 +419,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private Long getRoleId(String stage) {
-        if (!"INTAKE".equals(stage) && !"FOLLOW_UP".equals(stage)) {
-            throw new IllegalArgumentException("旅行规划只允许调用信息提取引擎");
+        if (!"INTAKE".equals(stage) && !"FOLLOW_UP".equals(stage) && !"OVERVIEW".equals(stage)) {
+            throw new IllegalArgumentException("不支持的旅行模型调用阶段：" + stage);
         }
         String configValue = configApi.getConfigValueByKey(INTAKE_ROLE_ID_CONFIG_KEY).getCheckedData();
         if (StrUtil.isBlank(configValue)) {
@@ -505,6 +538,21 @@ public class TripAgentServiceImpl implements TripAgentService {
                 + "QuestionCount:\n" + questionCount + "\n\n"
                 + "MaximumSuggestionCount:\n" + getModelSuggestionCount(missingRequired) + "\n\n"
                 + "CandidateFields:\n" + JsonUtils.toJsonString(informationFields(candidates));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String buildOverviewContext(Map<String, Object> state, Map<String, Object> itinerary, Integer day, String slot) {
+        Object target = itinerary;
+        if ("DAY_OVERVIEW".equalsIgnoreCase(slot)) {
+            Object dailyItinerary = itinerary.get("daily_itinerary");
+            if (dailyItinerary instanceof List<?> days) {
+                target = days.stream().filter(Map.class::isInstance).map(Map.class::cast)
+                        .filter(item -> ObjUtil.equal(MapUtil.getInt(item, "day"), day)).findFirst().orElse(Map.of());
+            }
+        }
+        String scope = "TRIP_OVERVIEW".equalsIgnoreCase(slot) ? "TRIP" : "DAY";
+        return "InteractionType: ITINERARY_OVERVIEW\n\nOverviewScope: " + scope + "\n\nTripState:\n"
+                + JsonUtils.toJsonString(state) + "\n\nOverviewTarget:\n" + JsonUtils.toJsonString(target);
     }
 
     private static int getModelSuggestionCount(List<String> missingRequired) {
@@ -838,6 +886,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @SuppressWarnings("unchecked")
     private void initializeItinerarySlots(TripItineraryDO itinerary, Map<String, Object> itineraryContent) {
+        createOverviewSlotIfPresent(itinerary, 0, itineraryContent.get("overview"));
         Object dailyItinerary = itineraryContent.get("daily_itinerary");
         if (dailyItinerary instanceof List<?> days) {
             for (Object dayItem : days) {
@@ -849,6 +898,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 if (day == null || !(slots instanceof List<?> slotList)) {
                     continue;
                 }
+                createOverviewSlotIfPresent(itinerary, day, dayMap.get("overview"));
                 for (Object slotItem : slotList) {
                     if (slotItem instanceof Map<?, ?> rawSlot) {
                         createItinerarySlotIfAbsent(itinerary, day, (Map<String, Object>) rawSlot);
@@ -860,6 +910,13 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (transport instanceof Map<?, ?> transportMap) {
             createTransportSlotIfAbsent(itinerary, "ARRIVAL", transportMap.get("arrival"));
             createTransportSlotIfAbsent(itinerary, "DEPARTURE", transportMap.get("departure"));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void createOverviewSlotIfPresent(TripItineraryDO itinerary, Integer day, Object value) {
+        if (value instanceof Map<?, ?> overview) {
+            createItinerarySlotIfAbsent(itinerary, day, (Map<String, Object>) overview);
         }
     }
 
@@ -903,6 +960,10 @@ public class TripAgentServiceImpl implements TripAgentService {
         itinerarySlot.setStatus(StrUtil.blankToDefault(ObjUtil.toString(slotData.get("status")), "PENDING"));
         itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_PENDING);
         tripItinerarySlotMapper.insertIgnore(itinerarySlot);
+    }
+
+    private static boolean isOverviewSlot(String slot) {
+        return "TRIP_OVERVIEW".equalsIgnoreCase(slot) || "DAY_OVERVIEW".equalsIgnoreCase(slot);
     }
 
     private TripItinerarySlotResult withWeather(TripItinerarySlotResult result, String city) {
@@ -989,6 +1050,13 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> findSlot(Map<String, Object> itinerary, Integer day, String slot) {
+        if (day == 0 && StrUtil.equalsIgnoreCase(slot, "TRIP_OVERVIEW")) {
+            Object overview = itinerary.get("overview");
+            if (overview instanceof Map<?, ?> result) {
+                return (Map<String, Object>) result;
+            }
+            throw new IllegalArgumentException("行程总览节点不存在");
+        }
         if (day == 0 && (StrUtil.equalsIgnoreCase(slot, "ARRIVAL") || StrUtil.equalsIgnoreCase(slot, "DEPARTURE"))) {
             Object transport = itinerary.get("transport");
             if (transport instanceof Map<?, ?> transportMap) {
@@ -1006,6 +1074,9 @@ public class TripAgentServiceImpl implements TripAgentService {
         for (Object item : days) {
             if (!(item instanceof Map<?, ?> rawDay) || !ObjUtil.equals(day, MapUtil.getInt((Map<?, ?>) rawDay, "day"))) {
                 continue;
+            }
+            if (StrUtil.equalsIgnoreCase(slot, "DAY_OVERVIEW") && rawDay.get("overview") instanceof Map<?, ?> overview) {
+                return (Map<String, Object>) overview;
             }
             Object slots = rawDay.get("slots");
             if (slots instanceof List<?> slotList) {
@@ -1045,6 +1116,8 @@ public class TripAgentServiceImpl implements TripAgentService {
             case "DINNER" -> "晚餐";
             case "EVENING" -> "晚上";
             case "ACCOMMODATION" -> "住宿";
+            case "TRIP_OVERVIEW" -> "行程总览";
+            case "DAY_OVERVIEW" -> "每日总览";
             default -> "待补充";
         };
     }

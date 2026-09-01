@@ -72,15 +72,24 @@ public class TripTravelQueryService {
         return queryPlaces(TravelPlaceQueryClient.PlaceType.RESTAURANT, city, limit);
     }
 
-    /** 以已选景点为中心查询餐厅；坐标必须是高德 GCJ-02。 */
+    /** 以已选景点为中心查询 5km 内餐厅；坐标必须是高德 GCJ-02。 */
     public List<Place> queryRestaurantsAround(String city, String longitude, String latitude, int limit) {
+        return queryPlacesAround(TravelPlaceQueryClient.PlaceType.RESTAURANT, city, longitude, latitude, 5_000, limit);
+    }
+
+    /** 以当日最后一个景点为中心查询 10km 内酒店；坐标必须是高德 GCJ-02。 */
+    public List<Place> queryHotelsAround(String city, String longitude, String latitude, int limit) {
+        return queryPlacesAround(TravelPlaceQueryClient.PlaceType.HOTEL, city, longitude, latitude, 10_000, limit);
+    }
+
+    private List<Place> queryPlacesAround(TravelPlaceQueryClient.PlaceType type, String city, String longitude,
+                                          String latitude, int radius, int limit) {
         TravelPlaceQueryClient.Response response = travelPlaceQueryClientFacade.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.RESTAURANT).setRegion(city).setLocation(longitude + ',' + latitude)
-                .setRadius(1_500).setLimit(limit));
+                .setType(type).setRegion(city).setLocation(longitude + ',' + latitude).setRadius(radius).setLimit(limit));
         if (!Boolean.TRUE.equals(response.getSuccess())) {
-            throw new IllegalStateException(StrUtil.blankToDefault(response.getMessage(), "周边餐厅查询失败"));
+            throw new IllegalStateException(StrUtil.blankToDefault(response.getMessage(), "周边地点查询失败"));
         }
-        String provider = travelPlaceQueryClientFacade.provider(TravelPlaceQueryClient.PlaceType.RESTAURANT);
+        String provider = travelPlaceQueryClientFacade.provider(type);
         return response.getPlaces().stream()
                 .map(place -> new Place(provider, place.getExternalId(), place.getName(), place.getAddress(),
                         place.getLongitude(), place.getLatitude(), place.getImageUrl(), place.getTelephone(),

@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +40,13 @@ class TripItineraryAssemblerTest {
         when(queryService.queryHotels(anyString(), anyInt())).thenReturn(List.of(
                 new TripTravelQueryService.Place("gaode", "hotel-1", "西湖国宾馆", "杭州", "120.0900", "30.1950", "", "", "4.9", "800", "")
         ));
+        when(queryService.queryHotelsAround(anyString(), anyString(), anyString(), anyInt())).thenReturn(
+                List.of(
+                        new TripTravelQueryService.Place("gaode", "hotel-2", "西湖舒适酒店", "杭州", "120.1110", "30.2060", "", "", "4.0", "400", "舒适型"),
+                        new TripTravelQueryService.Place("gaode", "hotel-3", "西湖豪华酒店", "杭州", "120.1120", "30.2070", "", "", "4.9", "1200", "五星级")
+                ),
+                List.of(new TripTravelQueryService.Place("gaode", "hotel-4", "灵隐精品酒店", "杭州", "120.3010", "30.2410", "", "", "4.6", "600", "四星级"))
+        );
         when(queryService.isRouteAvailable()).thenReturn(true);
         when(queryService.queryRoute(anyString(), anyString(), anyString(), any(TripTravelQueryService.RouteMode.class)))
                 .thenReturn(new TripTravelQueryService.Route("gaode", TripTravelQueryService.RouteMode.WALKING, 840, 720,
@@ -54,14 +62,17 @@ class TripItineraryAssemblerTest {
 
         List<?> days = (List<?>) itinerary.get("daily_itinerary");
         assertEquals(2, days.size());
+        assertEquals("TRIP_OVERVIEW", ((Map<?, ?>) itinerary.get("overview")).get("slot"));
         Map<?, ?> firstDay = (Map<?, ?>) days.get(0);
+        assertEquals("DAY_OVERVIEW", ((Map<?, ?>) firstDay.get("overview")).get("slot"));
         assertEquals("2026-09-10", firstDay.get("date"));
         List<?> slots = (List<?>) firstDay.get("slots");
-        assertEquals(6, slots.size());
+        assertEquals(5, slots.size());
         Map<?, ?> morning = (Map<?, ?>) slots.get(0);
         assertEquals("西湖", morning.get("poiName"));
         assertEquals("在知味观用餐", ((Map<?, ?>) slots.get(1)).get("skeleton"));
-        assertTrue(((Map<?, ?>) slots.get(5)).get("skeleton").toString().contains("西湖国宾馆"));
+        assertEquals("西湖舒适酒店", ((Map<?, ?>) slots.get(4)).get("poiName"));
+        assertTrue(slots.stream().noneMatch(slot -> "EVENING".equals(((Map<?, ?>) slot).get("slot"))));
         assertTrue(!firstDay.containsKey("transportSegments"));
         verify(queryService, never()).isRouteAvailable();
         verify(queryService, never()).queryRoute(anyString(), anyString(), anyString(), any(TripTravelQueryService.RouteMode.class));
@@ -69,12 +80,14 @@ class TripItineraryAssemblerTest {
         Map<?, ?> firstSegment = (Map<?, ?>) assembler.resolveTransportSegments(itinerary, 1).get(0);
         assertEquals("VERIFIED", firstSegment.get("status"));
         assertEquals(12, firstSegment.get("durationMinutes"));
-        assertEquals("120.0900", firstSegment.get("fromLongitude"));
+        assertEquals("120.1110", firstSegment.get("fromLongitude"));
         assertEquals("120.1000", firstSegment.get("toLongitude"));
-        assertEquals(2, ((List<?>) firstSegment.get("routePoints")).size());
+        assertEquals(3, ((List<?>) firstSegment.get("routePoints")).size());
 
         Map<?, ?> secondDay = (Map<?, ?>) days.get(1);
-        assertEquals("灵隐寺", ((Map<?, ?>) ((List<?>) secondDay.get("slots")).get(0)).get("poiName"));
+        assertEquals("中国茶叶博物馆", ((Map<?, ?>) ((List<?>) secondDay.get("slots")).get(0)).get("poiName"));
+        assertEquals("灵隐精品酒店", ((Map<?, ?>) ((List<?>) secondDay.get("slots")).get(4)).get("poiName"));
+        verify(queryService, times(2)).queryHotelsAround(anyString(), anyString(), anyString(), anyInt());
         List<String> scenicPoiIds = Stream.concat(((List<?>) firstDay.get("slots")).stream(), ((List<?>) secondDay.get("slots")).stream())
                 .filter(Map.class::isInstance).map(Map.class::cast).map(slot -> (String) slot.get("poiId"))
                 .filter(poiId -> poiId != null && poiId.startsWith("poi-")).toList();

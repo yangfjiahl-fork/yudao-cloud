@@ -152,11 +152,24 @@ Gift 旅行规划 C 端接口
 
     {
       "version":1,
-      "summary":"已根据你的信息生成杭州3天行程。",
+      "overview":{
+        "slot":"TRIP_OVERVIEW",
+        "label":"行程总览",
+        "status":"PENDING",
+        "city":"杭州",
+        "skeleton":"行程总览待生成"
+      },
       "daily_itinerary":[
         {
           "day":1,
           "date":"2026-10-01",
+          "overview":{
+            "slot":"DAY_OVERVIEW",
+            "label":"每日总览",
+            "status":"PENDING",
+            "city":"杭州",
+            "skeleton":"每日总览待生成"
+          },
           "slots":[
             {
               "slot":"MORNING",
@@ -181,8 +194,10 @@ Gift 旅行规划 C 端接口
       "citation_ids":[]
     }
 
+- `overview` 是行程总览节点；前端以 `day=0`、`slot=TRIP_OVERVIEW` 调用节点补全接口获得模型生成的总览文案。
+- 每个 `daily_itinerary` 的 `overview` 是每日总览节点；前端以该日 `day`、`slot=DAY_OVERVIEW` 调用节点补全接口获得模型生成的每日总览文案。
 - `daily_itinerary` 按 `day` 展示；`date` 可能不存在。
-- 每日 `slots` 的类型为 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`EVENING`、`ACCOMMODATION`。
+- 每日 `slots` 的类型为 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`ACCOMMODATION`。
 - 节点字段可能因暂无候选而缺失 `poiId`、`poiName`、经纬度或停留时长；前端应使用 `skeleton` 兜底展示。
 - `status` 初始为 `PENDING`；补全成功后以节点补全接口响应为准。
 
@@ -201,7 +216,7 @@ Gift 旅行规划 C 端接口
     }
 
 - `day`：日程从 `1` 开始；交通节点使用 `0`。
-- `slot`：日程节点使用 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`EVENING`、`ACCOMMODATION`；交通节点使用 `ARRIVAL`、`DEPARTURE`。
+- `slot`：行程总览使用 `TRIP_OVERVIEW`（`day=0`）；每日总览使用 `DAY_OVERVIEW`（`day>=1`）；日程节点使用 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`ACCOMMODATION`；交通节点使用 `ARRIVAL`、`DEPARTURE`。
 
 响应：
 
@@ -229,7 +244,7 @@ Gift 旅行规划 C 端接口
       }
     }
 
-- `candidates`、`citationIds`、`weather` 可为空或不存在，前端需兼容。
+- 总览节点的模型生成文本在 `detail` 返回，`candidates`、`citationIds`、`weather` 可为空或不存在，前端需兼容。
 - `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`；失败时保留骨架展示并允许重试。
 
 六、按天获取交通路线
