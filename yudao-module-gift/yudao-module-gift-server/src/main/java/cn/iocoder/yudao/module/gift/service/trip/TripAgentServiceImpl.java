@@ -467,10 +467,11 @@ public class TripAgentServiceImpl implements TripAgentService {
             }
             String question = CollUtil.isNotEmpty(questions) ? composeQuestions(questions) : fallbackQuestion;
             List<Map<String, String>> suggestions = parseSuggestions(interaction.get("suggestions"));
-            return new TripInteraction(question, CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions);
+            return new TripInteraction(question, ensureGenerateSuggestion(
+                    CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions, missingRequired));
         } catch (RuntimeException e) {
             log.warn("[generateInteraction][tripId({}) 追问文案生成失败，使用字段默认文案]", tripId, e);
-            return new TripInteraction(fallbackQuestion, fallbackSuggestions);
+            return new TripInteraction(fallbackQuestion, ensureGenerateSuggestion(fallbackSuggestions, missingRequired));
         }
     }
 
@@ -483,8 +484,12 @@ public class TripAgentServiceImpl implements TripAgentService {
         return "InteractionType: FOLLOW_UP\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
                 + "MissingRequiredFields:\n" + JsonUtils.toJsonString(missingRequired) + "\n\n"
                 + "QuestionCount:\n" + questionCount + "\n\n"
-                + "MaximumSuggestionCount:\n" + MAX_SUGGESTION_COUNT + "\n\n"
+                + "MaximumSuggestionCount:\n" + getModelSuggestionCount(missingRequired) + "\n\n"
                 + "CandidateFields:\n" + JsonUtils.toJsonString(informationFields(candidates));
+    }
+
+    private static int getModelSuggestionCount(List<String> missingRequired) {
+        return CollUtil.isEmpty(missingRequired) ? MAX_SUGGESTION_COUNT - 1 : MAX_SUGGESTION_COUNT;
     }
 
     private static List<Map<String, Object>> informationFields(List<TripInformationSchema.Field> fields) {
@@ -580,6 +585,25 @@ public class TripAgentServiceImpl implements TripAgentService {
             field.suggestions().forEach(suggestion -> addSuggestion(suggestions, suggestion.label(), suggestion.content()));
         }
         return suggestions;
+    }
+
+    private static List<Map<String, String>> ensureGenerateSuggestion(List<Map<String, String>> suggestions,
+                                                                         List<String> missingRequired) {
+        if (CollUtil.isNotEmpty(missingRequired)) {
+            return suggestions;
+        }
+        List<Map<String, String>> result = new ArrayList<>();
+        for (Map<String, String> suggestion : suggestions) {
+            if ("请立即生成行程".equals(suggestion.get("content"))) {
+                continue;
+            }
+            if (result.size() >= MAX_SUGGESTION_COUNT - 1) {
+                break;
+            }
+            result.add(suggestion);
+        }
+        addSuggestion(result, "立即生成行程", "请立即生成行程");
+        return result;
     }
 
     private static List<String> buildFallbackQuestions(Map<String, Object> state, List<String> missingRequired,
