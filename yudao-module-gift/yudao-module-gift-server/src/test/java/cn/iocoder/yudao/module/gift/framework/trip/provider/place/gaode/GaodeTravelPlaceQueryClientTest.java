@@ -74,7 +74,7 @@ class GaodeTravelPlaceQueryClientTest {
                 .andRespond(withSuccess("""
                         {"status":"1","info":"OK","infocode":"10000","pois":[{
                           "id":"B0FFREST","name":"杭州示例餐厅","typecode":"050000","location":"120.3,30.4",
-                          "business":{"tag":"杭帮菜","cost":"88"}
+                          "business":{"tag":"杭帮菜","cost":"88","business_time":"10:00-22:00"}
                         }]}
                         """, MediaType.APPLICATION_JSON));
 
@@ -84,6 +84,7 @@ class GaodeTravelPlaceQueryClientTest {
         assertTrue(response.getSuccess());
         assertEquals("杭州示例餐厅", response.getPlaces().get(0).getName());
         assertEquals("杭帮菜", response.getPlaces().get(0).getTag());
+        assertEquals("10:00-22:00", response.getPlaces().get(0).getBusinessHours());
     }
 
     @Test

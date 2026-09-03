@@ -122,6 +122,12 @@ Gift 旅行规划 C 端接口
 | `done` | `conversationId` | 结束 loading。 |
 | `error` | `conversationId`、`content` | 展示错误并结束 loading。 |
 
+常见事件顺序：
+
+- 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`accepted → stage(INTAKE) → stage(FOLLOW_UP) → intake_completed → question → done`。
+- 用户点击“立即生成行程”后：`accepted → stage(INTAKE) → stage(ASSEMBLE) → itinerary_skeleton → done`。
+- `intake_completed`、`question` 的 `missingRequired` 为空，不代表本轮一定生成行程；前端仍需展示 `question` 及其中的“立即生成行程”胶囊。
+
 事件字段示例：
 
     {
@@ -198,6 +204,9 @@ Gift 旅行规划 C 端接口
 - 每个 `daily_itinerary` 的 `overview` 是每日总览节点；前端以该日 `day`、`slot=DAY_OVERVIEW` 调用节点补全接口获得模型生成的每日总览文案。
 - `daily_itinerary` 按 `day` 展示；`date` 可能不存在。
 - 每日 `slots` 的类型为 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`ACCOMMODATION`。
+- 每日可选 `planning` 字段由后端确定性排程写入，包含 `solver`、`status`、`routeDataStatus`、`budgetStatus`、`droppedNodeIds` 及日间起止时间；前端可用于展示“已校验”或“已降级”，缺失时按旧骨架处理。
+- 当每日候选不足或完整排程不可行时，后端会在不跳过必去景点、午晚餐和住宿约束的前提下减少当日景点数量；`status` 仍为 `FEASIBLE`，并通过可选 `selectionStatus=DEGRADED`、`requestedScenicCount`、`selectedScenicCount` 标识降级结果。
+- 节点可选 `plannedStartTime`、`plannedEndTime`、`travelMinutesFromPrevious`、`routeStatus`、`planningStatus`；它们表示当前行程版本的排程结果，前端不应自行重排。
 - 节点字段可能因暂无候选而缺失 `poiId`、`poiName`、经纬度或停留时长；前端应使用 `skeleton` 兜底展示。
 - `status` 初始为 `PENDING`；补全成功后以节点补全接口响应为准。
 
@@ -232,6 +241,19 @@ Gift 旅行规划 C 端接口
         "detail":"西湖游览建议",
         "candidates":[{}],
         "citationIds":[],
+        "transportSegments":[
+          {
+            "fromPoiId":"hotel-1",
+            "fromPoiName":"西湖舒适酒店",
+            "toPoiId":"poi-1",
+            "toPoiName":"西湖",
+            "distanceMeters":840,
+            "durationMinutes":12,
+            "mode":"WALKING",
+            "provider":"gaode",
+            "status":"VERIFIED"
+          }
+        ],
         "weather":{
           "city":"杭州",
           "temperature":"24",
@@ -246,6 +268,7 @@ Gift 旅行规划 C 端接口
 
 - 总览节点的模型生成文本在 `detail` 返回，`candidates`、`citationIds`、`weather` 可为空或不存在，前端需兼容。
 - `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`；失败时保留骨架展示并允许重试。
+- `transportSegments` 为当前 `day` 全部相邻 POI（含住宿点）的批量测距结果；`day=0` 时为空数组。每段含距离、耗时、出行方式和状态；`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。前端可直接用于当天各 POI 间的距离展示。
 
 六、按天获取交通路线
 --------------------
@@ -303,5 +326,6 @@ Gift 旅行规划 C 端接口
 1. 创建或选择会话。
 2. 使用 `/send-stream` 发送用户消息，按 SSE 渲染 `question` 或 `itinerary_skeleton`。
 3. 收到 `question` 时展示 `suggestions`；点击后继续调用 `/send-stream`。
-4. 收到 `itinerary_skeleton` 后保存 `messageId`，按可见卡片调用 `/itinerary/slot/resolve`，用户打开地图时调用 `/itinerary/route/resolve`。
-5. 冷启动或返回页面时，使用消息历史接口恢复聊天和行程卡。
+4. 收到 `itinerary_skeleton` 后保存 `messageId`，按可见卡片调用 `/itinerary/slot/resolve`；该响应已包含当前天的 `transportSegments`，可直接用于距离和路线展示。
+5. 需要重新获取整天路线、或尚未解析任一日程节点时，再调用 `/itinerary/route/resolve`。
+6. 冷启动或返回页面时，使用消息历史接口恢复聊天和行程卡。

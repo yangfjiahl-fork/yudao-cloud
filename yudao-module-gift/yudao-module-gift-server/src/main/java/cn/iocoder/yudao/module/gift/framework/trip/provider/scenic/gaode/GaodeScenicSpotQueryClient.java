@@ -54,7 +54,7 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
                 .queryParam("key", config.getAmapKey())
                 .queryParam("types", types)
                 .queryParam("show_fields", "business,photos")
-                .queryParam("page_size", 20)
+                .queryParam("page_size", 25)
                 .queryParam("page_num", page)
                 .queryParam("output", "json");
         if (StrUtil.isNotBlank(keywords)) {

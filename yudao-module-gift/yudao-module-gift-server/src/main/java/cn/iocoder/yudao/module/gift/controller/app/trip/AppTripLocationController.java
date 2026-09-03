@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
+import cn.iocoder.yudao.framework.ip.core.utils.IPUtils;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripLocationRespVO;
 import cn.iocoder.yudao.module.gift.framework.geo.core.AmapGeocodingClient;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +14,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,13 +29,14 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 @RestController
 @RequestMapping("/ai/trip/location")
 @Validated
+@Slf4j
 public class AppTripLocationController {
 
     @Resource
     private AmapGeocodingClient amapGeocodingClient;
 
     @GetMapping("/reverse-geocode")
-    @Operation(summary = "根据经纬度获取城市", description = "经纬度需使用高德坐标系（GCJ-02），参数顺序为经度、纬度")
+    @Operation(summary = "根据经纬度获取城市", description = "经纬度均大于 0 时使用高德 GCJ-02 逆地理编码；任一小于等于 0 时使用客户端 IP 本地解析")
     @Parameters({
             @Parameter(name = "longitude", description = "经度", required = true, example = "120.155070"),
             @Parameter(name = "latitude", description = "纬度", required = true, example = "30.274084")
@@ -48,8 +52,20 @@ public class AppTripLocationController {
             @DecimalMin(value = "-90", message = "纬度必须在 -90 到 90 之间")
             @DecimalMax(value = "90", message = "纬度必须在 -90 到 90 之间")
             @Digits(integer = 2, fraction = 6, message = "纬度最多保留 6 位小数") BigDecimal latitude) {
+        if (longitude.signum() <= 0 || latitude.signum() <= 0) {
+            return success(resolveByIp());
+        }
         AmapGeocodingClient.Location location = amapGeocodingClient.reverseGeocode(longitude, latitude);
         return success(AppTripLocationRespVO.from(location));
+    }
+
+    private AppTripLocationRespVO resolveByIp() {
+        try {
+            return AppTripLocationRespVO.fromIpArea(IPUtils.getArea(ServletUtils.getClientIP()));
+        } catch (Exception e) {
+            log.warn("[resolveByIp][本地 IP 地区解析失败]", e);
+            return AppTripLocationRespVO.fromIpArea(null);
+        }
     }
 
 }

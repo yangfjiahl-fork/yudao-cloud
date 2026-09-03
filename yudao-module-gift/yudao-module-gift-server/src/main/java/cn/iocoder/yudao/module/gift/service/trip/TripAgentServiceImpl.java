@@ -29,8 +29,8 @@ import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.system.api.area.AreaApi;
 import com.baomidou.lock.annotation.Lock4j;
-import jakarta.annotation.Resource;
 import com.fasterxml.jackson.core.type.TypeReference;
+import jakarta.annotation.Resource;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
@@ -41,6 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -60,9 +63,11 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int STATUS_ACTIVE = 1;
     private static final int STATUS_GENERATED = 1;
     private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
+    private static final String SUMMARY_ROLE_ID_CONFIG_KEY = "trip.agent.sumaryRoleId";
     private static final String QUESTION_COUNT_CONFIG_KEY = "trip.question.cnt";
     private static final int MAX_SUGGESTION_COUNT = 5;
     private static final String STATE_ITINERARY_OVERRIDES = "itineraryOverrides";
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("H:mm");
     private static final int SLOT_RESOLVE_STATUS_PENDING = 0;
     private static final int SLOT_RESOLVE_STATUS_PROCESSING = 1;
     private static final int SLOT_RESOLVE_STATUS_COMPLETED = 2;
@@ -142,6 +147,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> promptVariables = buildPromptVariables(conversationId, memberId);
 
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
+        Map<String, Object> previousState = TripAgentFormatUtils.parseMap(JsonUtils.toJsonString(state));
         sanitizeTravelerProfile(state);
         state.remove("destinationEntityId"); // 兼容已存的旧状态，不再持久化外部实体副本
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
@@ -149,10 +155,11 @@ public class TripAgentServiceImpl implements TripAgentService {
                 buildIntakeContext(state, content),
                 "INTAKE", trip.getId(), promptVariables);
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
-        mergeInformationState(state, extractState(intake));
+        mergeInformationState(state, extractState(intake), content);
         applyItineraryPatch(state, intake.get("itinerary_patch"));
         List<String> missingRequired = validateState(state);
-        boolean generateRequested = isGenerateRequested(intake);
+        boolean generateRequested = isGenerateRequested(intake)
+                || (trip.getCurrentItineraryId() != null && !previousState.equals(state));
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
         tripPlanMapper.updateById(trip);
@@ -283,11 +290,14 @@ public class TripAgentServiceImpl implements TripAgentService {
                 SLOT_RESOLVE_STATUS_FAILED, SLOT_RESOLVE_STATUS_PROCESSING)) {
             TripItinerarySlotDO currentSlot = tripItinerarySlotMapper.selectById(itinerarySlot.getId());
             TripItinerarySlotResult result = toSlotResult(messageId, currentSlot != null ? currentSlot : itinerarySlot);
-            return isOverviewSlot(slot) ? result : withWeather(result, resolveSlotCity(state, skeletonSlot));
+            if (!isOverviewSlot(slot)) {
+                result = withWeather(result, resolveSlotCity(state, skeletonSlot));
+            }
+            return withDayTransport(result, itinerary, day);
         }
         if (isOverviewSlot(slot)) {
-            return resolveItineraryOverviewSlot(conversationId, memberId, messageId, trip, itineraryDO, itinerary,
-                    itinerarySlot, day, slot);
+            return withDayTransport(resolveItineraryOverviewSlot(conversationId, memberId, messageId, trip, itineraryDO,
+                    itinerary, itinerarySlot, day, slot), itinerary, day);
         }
         long start = System.currentTimeMillis();
         Long runId = tripRunLogService.create(trip.getId(), "SLOT_RESOLVE", JsonUtils.toJsonString(Map.of(
@@ -307,7 +317,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             tripRunLogService.complete(runId, null, 0L, 0L, 0L, System.currentTimeMillis() - start,
                     JsonUtils.toJsonString(Map.of("toolPlans", researchResult.toolPlans(), "status", researchResult.status(),
                             "candidateCount", candidates.size(), "citationIds", researchResult.citationIds())));
-            return withWeather(toSlotResult(messageId, itinerarySlot), city);
+            return withDayTransport(withWeather(toSlotResult(messageId, itinerarySlot), city), itinerary, day);
         } catch (RuntimeException e) {
             itinerarySlot.setStatus("PENDING");
             itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_FAILED);
@@ -344,6 +354,22 @@ public class TripAgentServiceImpl implements TripAgentService {
             itinerarySlot.setDetail("总览生成失败，请重试");
             tripItinerarySlotMapper.updateById(itinerarySlot);
             throw e;
+        }
+    }
+
+    /**
+     * 节点补全时一并返回当天全部相邻 POI 的交通段，前端无需再为每个 POI 单独测距。
+     * 单段高德查询失败时，组装器会自动回退为本地估算，不影响节点补全结果。
+     */
+    private TripItinerarySlotResult withDayTransport(TripItinerarySlotResult result, Map<String, Object> itinerary, Integer day) {
+        if (day == null || day <= 0) {
+            return result.setTransportSegments(List.of());
+        }
+        try {
+            return result.setTransportSegments(tripItineraryAssembler.resolveTransportSegments(itinerary, day));
+        } catch (RuntimeException e) {
+            log.warn("[withDayTransport][day({}) 批量测距失败，不影响节点补全]", day, e);
+            return result.setTransportSegments(List.of());
         }
     }
 
@@ -422,14 +448,15 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (!"INTAKE".equals(stage) && !"FOLLOW_UP".equals(stage) && !"OVERVIEW".equals(stage)) {
             throw new IllegalArgumentException("不支持的旅行模型调用阶段：" + stage);
         }
-        String configValue = configApi.getConfigValueByKey(INTAKE_ROLE_ID_CONFIG_KEY).getCheckedData();
+        String configKey = "OVERVIEW".equals(stage) ? SUMMARY_ROLE_ID_CONFIG_KEY : INTAKE_ROLE_ID_CONFIG_KEY;
+        String configValue = configApi.getConfigValueByKey(configKey).getCheckedData();
         if (StrUtil.isBlank(configValue)) {
-            throw new IllegalStateException("系统配置 " + INTAKE_ROLE_ID_CONFIG_KEY + " 未配置");
+            throw new IllegalStateException("系统配置 " + configKey + " 未配置");
         }
         try {
             return Long.parseLong(configValue.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("系统配置 " + INTAKE_ROLE_ID_CONFIG_KEY + " 必须是角色编号", e);
+            throw new IllegalStateException("系统配置 " + configKey + " 必须是角色编号", e);
         }
     }
 
@@ -566,6 +593,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             item.put("label", field.label());
             item.put("required", TripInformationSchema.getRequiredStateKeys().contains(field.stateKey()));
             item.put("questionHint", field.question());
+            item.put("suggestions", field.suggestions());
             return item;
         }).toList();
     }
@@ -585,13 +613,18 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     @SuppressWarnings("unchecked")
-    private static void mergeInformationState(Map<String, Object> state, Object extractedState) {
+    static void mergeInformationState(Map<String, Object> state, Object extractedState, String userMessage) {
         if (!(extractedState instanceof Map<?, ?> patch)) {
             return;
         }
         patch.forEach((key, value) -> {
             if (key instanceof String field && TripInformationSchema.supports(field) && value != null) {
                 Object normalized = normalizeField(field, value);
+                if (normalized != null && requiresExplicitNumber(field)
+                        && !isExplicitlyMentioned(field, userMessage)) {
+                    log.info("[mergeInformationState][忽略模型未被本轮消息支持的数值字段 field({})]", field);
+                    return;
+                }
                 if (normalized == null) {
                     state.remove(field);
                 } else {
@@ -601,15 +634,45 @@ public class TripAgentServiceImpl implements TripAgentService {
         });
     }
 
+    private static boolean requiresExplicitNumber(String field) {
+        return "days".equals(field) || "travelerCount".equals(field) || "budget".equals(field)
+                || "hotelBudget".equals(field) || "travelerProfile".equals(field);
+    }
+
+    private static boolean isExplicitlyMentioned(String field, String userMessage) {
+        if (StrUtil.isBlank(userMessage)) {
+            return false;
+        }
+        String number = "[0-9０-９一二两三四五六七八九十百千万]+";
+        return switch (field) {
+            case "days" -> userMessage.matches("(?s).*" + number + "\\s*[天晚日].*");
+            case "travelerCount" -> userMessage.matches("(?s).*" + number + "\\s*[人位大小].*")
+                    || userMessage.matches("(?s).*一家" + number + "口.*");
+            case "travelerProfile" -> userMessage.matches("(?s).*" + number + "\\s*[大小].*")
+                    || userMessage.matches("(?s).*" + number + "\\s*(?:位)?(?:成人|儿童|小孩|老人).*" );
+            case "budget" -> userMessage.matches("(?s).*" + number + "\\s*(?:元|块|人民币).*" )
+                    || userMessage.matches("(?s).*(?:预算|花费|花).*" + number + ".*");
+            case "hotelBudget" -> userMessage.matches("(?s).*(?:住宿|酒店|每晚).*" + number + ".*");
+            default -> true;
+        };
+    }
+
     private static Object normalizeField(String field, Object value) {
         if ("days".equals(field) || "travelerCount".equals(field)) {
             String text = trimNullable(value);
             return StrUtil.isBlank(text) ? null : Integer.parseInt(text);
         }
+        if ("hotelBudget".equals(field)) {
+            Integer budget = MapUtil.getInt(Map.of("value", value), "value");
+            return budget != null && budget > 0 ? budget : null;
+        }
+        if ("dailyStartTime".equals(field) || "dailyEndTime".equals(field)) {
+            return normalizeTime(value);
+        }
         if ("travelerProfile".equals(field)) {
             return normalizeTravelerProfile(value);
         }
-        if ("interests".equals(field) || "constraints".equals(field)) {
+        if ("interests".equals(field) || "mustVisit".equals(field) || "constraints".equals(field)) {
             if (value instanceof List<?> list) {
                 return list.stream().map(TripAgentServiceImpl::trimNullable).filter(StrUtil::isNotBlank).toList();
             }
@@ -617,6 +680,18 @@ public class TripAgentServiceImpl implements TripAgentService {
             return StrUtil.isBlank(text) ? List.of() : List.of(text);
         }
         return trimNullable(value);
+    }
+
+    private static String normalizeTime(Object value) {
+        String text = trimNullable(value);
+        if (StrUtil.isBlank(text)) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(text, TIME_FORMATTER).format(DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private static Map<String, Object> normalizeTravelerProfile(Object value) {

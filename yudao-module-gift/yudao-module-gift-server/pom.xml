@@ -63,6 +63,10 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>yudao-spring-boot-starter-biz-tenant</artifactId>
         </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>yudao-spring-boot-starter-biz-ip</artifactId>
+        </dependency>
 
         <!-- Web 相关 -->
         <dependency>
@@ -140,6 +144,11 @@
         <dependency>
             <groupId>io.github.du00cs</groupId>
             <artifactId>json-repairj</artifactId> <!-- 修复大模型返回的非标准 JSON -->
+        </dependency>
+        <dependency>
+            <groupId>com.google.ortools</groupId>
+            <artifactId>ortools-java</artifactId>
+            <version>9.15.6755</version>
         </dependency>
 
         <dependency>

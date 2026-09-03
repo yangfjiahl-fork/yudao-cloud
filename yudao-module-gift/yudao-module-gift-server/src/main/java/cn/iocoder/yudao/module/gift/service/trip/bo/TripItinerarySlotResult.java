@@ -21,5 +21,7 @@ public class TripItinerarySlotResult {
     private List<Map<String, Object>> candidates;
     private List<String> citationIds;
     private TripTravelQueryService.Weather weather;
+    /** 当前日按行程顺序测得的相邻 POI 交通段；day=0 时为空。 */
+    private List<Map<String, Object>> transportSegments;
 
 }

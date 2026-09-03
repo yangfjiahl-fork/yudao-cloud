@@ -27,10 +27,19 @@ public final class TripInformationSchema {
             field("days", "days", "旅行天数", "这次计划玩几天？", "玩 3 天", "计划玩3天"),
             field("travelerCount", "traveler_count", "出行人数", "这次一共几个人出行？", "2 人出行", "总共2人出行"),
             field("budget", "budget", "预算", "你的预算大约是多少？", "人均 ¥1,500", "人均预算1500元"),
+            new Field("hotelBudget", "hotel_budget", "住宿预算", "每晚住宿预算大约是多少？", List.of(
+                    new Suggestion("¥300/晚", "每晚住宿预算300元"),
+                    new Suggestion("¥500/晚", "每晚住宿预算500元"),
+                    new Suggestion("¥800/晚", "每晚住宿预算800元"),
+                    new Suggestion("¥3,000/晚", "每晚住宿预算3000元")
+            )),
             field("endDate", "end_date", "返程日期", "返程日期大约是哪天？", "周末返程", "计划周末返程"),
             field("travelerProfile", "traveler_profile", "同行人构成", "同行人中有儿童或老人吗？", "2 大 1 小", "总共3人出行，其中2位成人、1位儿童"),
             field("interests", "interests", "旅行偏好", "这次更想体验什么？", "美食与人文", "偏好美食和人文"),
             field("pace", "pace", "行程节奏", "希望行程紧凑还是轻松？", "轻松慢游", "希望行程节奏轻松，不要太赶"),
+            field("dailyStartTime", "daily_start_time", "每日出发时间", "每天大约几点开始游玩？", "上午 9 点", "每天上午9点开始游玩"),
+            field("dailyEndTime", "daily_end_time", "每日结束时间", "每天最晚几点结束行程？", "晚上 8 点", "每天晚上8点结束行程"),
+            field("mustVisit", "must_visit", "必去地点", "有没有一定要去的景点或地点？", "一定去西湖", "一定要去西湖"),
             field("constraints", "constraints", "特殊约束", "有需要特别照顾的需求吗？", "亲子友好", "希望行程亲子友好")
     );
 

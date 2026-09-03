@@ -62,11 +62,16 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring Boot Actuator：提供 MeterRegistry、ObservationRegistry 和监控端点 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Micrometer 对 Prometheus 的支持 -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
-            <optional>true</optional>
         </dependency>
 
         <dependency>

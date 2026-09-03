@@ -1,5 +1,8 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip.vo;
 
+import cn.iocoder.yudao.framework.ip.core.Area;
+import cn.iocoder.yudao.framework.ip.core.enums.AreaTypeEnum;
+import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.framework.geo.core.AmapGeocodingClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -45,6 +48,42 @@ public class AppTripLocationRespVO {
                 .setDistrict(location.district())
                 .setAdcode(location.adcode())
                 .setFormattedAddress(location.formattedAddress());
+    }
+
+    /**
+     * 基于本地 IP 库的城市级定位结果构建响应。
+     *
+     * IP 库通常只能精确到城市，因此 district 相关字段会保持为空。
+     */
+    public static AppTripLocationRespVO fromIpArea(Area area) {
+        if (area == null) {
+            return new AppTripLocationRespVO();
+        }
+        Area province = findAncestor(area, AreaTypeEnum.PROVINCE);
+        Area city = findAncestor(area, AreaTypeEnum.CITY);
+        Area district = findAncestor(area, AreaTypeEnum.DISTRICT);
+        return new AppTripLocationRespVO()
+                .setProvinceId(toLong(province))
+                .setCityId(toLong(city))
+                .setDistrictId(toLong(district))
+                .setProvince(province == null ? null : province.getName())
+                .setCity(city == null ? null : city.getName())
+                .setDistrict(district == null ? null : district.getName())
+                .setAdcode(String.valueOf(area.getId()))
+                .setFormattedAddress(AreaUtils.format(area.getId(), ""));
+    }
+
+    private static Area findAncestor(Area area, AreaTypeEnum type) {
+        for (Area current = area; current != null; current = current.getParent()) {
+            if (type.getType().equals(current.getType())) {
+                return current;
+            }
+        }
+        return null;
+    }
+
+    private static Long toLong(Area area) {
+        return area == null ? null : area.getId().longValue();
     }
 
 }

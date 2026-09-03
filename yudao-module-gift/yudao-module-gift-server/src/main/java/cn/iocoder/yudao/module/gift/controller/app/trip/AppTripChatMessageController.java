@@ -133,6 +133,7 @@ public class AppTripChatMessageController {
         response.setDetail(result.getDetail());
         response.setCandidates(result.getCandidates());
         response.setCitationIds(result.getCitationIds());
+        response.setTransportSegments(result.getTransportSegments());
         if (result.getWeather() != null) {
             response.setWeather(new AppTripWeatherRespVO()
                     .setCity(result.getWeather().city())

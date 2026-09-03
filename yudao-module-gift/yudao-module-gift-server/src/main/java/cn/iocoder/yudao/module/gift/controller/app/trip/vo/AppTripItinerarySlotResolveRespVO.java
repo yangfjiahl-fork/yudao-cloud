@@ -21,5 +21,6 @@ public class AppTripItinerarySlotResolveRespVO {
     private List<Map<String, Object>> candidates;
     private List<String> citationIds;
     private AppTripWeatherRespVO weather;
+    private List<Map<String, Object>> transportSegments;
 
 }

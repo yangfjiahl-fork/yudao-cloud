@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip.vo;
 
+import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.framework.geo.core.AmapGeocodingClient;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,18 @@ class AppTripLocationRespVOTest {
         assertEquals(410000L, result.getProvinceId());
         assertEquals(419001L, result.getCityId());
         assertEquals(419001L, result.getDistrictId());
+    }
+
+    @Test
+    void testFromIpArea() {
+        AppTripLocationRespVO result = AppTripLocationRespVO.fromIpArea(AreaUtils.getArea(420600));
+
+        assertEquals(420000L, result.getProvinceId());
+        assertEquals(420600L, result.getCityId());
+        assertEquals("湖北省", result.getProvince());
+        assertEquals("襄阳市", result.getCity());
+        assertEquals(null, result.getDistrictId());
+        assertEquals(null, result.getDistrict());
     }
 
 }

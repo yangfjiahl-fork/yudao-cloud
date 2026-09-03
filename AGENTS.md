@@ -50,6 +50,19 @@ Tests use JUnit 5 with Spring Boot test support from `yudao-spring-boot-starter-
 
 Run at least the affected module’s tests or compile command before handing off.
 
+### 旅行规划固定回归场景
+
+本地后端联调旅行规划 C 端流程时，除非任务另有要求，使用以下固定中文用例：
+
+- 固定测试条件：`国庆节，2大2小上海出发去云南6天5晚，亲子。` 不得改用英文或翻译后的输入。
+- 使用同一会话拆分发送中文消息，至少覆盖：`国庆节从上海出发去云南。`、`请按2026年10月1日出发安排：2大2小共4人，6天5晚，亲子游。`、必填预算及`请立即生成行程。`；不得一次性提交完整条件。
+- 每轮检查 SSE：信息收集或可选信息补充阶段应返回 `accepted → stage(INTAKE) → stage(FOLLOW_UP) → intake_completed → question → done`；点击立即生成后应返回行程骨架事件。必填项完成后仍应出现可选信息追问和“立即生成行程”胶囊。
+- 检查状态已落库：至少包含出发地、目的地、出发日期、天数、人数、预算和亲子偏好，且与输入一致。
+- 检查最终骨架：有 6 个按天行程、可解析的 POI 坐标，以及当天相邻 POI（含住宿）的批量 `transportSegments`；每段须有距离、耗时、出行方式和 `VERIFIED` 或 `ESTIMATED` 状态。
+- 分别调用 `TRIP_OVERVIEW` 与第 1～6 天的 `DAY_OVERVIEW` 节点解析接口；均须返回 `status=RESOLVED` 且 `detail` 非空，验证行程总览和每日总览由模型生成。
+- 检查每日 `planning.status`。出现 `PENDING`、缺坐标、缺 summary、节点解析失败或交通测距失败时，必须在验收结果中明确报告，不得仅因骨架已生成而判定通过。
+- 仅使用 test 数据库中会员 `userId=288` 的运行时有效 access token；不得将 token 写入代码、测试样例、接口文档、提交记录或日志输出。
+
 ## Commit & Pull Request Guidelines
 
 Recent history uses simple Conventional Commit-style prefixes, for example `feat: save`. Prefer clear messages such as `feat(gift): grant wool on registration` or `fix(system): validate sms mock config`.

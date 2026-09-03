@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PostConstruct;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -26,6 +27,14 @@ public class AmapRouteQueryClient {
         return config != null && StrUtil.isNotBlank(config.getAmapKey());
     }
 
+    @PostConstruct
+    void warnWhenRouteProviderUnavailable() {
+        if (!isConfigured()) {
+            log.warn("[warnWhenRouteProviderUnavailable][高德路径规划未配置；行程交通段将使用本地估算。"
+                    + "请配置 AMAP_ROUTE_API_KEY 或 AMAP_WEB_SERVICE_KEY 后重启服务]");
+        }
+    }
+
     @Cacheable(cacheNames = "tripRouteGaode#5m", key = "#request == null ? '' : #request.toString()")
     public Route query(Request request) {
         validateRequest(request);
@@ -42,11 +51,11 @@ public class AmapRouteQueryClient {
         try {
             ResponseEntity<String> response = restTemplate.getForEntity(uriBuilder.build().encode().toUri(), String.class);
             if (!response.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(response.getBody())) {
-                throw new IllegalStateException("高德路径规划服务无有效响应");
+                throw new RouteQueryException("HTTP_" + response.getStatusCode().value());
             }
             JsonNode root = JsonUtils.parseTree(response.getBody());
             if (!"1".equals(JsonUtils.getText(root, "status")) || !"10000".equals(JsonUtils.getText(root, "infocode"))) {
-                throw new IllegalStateException("高德路径规划失败：" + JsonUtils.getText(root, "info"));
+                throw new RouteQueryException("AMAP_" + StrUtil.blankToDefault(JsonUtils.getText(root, "infocode"), "UNKNOWN"));
             }
             JsonNode route = root.path("route");
             JsonNode path = request.mode() == Mode.WALKING ? route.path("paths").path(0) : route.path("transits").path(0);
@@ -57,8 +66,10 @@ public class AmapRouteQueryClient {
             }
             return new Route(request.mode(), distance, duration, collectRoutePoints(path));
         } catch (RuntimeException e) {
-            log.warn("[query][高德路径规划失败，mode({}) city({}) cost({}ms) exceptionType({})]", request.mode(), request.city(),
-                    System.currentTimeMillis() - start, e.getClass().getSimpleName());
+            String failureCode = e instanceof RouteQueryException routeException ? routeException.failureCode()
+                    : e.getClass().getSimpleName();
+            log.warn("[query][高德路径规划失败，mode({}) city({}) cost({}ms) failureCode({})]", request.mode(), request.city(),
+                    System.currentTimeMillis() - start, failureCode);
             throw e;
         }
     }
@@ -132,6 +143,20 @@ public class AmapRouteQueryClient {
     }
 
     public record Route(Mode mode, int distanceMeters, int durationSeconds, List<RoutePoint> routePoints) {
+    }
+
+    private static final class RouteQueryException extends IllegalStateException {
+
+        private final String failureCode;
+
+        private RouteQueryException(String failureCode) {
+            super("高德路径规划失败：" + failureCode);
+            this.failureCode = failureCode;
+        }
+
+        private String failureCode() {
+            return failureCode;
+        }
     }
 
     /** 路线点为高德 GCJ-02 坐标，可直接转换为各端地图 SDK 的 LatLng。 */

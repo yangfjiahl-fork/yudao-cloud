@@ -28,6 +28,8 @@ public interface TravelPlaceQueryClient {
         private PlaceType type;
         private String region;
         private Integer limit;
+        /** 结果页码；供应商按该值分页返回地点候选。 */
+        private Integer page;
         /** 高德坐标系中心点，经度在前纬度在后；为空时使用城市文本搜索。 */
         private String location;
         /** 周边搜索半径，单位米。 */
@@ -64,6 +66,8 @@ public interface TravelPlaceQueryClient {
         private String rating;
         private String cost;
         private String tag;
+        /** 供应商原始营业时间文本；无法确认时为空，业务层不得据此推断营业状态。 */
+        private String businessHours;
 
     }
 

@@ -24,8 +24,9 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
     private static final String DEFAULT_AROUND_URL = "https://restapi.amap.com/v5/place/around";
     private static final String HOTEL_TYPES = "100000";
     private static final String RESTAURANT_TYPES = "050000";
-    private static final int DEFAULT_LIMIT = 2;
-    private static final int MAX_LIMIT = 20;
+    private static final int DEFAULT_LIMIT = 25;
+    private static final int MAX_LIMIT = 25;
+    private static final int MAX_PAGE = 100;
 
     private final RestTemplate restTemplate;
     private final TripProviderProperties.TravelPlace config;
@@ -48,6 +49,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
             return Response.failure("高德旅行地点查询服务未配置 AMAP_WEB_SERVICE_KEY");
         }
         int limit = Math.min(Math.max(request.getLimit() == null ? DEFAULT_LIMIT : request.getLimit(), 1), MAX_LIMIT);
+        int page = Math.min(Math.max(request.getPage() == null ? 1 : request.getPage(), 1), MAX_PAGE);
         String types = request.getType() == PlaceType.HOTEL ? HOTEL_TYPES : RESTAURANT_TYPES;
         boolean around = StrUtil.isNotBlank(request.getLocation());
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
@@ -62,7 +64,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
             uriBuilder.queryParam("region", request.getRegion()).queryParam("city_limit", true);
         }
         uriBuilder.queryParam("show_fields", "business,photos").queryParam("page_size", limit)
-                .queryParam("page_num", 1).queryParam("output", "json");
+                .queryParam("page_num", page).queryParam("output", "json");
         long startTime = System.currentTimeMillis();
         try {
             ResponseEntity<String> responseEntity = restTemplate.getForEntity(uriBuilder.build().encode().toUri(), String.class);
@@ -114,6 +116,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
             place.setRating(text(business, "rating"));
             place.setCost(text(business, "cost"));
             place.setTag(text(business, "tag"));
+            place.setBusinessHours(businessHours(business));
             result.add(place);
             if (result.size() >= limit) {
                 break;
@@ -125,6 +128,16 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
     private static String firstImage(JsonNode poi) {
         JsonNode photos = poi.path("photos");
         return photos.isArray() && !photos.isEmpty() ? text(photos.get(0), "url") : "";
+    }
+
+    private static String businessHours(JsonNode business) {
+        for (String field : List.of("business_time", "opentime_week", "open_time")) {
+            String value = text(business, field);
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private static String text(JsonNode node, String name) {

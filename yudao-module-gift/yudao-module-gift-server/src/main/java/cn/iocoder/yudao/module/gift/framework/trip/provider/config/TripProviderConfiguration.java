@@ -12,10 +12,12 @@ import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.amap.AmapWea
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.aliyun.AliyunWeatherClient;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
@@ -69,8 +71,12 @@ public class TripProviderConfiguration {
     }
 
     @Bean
-    public AmapRouteQueryClient amapRouteQueryClient(RestTemplate restTemplate, TripProviderProperties properties) {
-        return new AmapRouteQueryClient(restTemplate, properties.getRoute());
+    public AmapRouteQueryClient amapRouteQueryClient(RestTemplateBuilder restTemplateBuilder, TripProviderProperties properties) {
+        RestTemplate routeRestTemplate = restTemplateBuilder
+                .connectTimeout(Duration.ofSeconds(2))
+                .readTimeout(Duration.ofSeconds(2))
+                .build();
+        return new AmapRouteQueryClient(routeRestTemplate, properties.getRoute());
     }
 
 }
