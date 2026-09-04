@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
+import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -9,6 +10,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -176,6 +179,8 @@ class TripItineraryAssemblerTest {
         TripItineraryAssembler assembler = new TripItineraryAssembler();
         ReflectionTestUtils.setField(assembler, "tripTravelQueryService", queryService);
         ReflectionTestUtils.setField(assembler, "meterRegistry", meterRegistry);
+        ReflectionTestUtils.setField(assembler, "tripItineraryTaskExecutor",
+                (Executor) runnable -> ForkJoinPool.commonPool().execute(MdcContextUtils.wrap(runnable)));
         return assembler;
     }
 

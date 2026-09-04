@@ -3,10 +3,10 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.module.gift.framework.trip.config.TripAsyncConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,6 +53,8 @@ public class TripItineraryAssembler {
     private TripTravelQueryService tripTravelQueryService;
     @Resource
     private MeterRegistry meterRegistry;
+    @Resource(name = TripAsyncConfiguration.TRIP_ITINERARY_TASK_EXECUTOR)
+    private Executor tripItineraryTaskExecutor;
 
     public Map<String, Object> assemble(Map<String, Object> state) {
         Timer.Sample sample = Timer.start(meterRegistry);
@@ -63,15 +66,14 @@ public class TripItineraryAssembler {
             List<String> interests = texts(state.get("interests"));
             List<String> mustVisit = texts(state.get("mustVisit"));
             int candidateLimit = candidateLimit(days);
-            Map<String, String> mdcContext = MDC.getCopyOfContextMap();
             log.info("[assemble][destination({}) days({}) candidateLimit({}) 开始组装行程骨架]", destination, days, candidateLimit);
             CompletableFuture<List<ScenicCandidate>> scenicFuture = CompletableFuture.supplyAsync(
-                    withMdcContext(mdcContext,
-                            () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit))));
+                    () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)),
+                    tripItineraryTaskExecutor);
             CompletableFuture<List<TripTravelQueryService.Place>> restaurantFuture = CompletableFuture.supplyAsync(
-                    withMdcContext(mdcContext, () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit))));
+                    () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit)), tripItineraryTaskExecutor);
             CompletableFuture<List<TripTravelQueryService.Place>> hotelFuture = CompletableFuture.supplyAsync(
-                    withMdcContext(mdcContext, () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit))));
+                    () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit)), tripItineraryTaskExecutor);
             List<ScenicCandidate> scenicCandidates = scenicFuture.join();
             List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
             List<TripTravelQueryService.Place> hotels = hotelFuture.join();
@@ -107,14 +109,13 @@ public class TripItineraryAssembler {
             List<List<ScenicCandidate>> scenicCandidatesByDay = allocateScenicCandidates(days, scenicCandidates);
             List<TripTravelQueryService.Place> dayMealCandidates = rankMealCandidates(restaurants);
             List<TripTravelQueryService.Place> dayHotelCandidates = rankHotelCandidates(hotels, hotelBudget);
-            Map<String, String> mdcContext = MDC.getCopyOfContextMap();
             List<CompletableFuture<Map<String, Object>>> dayFutures = new ArrayList<>();
             for (int day = 1; day <= days; day++) {
                 final int currentDay = day;
                 final List<ScenicCandidate> dayScenicCandidates = scenicCandidatesByDay.get(day - 1);
-                dayFutures.add(CompletableFuture.supplyAsync(withMdcContext(mdcContext,
+                dayFutures.add(CompletableFuture.supplyAsync(
                         () -> buildDay(state, destination, startDate, currentDay,
-                                dayScenicCandidates, dayMealCandidates, dayHotelCandidates))));
+                                dayScenicCandidates, dayMealCandidates, dayHotelCandidates), tripItineraryTaskExecutor));
             }
             List<Map<String, Object>> result = dayFutures.stream().map(CompletableFuture::join).toList();
             log.info("[buildDays][destination({}) days({}) scenicPerDay({}) mealCandidates({}) hotelCandidates({}) 耗时({}ms)]",
@@ -213,26 +214,6 @@ public class TripItineraryAssembler {
         return Timer.builder(ITINERARY_ASSEMBLE_METRIC_NAME)
                 .tags("phase", phase, "category", category, "outcome", outcome)
                 .register(meterRegistry);
-    }
-
-    private static <T> Supplier<T> withMdcContext(Map<String, String> mdcContext, Supplier<T> supplier) {
-        return () -> {
-            Map<String, String> previousMdcContext = MDC.getCopyOfContextMap();
-            setMdcContext(mdcContext);
-            try {
-                return supplier.get();
-            } finally {
-                setMdcContext(previousMdcContext);
-            }
-        };
-    }
-
-    private static void setMdcContext(Map<String, String> mdcContext) {
-        if (mdcContext == null) {
-            MDC.clear();
-            return;
-        }
-        MDC.setContextMap(mdcContext);
     }
 
     /** 按需查询某一天的交通段，避免行程骨架默认携带大量路线点。 */

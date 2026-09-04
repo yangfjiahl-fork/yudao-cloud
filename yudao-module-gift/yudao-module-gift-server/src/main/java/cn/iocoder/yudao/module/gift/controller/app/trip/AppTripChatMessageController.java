@@ -25,7 +25,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -80,14 +79,11 @@ public class AppTripChatMessageController {
         }
         Long tenantId = TenantContextHolder.getRequiredTenantId();
         Long memberId = getLoginUserId();
-        Map<String, String> mdcContext = MDC.getCopyOfContextMap();
         log.info("[sendMessageStream][conversationId({}) memberId({}) tenantId({}) 创建 SSE 流]",
                 reqVO.getConversationId(), memberId, tenantId);
         CommonResult<AppTripChatStreamRespVO> accepted = success(new AppTripChatStreamRespVO().setEvent("accepted")
                 .setConversationId(reqVO.getConversationId()).setContent("正在分析您的需求…"));
         Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> {
-            Map<String, String> previousMdcContext = MDC.getCopyOfContextMap();
-            setMdcContext(mdcContext);
             try {
                 TenantUtils.execute(tenantId, () -> {
                     tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent(),
@@ -96,8 +92,6 @@ public class AppTripChatMessageController {
                 sink.complete();
             } catch (Exception e) {
                 sink.error(e);
-            } finally {
-                setMdcContext(previousMdcContext);
             }
         }).subscribeOn(Schedulers.boundedElastic());
         CommonResult<AppTripChatStreamRespVO> done = success(new AppTripChatStreamRespVO().setEvent("done")
@@ -116,14 +110,6 @@ public class AppTripChatMessageController {
                         reqVO.getConversationId()))
                 .doOnComplete(() -> log.info("[sendMessageStream][conversationId({}) SSE 完成]",
                         reqVO.getConversationId()));
-    }
-
-    private static void setMdcContext(Map<String, String> mdcContext) {
-        if (mdcContext == null) {
-            MDC.clear();
-            return;
-        }
-        MDC.setContextMap(mdcContext);
     }
 
     @PostMapping("/itinerary/slot/resolve")
