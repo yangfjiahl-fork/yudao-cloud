@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
@@ -11,17 +12,18 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** 基于已提取旅行信息的确定性行程骨架组装器。 */
 @Service
+@Slf4j
 public class TripItineraryAssembler {
 
     private static final int MAX_CATEGORY_CANDIDATE_POOL_SIZE = 200;
@@ -45,17 +47,19 @@ public class TripItineraryAssembler {
     private TripTravelQueryService tripTravelQueryService;
 
     public Map<String, Object> assemble(Map<String, Object> state) {
+        long start = System.currentTimeMillis();
         String destination = text(state.get("destination"));
         int days = MapUtil.getInt(state, "days", 1);
         List<String> interests = texts(state.get("interests"));
         List<String> mustVisit = texts(state.get("mustVisit"));
         int candidateLimit = candidateLimit(days);
+        log.info("[assemble][destination({}) days({}) candidateLimit({}) 开始组装行程骨架]", destination, days, candidateLimit);
         CompletableFuture<List<ScenicCandidate>> scenicFuture = CompletableFuture.supplyAsync(
-                () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit));
+                () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)));
         CompletableFuture<List<TripTravelQueryService.Place>> restaurantFuture = CompletableFuture.supplyAsync(
-                () -> queryPlaces(destination, false, candidateLimit));
+                () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit)));
         CompletableFuture<List<TripTravelQueryService.Place>> hotelFuture = CompletableFuture.supplyAsync(
-                () -> queryPlaces(destination, true, candidateLimit));
+                () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit)));
         List<ScenicCandidate> scenicCandidates = scenicFuture.join();
         List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
         List<TripTravelQueryService.Place> hotels = hotelFuture.join();
@@ -67,6 +71,8 @@ public class TripItineraryAssembler {
         itinerary.put("transport", buildTransport(destination));
         itinerary.put("citation_ids", List.of());
         applyOverrides(itinerary, state.get("itineraryOverrides"));
+        log.info("[assemble][destination({}) days({}) scenicCandidates({}) restaurants({}) hotels({}) 耗时({}ms) 骨架组装完成]",
+                destination, days, scenicCandidates.size(), restaurants.size(), hotels.size(), System.currentTimeMillis() - start);
         return itinerary;
     }
 
@@ -74,28 +80,90 @@ public class TripItineraryAssembler {
                                                  List<ScenicCandidate> scenicCandidates,
                                                  List<TripTravelQueryService.Place> restaurants,
                                                  List<TripTravelQueryService.Place> hotels) {
-        List<Map<String, Object>> result = new ArrayList<>();
         LocalDate startDate = parseDate(text(state.get("startDate")));
         int hotelBudget = MapUtil.getInt(state, "hotelBudget", 300);
-        Set<String> usedScenicIds = new HashSet<>();
+        List<List<ScenicCandidate>> scenicCandidatesByDay = allocateScenicCandidates(days, scenicCandidates);
+        List<TripTravelQueryService.Place> dayMealCandidates = rankMealCandidates(restaurants);
+        List<TripTravelQueryService.Place> dayHotelCandidates = rankHotelCandidates(hotels, hotelBudget);
+        long start = System.currentTimeMillis();
+        List<CompletableFuture<Map<String, Object>>> dayFutures = new ArrayList<>();
         for (int day = 1; day <= days; day++) {
-            Map<String, Object> dayItem = new LinkedHashMap<>();
-            dayItem.put("day", day);
-            if (startDate != null) {
-                dayItem.put("date", startDate.plusDays(day - 1).toString());
+            final int currentDay = day;
+            final List<ScenicCandidate> dayScenicCandidates = scenicCandidatesByDay.get(day - 1);
+            dayFutures.add(CompletableFuture.supplyAsync(() -> buildDay(state, destination, startDate, currentDay,
+                    dayScenicCandidates, dayMealCandidates, dayHotelCandidates)));
+        }
+        List<Map<String, Object>> result = dayFutures.stream().map(CompletableFuture::join).toList();
+        log.info("[buildDays][destination({}) days({}) scenicPerDay({}) mealCandidates({}) hotelCandidates({}) 耗时({}ms)]",
+                destination, days, scenicCandidatesByDay.stream().mapToInt(List::size).boxed().toList(),
+                dayMealCandidates.size(), dayHotelCandidates.size(), System.currentTimeMillis() - start);
+        return result;
+    }
+
+    private Map<String, Object> buildDay(Map<String, Object> state, String destination, LocalDate startDate, int day,
+                                         List<ScenicCandidate> scenicCandidates,
+                                         List<TripTravelQueryService.Place> mealCandidates,
+                                         List<TripTravelQueryService.Place> hotelCandidates) {
+        long start = System.currentTimeMillis();
+        DaySchedule schedule = optimizeDayCandidates(state, destination, scenicCandidates, mealCandidates, hotelCandidates);
+        Map<String, Object> dayItem = new LinkedHashMap<>();
+        dayItem.put("day", day);
+        if (startDate != null) {
+            dayItem.put("date", startDate.plusDays(day - 1).toString());
+        }
+        dayItem.put("overview", buildOverviewSlot(day, destination));
+        dayItem.put("slots", schedule.slots());
+        dayItem.put("planning", schedule.metadata());
+        log.info("[buildDay][day({}) scenicCandidates({}) mealCandidates({}) hotelCandidates({}) status({}) 耗时({}ms)]",
+                day, scenicCandidates.size(), mealCandidates.size(), hotelCandidates.size(),
+                schedule.metadata().get("status"), System.currentTimeMillis() - start);
+        return dayItem;
+    }
+
+    private static List<List<ScenicCandidate>> allocateScenicCandidates(int days, List<ScenicCandidate> candidates) {
+        List<ScenicCandidate> ranked = rankScenicCandidates(candidates, Set.of());
+        List<List<ScenicCandidate>> result = new ArrayList<>();
+        for (int day = 0; day < days; day++) {
+            result.add(new ArrayList<>());
+        }
+        if (ranked.isEmpty()) {
+            return result;
+        }
+        int perDayLimit = Math.max(1, (int) Math.ceil((double) ranked.size() / days));
+        int nextCandidateIndex = 0;
+        int minimumPerDay = Math.min(2, perDayLimit);
+        for (List<ScenicCandidate> dayCandidates : result) {
+            for (int count = 0; count < minimumPerDay && nextCandidateIndex < ranked.size(); count++) {
+                dayCandidates.add(ranked.get(nextCandidateIndex++));
             }
-            List<ScenicCandidate> dayScenicCandidates = rankScenicCandidates(scenicCandidates, usedScenicIds);
-            List<TripTravelQueryService.Place> dayMealCandidates = rankMealCandidates(restaurants);
-            List<TripTravelQueryService.Place> dayHotelCandidates = rankHotelCandidates(hotels, hotelBudget);
-            DaySchedule schedule = optimizeDayCandidates(state, destination, dayScenicCandidates,
-                    dayMealCandidates, dayHotelCandidates);
-            selectedScenicIds(schedule).forEach(usedScenicIds::add);
-            dayItem.put("overview", buildOverviewSlot(day, destination));
-            dayItem.put("slots", schedule.slots());
-            dayItem.put("planning", schedule.metadata());
-            result.add(dayItem);
+        }
+        while (nextCandidateIndex < ranked.size()) {
+            boolean allocated = false;
+            for (List<ScenicCandidate> dayCandidates : result) {
+                if (nextCandidateIndex >= ranked.size() || dayCandidates.size() >= perDayLimit) {
+                    continue;
+                }
+                dayCandidates.add(ranked.get(nextCandidateIndex++));
+                allocated = true;
+            }
+            if (!allocated) {
+                break;
+            }
         }
         return result;
+    }
+
+    private <T extends List<?>> T measureCandidateQuery(String category, Supplier<T> supplier) {
+        long start = System.currentTimeMillis();
+        try {
+            T result = supplier.get();
+            log.info("[assemble][category({}) candidateCount({}) 耗时({}ms)]", category, result.size(),
+                    System.currentTimeMillis() - start);
+            return result;
+        } catch (RuntimeException e) {
+            log.warn("[assemble][category({}) 耗时({}ms) 查询失败]", category, System.currentTimeMillis() - start, e);
+            throw e;
+        }
     }
 
     /** 按需查询某一天的交通段，避免行程骨架默认携带大量路线点。 */
@@ -579,16 +647,6 @@ public class TripItineraryAssembler {
         slots.add(buildMealSlot("DINNER", city, pick(mealCandidates, mealCandidates.size() > 1 ? 1 : 0)));
         slots.add(buildAccommodationSlot(city, pick(hotelCandidates, 0)));
         return slots;
-    }
-
-    private static Set<String> selectedScenicIds(DaySchedule schedule) {
-        Set<String> result = new HashSet<>();
-        for (Map<String, Object> slot : schedule.slots()) {
-            if (isScenicSlot(slot) && StrUtil.isNotBlank(text(slot.get("poiId")))) {
-                result.add(text(slot.get("poiId")));
-            }
-        }
-        return result;
     }
 
     private static String scenicIdentity(ScenicCandidate candidate) {
