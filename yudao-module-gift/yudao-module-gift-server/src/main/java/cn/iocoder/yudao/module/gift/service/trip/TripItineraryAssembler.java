@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +28,7 @@ import java.util.regex.Pattern;
 @Slf4j
 public class TripItineraryAssembler {
 
+    private static final String ITINERARY_ASSEMBLE_METRIC_NAME = "yudao.gift.trip.itinerary.assemble";
     private static final int MAX_CATEGORY_CANDIDATE_POOL_SIZE = 200;
     private static final int CANDIDATES_PER_DAY = 25;
     private static final int DAILY_SCENIC_CANDIDATE_LIMIT = 30;
@@ -45,79 +48,108 @@ public class TripItineraryAssembler {
 
     @Resource
     private TripTravelQueryService tripTravelQueryService;
+    @Resource
+    private MeterRegistry meterRegistry;
 
     public Map<String, Object> assemble(Map<String, Object> state) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String outcome = "success";
         long start = System.currentTimeMillis();
-        String destination = text(state.get("destination"));
-        int days = MapUtil.getInt(state, "days", 1);
-        List<String> interests = texts(state.get("interests"));
-        List<String> mustVisit = texts(state.get("mustVisit"));
-        int candidateLimit = candidateLimit(days);
-        log.info("[assemble][destination({}) days({}) candidateLimit({}) 开始组装行程骨架]", destination, days, candidateLimit);
-        CompletableFuture<List<ScenicCandidate>> scenicFuture = CompletableFuture.supplyAsync(
-                () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)));
-        CompletableFuture<List<TripTravelQueryService.Place>> restaurantFuture = CompletableFuture.supplyAsync(
-                () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit)));
-        CompletableFuture<List<TripTravelQueryService.Place>> hotelFuture = CompletableFuture.supplyAsync(
-                () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit)));
-        List<ScenicCandidate> scenicCandidates = scenicFuture.join();
-        List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
-        List<TripTravelQueryService.Place> hotels = hotelFuture.join();
+        try {
+            String destination = text(state.get("destination"));
+            int days = MapUtil.getInt(state, "days", 1);
+            List<String> interests = texts(state.get("interests"));
+            List<String> mustVisit = texts(state.get("mustVisit"));
+            int candidateLimit = candidateLimit(days);
+            log.info("[assemble][destination({}) days({}) candidateLimit({}) 开始组装行程骨架]", destination, days, candidateLimit);
+            CompletableFuture<List<ScenicCandidate>> scenicFuture = CompletableFuture.supplyAsync(
+                    () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)));
+            CompletableFuture<List<TripTravelQueryService.Place>> restaurantFuture = CompletableFuture.supplyAsync(
+                    () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit)));
+            CompletableFuture<List<TripTravelQueryService.Place>> hotelFuture = CompletableFuture.supplyAsync(
+                    () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit)));
+            List<ScenicCandidate> scenicCandidates = scenicFuture.join();
+            List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
+            List<TripTravelQueryService.Place> hotels = hotelFuture.join();
 
-        Map<String, Object> itinerary = new LinkedHashMap<>();
-        List<Map<String, Object>> dailyItinerary = buildDays(state, days, destination, scenicCandidates, restaurants, hotels);
-        itinerary.put("overview", buildOverviewSlot(0, destination));
-        itinerary.put("daily_itinerary", dailyItinerary);
-        itinerary.put("transport", buildTransport(destination));
-        itinerary.put("citation_ids", List.of());
-        applyOverrides(itinerary, state.get("itineraryOverrides"));
-        log.info("[assemble][destination({}) days({}) scenicCandidates({}) restaurants({}) hotels({}) 耗时({}ms) 骨架组装完成]",
-                destination, days, scenicCandidates.size(), restaurants.size(), hotels.size(), System.currentTimeMillis() - start);
-        return itinerary;
+            Map<String, Object> itinerary = new LinkedHashMap<>();
+            List<Map<String, Object>> dailyItinerary = buildDays(state, days, destination, scenicCandidates, restaurants, hotels);
+            itinerary.put("overview", buildOverviewSlot(0, destination));
+            itinerary.put("daily_itinerary", dailyItinerary);
+            itinerary.put("transport", buildTransport(destination));
+            itinerary.put("citation_ids", List.of());
+            applyOverrides(itinerary, state.get("itineraryOverrides"));
+            log.info("[assemble][destination({}) days({}) scenicCandidates({}) restaurants({}) hotels({}) 耗时({}ms) 骨架组装完成]",
+                    destination, days, scenicCandidates.size(), restaurants.size(), hotels.size(), System.currentTimeMillis() - start);
+            return itinerary;
+        } catch (RuntimeException | Error ex) {
+            outcome = "error";
+            throw ex;
+        } finally {
+            sample.stop(itineraryTimer("assemble", "all", outcome));
+        }
     }
 
     private List<Map<String, Object>> buildDays(Map<String, Object> state, int days, String destination,
                                                  List<ScenicCandidate> scenicCandidates,
                                                  List<TripTravelQueryService.Place> restaurants,
                                                  List<TripTravelQueryService.Place> hotels) {
-        LocalDate startDate = parseDate(text(state.get("startDate")));
-        int hotelBudget = MapUtil.getInt(state, "hotelBudget", 300);
-        List<List<ScenicCandidate>> scenicCandidatesByDay = allocateScenicCandidates(days, scenicCandidates);
-        List<TripTravelQueryService.Place> dayMealCandidates = rankMealCandidates(restaurants);
-        List<TripTravelQueryService.Place> dayHotelCandidates = rankHotelCandidates(hotels, hotelBudget);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String outcome = "success";
         long start = System.currentTimeMillis();
-        List<CompletableFuture<Map<String, Object>>> dayFutures = new ArrayList<>();
-        for (int day = 1; day <= days; day++) {
-            final int currentDay = day;
-            final List<ScenicCandidate> dayScenicCandidates = scenicCandidatesByDay.get(day - 1);
-            dayFutures.add(CompletableFuture.supplyAsync(() -> buildDay(state, destination, startDate, currentDay,
-                    dayScenicCandidates, dayMealCandidates, dayHotelCandidates)));
+        try {
+            LocalDate startDate = parseDate(text(state.get("startDate")));
+            int hotelBudget = MapUtil.getInt(state, "hotelBudget", 300);
+            List<List<ScenicCandidate>> scenicCandidatesByDay = allocateScenicCandidates(days, scenicCandidates);
+            List<TripTravelQueryService.Place> dayMealCandidates = rankMealCandidates(restaurants);
+            List<TripTravelQueryService.Place> dayHotelCandidates = rankHotelCandidates(hotels, hotelBudget);
+            List<CompletableFuture<Map<String, Object>>> dayFutures = new ArrayList<>();
+            for (int day = 1; day <= days; day++) {
+                final int currentDay = day;
+                final List<ScenicCandidate> dayScenicCandidates = scenicCandidatesByDay.get(day - 1);
+                dayFutures.add(CompletableFuture.supplyAsync(() -> buildDay(state, destination, startDate, currentDay,
+                        dayScenicCandidates, dayMealCandidates, dayHotelCandidates)));
+            }
+            List<Map<String, Object>> result = dayFutures.stream().map(CompletableFuture::join).toList();
+            log.info("[buildDays][destination({}) days({}) scenicPerDay({}) mealCandidates({}) hotelCandidates({}) 耗时({}ms)]",
+                    destination, days, scenicCandidatesByDay.stream().mapToInt(List::size).boxed().toList(),
+                    dayMealCandidates.size(), dayHotelCandidates.size(), System.currentTimeMillis() - start);
+            return result;
+        } catch (RuntimeException | Error ex) {
+            outcome = "error";
+            throw ex;
+        } finally {
+            sample.stop(itineraryTimer("daily_schedule", "all", outcome));
         }
-        List<Map<String, Object>> result = dayFutures.stream().map(CompletableFuture::join).toList();
-        log.info("[buildDays][destination({}) days({}) scenicPerDay({}) mealCandidates({}) hotelCandidates({}) 耗时({}ms)]",
-                destination, days, scenicCandidatesByDay.stream().mapToInt(List::size).boxed().toList(),
-                dayMealCandidates.size(), dayHotelCandidates.size(), System.currentTimeMillis() - start);
-        return result;
     }
 
     private Map<String, Object> buildDay(Map<String, Object> state, String destination, LocalDate startDate, int day,
                                          List<ScenicCandidate> scenicCandidates,
                                          List<TripTravelQueryService.Place> mealCandidates,
                                          List<TripTravelQueryService.Place> hotelCandidates) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String outcome = "success";
         long start = System.currentTimeMillis();
-        DaySchedule schedule = optimizeDayCandidates(state, destination, scenicCandidates, mealCandidates, hotelCandidates);
-        Map<String, Object> dayItem = new LinkedHashMap<>();
-        dayItem.put("day", day);
-        if (startDate != null) {
-            dayItem.put("date", startDate.plusDays(day - 1).toString());
+        try {
+            DaySchedule schedule = optimizeDayCandidates(state, destination, scenicCandidates, mealCandidates, hotelCandidates);
+            Map<String, Object> dayItem = new LinkedHashMap<>();
+            dayItem.put("day", day);
+            if (startDate != null) {
+                dayItem.put("date", startDate.plusDays(day - 1).toString());
+            }
+            dayItem.put("overview", buildOverviewSlot(day, destination));
+            dayItem.put("slots", schedule.slots());
+            dayItem.put("planning", schedule.metadata());
+            log.info("[buildDay][day({}) scenicCandidates({}) mealCandidates({}) hotelCandidates({}) status({}) 耗时({}ms)]",
+                    day, scenicCandidates.size(), mealCandidates.size(), hotelCandidates.size(),
+                    schedule.metadata().get("status"), System.currentTimeMillis() - start);
+            return dayItem;
+        } catch (RuntimeException | Error ex) {
+            outcome = "error";
+            throw ex;
+        } finally {
+            sample.stop(itineraryTimer("daily", "all", outcome));
         }
-        dayItem.put("overview", buildOverviewSlot(day, destination));
-        dayItem.put("slots", schedule.slots());
-        dayItem.put("planning", schedule.metadata());
-        log.info("[buildDay][day({}) scenicCandidates({}) mealCandidates({}) hotelCandidates({}) status({}) 耗时({}ms)]",
-                day, scenicCandidates.size(), mealCandidates.size(), hotelCandidates.size(),
-                schedule.metadata().get("status"), System.currentTimeMillis() - start);
-        return dayItem;
     }
 
     private static List<List<ScenicCandidate>> allocateScenicCandidates(int days, List<ScenicCandidate> candidates) {
@@ -154,16 +186,27 @@ public class TripItineraryAssembler {
     }
 
     private <T extends List<?>> T measureCandidateQuery(String category, Supplier<T> supplier) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String outcome = "success";
         long start = System.currentTimeMillis();
         try {
             T result = supplier.get();
             log.info("[assemble][category({}) candidateCount({}) 耗时({}ms)]", category, result.size(),
                     System.currentTimeMillis() - start);
             return result;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
+            outcome = "error";
             log.warn("[assemble][category({}) 耗时({}ms) 查询失败]", category, System.currentTimeMillis() - start, e);
             throw e;
+        } finally {
+            sample.stop(itineraryTimer("candidate_query", category, outcome));
         }
+    }
+
+    private Timer itineraryTimer(String phase, String category, String outcome) {
+        return Timer.builder(ITINERARY_ASSEMBLE_METRIC_NAME)
+                .tags("phase", phase, "category", category, "outcome", outcome)
+                .register(meterRegistry);
     }
 
     /** 按需查询某一天的交通段，避免行程骨架默认携带大量路线点。 */

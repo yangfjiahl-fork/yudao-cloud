@@ -1,5 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -45,8 +48,8 @@ class TripItineraryAssemblerTest {
                 .thenReturn(new TripTravelQueryService.Route("gaode", TripTravelQueryService.RouteMode.WALKING, 840, 720,
                         List.of(new TripTravelQueryService.RoutePoint(120.0900D, 30.1950D),
                                 new TripTravelQueryService.RoutePoint(120.1000D, 30.2000D))));
-        TripItineraryAssembler assembler = new TripItineraryAssembler();
-        ReflectionTestUtils.setField(assembler, "tripTravelQueryService", queryService);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TripItineraryAssembler assembler = createAssembler(queryService, meterRegistry);
 
         Map<String, Object> itinerary = assembler.assemble(Map.of(
                 "departure", "上海", "destination", "杭州", "startDate", "2026-09-10", "days", 2,
@@ -88,6 +91,14 @@ class TripItineraryAssemblerTest {
                 .filter(Map.class::isInstance).map(Map.class::cast).map(slot -> (String) slot.get("poiId"))
                 .filter(poiId -> poiId != null && poiId.startsWith("poi-")).toList();
         assertEquals(scenicPoiIds.size(), scenicPoiIds.stream().distinct().count());
+        assertEquals(1, meterRegistry.find("yudao.gift.trip.itinerary.assemble")
+                .tags("phase", "assemble", "category", "all", "outcome", "success").timer().count());
+        assertEquals(3, meterRegistry.find("yudao.gift.trip.itinerary.assemble")
+                .tags("phase", "candidate_query", "outcome", "success").timers().stream().mapToLong(Timer::count).sum());
+        assertEquals(1, meterRegistry.find("yudao.gift.trip.itinerary.assemble")
+                .tags("phase", "daily_schedule", "category", "all", "outcome", "success").timer().count());
+        assertEquals(2, meterRegistry.find("yudao.gift.trip.itinerary.assemble")
+                .tags("phase", "daily", "category", "all", "outcome", "success").timer().count());
     }
 
     @Test
@@ -113,8 +124,7 @@ class TripItineraryAssemblerTest {
         when(queryService.queryHotels(anyString(), anyInt())).thenReturn(List.of(
                 new TripTravelQueryService.Place("gaode", "hotel-1", "西湖国宾馆", "杭州", "120.0900", "30.1950", "", "", "4.9", "800", "")
         ));
-        TripItineraryAssembler assembler = new TripItineraryAssembler();
-        ReflectionTestUtils.setField(assembler, "tripTravelQueryService", queryService);
+        TripItineraryAssembler assembler = createAssembler(queryService);
 
         Map<String, Object> itinerary = assembler.assemble(Map.of("destination", "杭州", "days", 1));
 
@@ -137,13 +147,23 @@ class TripItineraryAssemblerTest {
                 new TripTravelQueryService.Place("gaode", "hotel-1", "经济酒店", "杭州", "120.1110", "30.2060", "", "", "4.9", "300", "三星级"),
                 new TripTravelQueryService.Place("gaode", "hotel-2", "高档酒店", "杭州", "120.1120", "30.2070", "", "", "4.6", "1200", "五星级")
         ));
-        TripItineraryAssembler assembler = new TripItineraryAssembler();
-        ReflectionTestUtils.setField(assembler, "tripTravelQueryService", queryService);
+        TripItineraryAssembler assembler = createAssembler(queryService);
 
         Map<String, Object> itinerary = assembler.assemble(Map.of("destination", "杭州", "days", 1, "hotelBudget", 800));
 
         Map<?, ?> firstDay = (Map<?, ?>) ((List<?>) itinerary.get("daily_itinerary")).get(0);
         assertEquals("高档酒店", ((Map<?, ?>) ((List<?>) firstDay.get("slots")).get(4)).get("poiName"));
+    }
+
+    private static TripItineraryAssembler createAssembler(TripTravelQueryService queryService) {
+        return createAssembler(queryService, new SimpleMeterRegistry());
+    }
+
+    private static TripItineraryAssembler createAssembler(TripTravelQueryService queryService, MeterRegistry meterRegistry) {
+        TripItineraryAssembler assembler = new TripItineraryAssembler();
+        ReflectionTestUtils.setField(assembler, "tripTravelQueryService", queryService);
+        ReflectionTestUtils.setField(assembler, "meterRegistry", meterRegistry);
+        return assembler;
     }
 
 }
