@@ -31,7 +31,7 @@ public class AmapRouteQueryClient {
     void warnWhenRouteProviderUnavailable() {
         if (!isConfigured()) {
             log.warn("[warnWhenRouteProviderUnavailable][高德路径规划未配置；行程交通段将使用本地估算。"
-                    + "请配置 AMAP_ROUTE_API_KEY 或 AMAP_WEB_SERVICE_KEY 后重启服务]");
+                    + "请配置 AMAP_WEB_SERVICE_KEY 或 yudao.gift.amap.key 后重启服务]");
         }
     }
 
