@@ -48,6 +48,8 @@ Tests use JUnit 5 with Spring Boot test support from `yudao-spring-boot-starter-
 
 前端接口联调约定：默认使用 test 数据库中的 `userId=288` 会员账号进行鉴权验证，并从 test 数据库运行时获取有效 access token；不得使用固定的 `288` 字符串作为 Token。Token 仅用于本地验证，不得写入代码、接口文档、测试样例、提交记录或日志输出。
 
+本地 MySQL 联调约定：连接信息从当前 profile 的配置文件读取，只能在本地进程变量中短暂使用，禁止在命令输出、脚本、文档或提交中暴露密码、access token、地图 Key 等敏感值。优先执行只读查询；旅行规划回归仅查询 `userId=288` 的未过期会员 token。若本机未安装 MySQL 客户端，可复用本地 Maven 缓存中的 MySQL JDBC 驱动以内存方式查询，禁止为联调把凭据复制到新文件。需要产生业务数据时，必须通过 C 端接口创建独立会话，不得直接更新或删除 test 数据库中的旅行、聊天或令牌记录。
+
 Run at least the affected module’s tests or compile command before handing off.
 
 ### 旅行规划固定回归场景
