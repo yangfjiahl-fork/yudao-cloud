@@ -1,8 +1,10 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.ip.core.Area;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.yudao.framework.ip.core.utils.IPUtils;
+import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripLocationRespVO;
 import cn.iocoder.yudao.module.gift.framework.geo.core.AmapGeocodingClient;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +24,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 
@@ -31,6 +35,8 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 @Validated
 @Slf4j
 public class AppTripLocationController {
+
+    private static final int DEFAULT_IP_AREA_ID = 310115;
 
     @Resource
     private AmapGeocodingClient amapGeocodingClient;
@@ -61,10 +67,27 @@ public class AppTripLocationController {
 
     private AppTripLocationRespVO resolveByIp() {
         try {
-            return AppTripLocationRespVO.fromIpArea(IPUtils.getArea(ServletUtils.getClientIP()));
+            String clientIp = ServletUtils.getClientIP();
+            Area area = isPrivateOrLocalIp(clientIp) ? AreaUtils.getArea(DEFAULT_IP_AREA_ID) : IPUtils.getArea(clientIp);
+            return AppTripLocationRespVO.fromIpArea(area);
         } catch (Exception e) {
             log.warn("[resolveByIp][本地 IP 地区解析失败]", e);
-            return AppTripLocationRespVO.fromIpArea(null);
+            return AppTripLocationRespVO.fromIpArea(AreaUtils.getArea(DEFAULT_IP_AREA_ID));
+        }
+    }
+
+    static boolean isPrivateOrLocalIp(String ip) {
+        if (ip == null || !ip.matches("[0-9a-fA-F:.]+")) {
+            return true;
+        }
+        try {
+            InetAddress address = InetAddress.getByName(ip);
+            byte[] addressBytes = address.getAddress();
+            boolean isIpv6UniqueLocal = addressBytes.length == 16 && (addressBytes[0] & 0xFE) == 0xFC;
+            return address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress() || isIpv6UniqueLocal;
+        } catch (UnknownHostException e) {
+            return true;
         }
     }
 

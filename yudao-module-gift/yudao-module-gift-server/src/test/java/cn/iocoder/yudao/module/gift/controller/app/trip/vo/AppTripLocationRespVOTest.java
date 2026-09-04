@@ -45,4 +45,16 @@ class AppTripLocationRespVOTest {
         assertEquals(null, result.getDistrict());
     }
 
+    @Test
+    void testFromIpArea_defaultPudong() {
+        AppTripLocationRespVO result = AppTripLocationRespVO.fromIpArea(AreaUtils.getArea(310115));
+
+        assertEquals(310000L, result.getProvinceId());
+        assertEquals(310100L, result.getCityId());
+        assertEquals(310115L, result.getDistrictId());
+        assertEquals("上海市", result.getProvince());
+        assertEquals("上海市", result.getCity());
+        assertEquals("浦东新区", result.getDistrict());
+    }
+
 }
