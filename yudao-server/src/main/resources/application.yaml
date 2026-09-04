@@ -347,7 +347,7 @@ yudao:
         app-code: ${ALIYUN_WEATHER_APP_CODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}}
         url: ${ALIYUN_WEATHER_URL:https://ali-weather.showapi.com/area-to-weather}
         amap:
-          api-key: ${AMAP_WEATHER_API_KEY:${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}}
+          api-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
           geocode-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
           weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
       scenic-spot:
@@ -359,6 +359,10 @@ yudao:
       travel-place:
         amap-url: ${AMAP_TRAVEL_PLACE_URL:https://restapi.amap.com/v5/place/text}
         amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
+      route:
+        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
+        walking-url: ${AMAP_WALKING_ROUTE_URL:https://restapi.amap.com/v3/direction/walking}
+        transit-url: ${AMAP_TRANSIT_ROUTE_URL:https://restapi.amap.com/v3/direction/transit/integrated}
   codegen:
     base-package: ${yudao.info.base-package}
     db-schemas: ${spring.datasource.dynamic.datasource.master.name}
