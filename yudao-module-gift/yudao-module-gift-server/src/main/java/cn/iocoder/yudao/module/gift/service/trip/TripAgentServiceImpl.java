@@ -52,6 +52,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 旅行规划的显式编排器。LLM 负责需求交互和总览表达；状态、骨架、事实及引用均由服务端控制。
@@ -72,6 +74,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int SLOT_RESOLVE_STATUS_PROCESSING = 1;
     private static final int SLOT_RESOLVE_STATUS_COMPLETED = 2;
     private static final int SLOT_RESOLVE_STATUS_FAILED = 3;
+    private static final Pattern AMOUNT_PATTERN = Pattern.compile("\\d[\\d,]*");
     private static final Set<String> DAILY_ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "ACCOMMODATION");
     private static final Set<String> ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
@@ -663,8 +666,12 @@ public class TripAgentServiceImpl implements TripAgentService {
             return StrUtil.isBlank(text) ? null : Integer.parseInt(text);
         }
         if ("hotelBudget".equals(field)) {
-            Integer budget = MapUtil.getInt(Map.of("value", value), "value");
+            Integer budget = normalizeAmount(value);
             return budget != null && budget > 0 ? budget : null;
+        }
+        if ("budget".equals(field)) {
+            Integer budget = normalizeAmount(value);
+            return budget != null && budget > 0 ? String.valueOf(budget) : null;
         }
         if ("dailyStartTime".equals(field) || "dailyEndTime".equals(field)) {
             return normalizeTime(value);
@@ -680,6 +687,21 @@ public class TripAgentServiceImpl implements TripAgentService {
             return StrUtil.isBlank(text) ? List.of() : List.of(text);
         }
         return trimNullable(value);
+    }
+
+    private static Integer normalizeAmount(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        Matcher matcher = AMOUNT_PATTERN.matcher(trimNullable(value));
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(matcher.group().replace(",", ""));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private static String normalizeTime(Object value) {

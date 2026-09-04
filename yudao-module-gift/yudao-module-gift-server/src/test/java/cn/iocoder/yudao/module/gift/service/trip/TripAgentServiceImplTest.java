@@ -46,4 +46,16 @@ class TripAgentServiceImplTest {
         assertEquals(500, state.get("hotelBudget"));
         assertEquals(Map.of("adultCount", 2, "childCount", 2), state.get("travelerProfile"));
     }
+
+    @Test
+    void mergeInformationState_shouldNormalizeAmountSuggestionContent() {
+        Map<String, Object> state = new LinkedHashMap<>();
+
+        TripAgentServiceImpl.mergeInformationState(state, Map.of(
+                "budget", "人均预算1,500元",
+                "hotelBudget", "每晚住宿预算500元"), "人均预算1,500元，每晚住宿预算500元。");
+
+        assertEquals("1500", state.get("budget"));
+        assertEquals(500, state.get("hotelBudget"));
+    }
 }

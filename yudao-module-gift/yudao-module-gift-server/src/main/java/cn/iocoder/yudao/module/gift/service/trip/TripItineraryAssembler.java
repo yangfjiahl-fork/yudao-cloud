@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
@@ -45,6 +46,7 @@ public class TripItineraryAssembler {
     private static final int SCENIC_BUFFER_MINUTES = 30;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final Pattern TIME_RANGE_PATTERN = Pattern.compile("(\\d{1,2}):(\\d{2})\\s*[-~至]\\s*(\\d{1,2}):(\\d{2})");
+    private static final Pattern AMOUNT_PATTERN = Pattern.compile("\\d[\\d,]*");
 
     @Resource
     private TripTravelQueryService tripTravelQueryService;
@@ -61,13 +63,15 @@ public class TripItineraryAssembler {
             List<String> interests = texts(state.get("interests"));
             List<String> mustVisit = texts(state.get("mustVisit"));
             int candidateLimit = candidateLimit(days);
+            Map<String, String> mdcContext = MDC.getCopyOfContextMap();
             log.info("[assemble][destination({}) days({}) candidateLimit({}) 开始组装行程骨架]", destination, days, candidateLimit);
             CompletableFuture<List<ScenicCandidate>> scenicFuture = CompletableFuture.supplyAsync(
-                    () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)));
+                    withMdcContext(mdcContext,
+                            () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit))));
             CompletableFuture<List<TripTravelQueryService.Place>> restaurantFuture = CompletableFuture.supplyAsync(
-                    () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit)));
+                    withMdcContext(mdcContext, () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit))));
             CompletableFuture<List<TripTravelQueryService.Place>> hotelFuture = CompletableFuture.supplyAsync(
-                    () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit)));
+                    withMdcContext(mdcContext, () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit))));
             List<ScenicCandidate> scenicCandidates = scenicFuture.join();
             List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
             List<TripTravelQueryService.Place> hotels = hotelFuture.join();
@@ -99,16 +103,18 @@ public class TripItineraryAssembler {
         long start = System.currentTimeMillis();
         try {
             LocalDate startDate = parseDate(text(state.get("startDate")));
-            int hotelBudget = MapUtil.getInt(state, "hotelBudget", 300);
+            int hotelBudget = ObjUtil.defaultIfNull(normalizeAmount(state.get("hotelBudget")), 300);
             List<List<ScenicCandidate>> scenicCandidatesByDay = allocateScenicCandidates(days, scenicCandidates);
             List<TripTravelQueryService.Place> dayMealCandidates = rankMealCandidates(restaurants);
             List<TripTravelQueryService.Place> dayHotelCandidates = rankHotelCandidates(hotels, hotelBudget);
+            Map<String, String> mdcContext = MDC.getCopyOfContextMap();
             List<CompletableFuture<Map<String, Object>>> dayFutures = new ArrayList<>();
             for (int day = 1; day <= days; day++) {
                 final int currentDay = day;
                 final List<ScenicCandidate> dayScenicCandidates = scenicCandidatesByDay.get(day - 1);
-                dayFutures.add(CompletableFuture.supplyAsync(() -> buildDay(state, destination, startDate, currentDay,
-                        dayScenicCandidates, dayMealCandidates, dayHotelCandidates)));
+                dayFutures.add(CompletableFuture.supplyAsync(withMdcContext(mdcContext,
+                        () -> buildDay(state, destination, startDate, currentDay,
+                                dayScenicCandidates, dayMealCandidates, dayHotelCandidates))));
             }
             List<Map<String, Object>> result = dayFutures.stream().map(CompletableFuture::join).toList();
             log.info("[buildDays][destination({}) days({}) scenicPerDay({}) mealCandidates({}) hotelCandidates({}) 耗时({}ms)]",
@@ -207,6 +213,26 @@ public class TripItineraryAssembler {
         return Timer.builder(ITINERARY_ASSEMBLE_METRIC_NAME)
                 .tags("phase", phase, "category", category, "outcome", outcome)
                 .register(meterRegistry);
+    }
+
+    private static <T> Supplier<T> withMdcContext(Map<String, String> mdcContext, Supplier<T> supplier) {
+        return () -> {
+            Map<String, String> previousMdcContext = MDC.getCopyOfContextMap();
+            setMdcContext(mdcContext);
+            try {
+                return supplier.get();
+            } finally {
+                setMdcContext(previousMdcContext);
+            }
+        };
+    }
+
+    private static void setMdcContext(Map<String, String> mdcContext) {
+        if (mdcContext == null) {
+            MDC.clear();
+            return;
+        }
+        MDC.setContextMap(mdcContext);
     }
 
     /** 按需查询某一天的交通段，避免行程骨架默认携带大量路线点。 */
@@ -465,7 +491,7 @@ public class TripItineraryAssembler {
 
     private static Long dailyBudgetCapacity(Map<String, Object> state, Map<String, Object> accommodation,
                                             List<NodeBinding> bindings) {
-        Integer budget = MapUtil.getInt(state, "budget");
+        Integer budget = normalizeAmount(state.get("budget"));
         Integer travelerCount = MapUtil.getInt(state, "travelerCount");
         Integer days = MapUtil.getInt(state, "days");
         long hotelCost = nodeCost(accommodation);
@@ -491,6 +517,21 @@ public class TripItineraryAssembler {
             return Math.round(Double.parseDouble(rawCost));
         } catch (NumberFormatException ignored) {
             return -1L;
+        }
+    }
+
+    private static Integer normalizeAmount(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        Matcher matcher = AMOUNT_PATTERN.matcher(text(value));
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(matcher.group().replace(",", ""));
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

@@ -4,10 +4,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +28,7 @@ class TripItineraryAssemblerTest {
     @Test
     void assemble_shouldBuildStableSlotsFromExtractedStateAndProviderCandidates() {
         TripTravelQueryService queryService = mock(TripTravelQueryService.class);
+        AtomicReference<String> restaurantTraceId = new AtomicReference<>();
         when(queryService.queryScenicSpots(anyString(), anyString(), anyInt())).thenReturn(List.of(
                 new TripTravelQueryService.ScenicSpot("gaode", "poi-1", "西湖", "杭州", "120.1000", "30.2000", "", "00:00-24:00", "", ""),
                 new TripTravelQueryService.ScenicSpot("gaode", "poi-2", "雷峰塔", "杭州", "120.1100", "30.2050", ""),
@@ -34,12 +37,15 @@ class TripItineraryAssemblerTest {
                 new TripTravelQueryService.ScenicSpot("gaode", "poi-5", "飞来峰", "杭州", "120.3050", "30.2450", ""),
                 new TripTravelQueryService.ScenicSpot("gaode", "poi-6", "杭州植物园", "杭州", "120.3100", "30.2500", "")
         ));
-        when(queryService.queryRestaurants(anyString(), anyInt())).thenReturn(List.of(
-                new TripTravelQueryService.Place("gaode", "food-1", "知味观", "杭州", "120.1010", "30.2010", "", "", "4.8", "80", ""),
-                new TripTravelQueryService.Place("gaode", "food-2", "楼外楼", "杭州", "120.1150", "30.2080", "", "", "4.7", "120", ""),
-                new TripTravelQueryService.Place("gaode", "food-3", "灵隐素斋", "杭州", "120.3010", "30.2410", "", "", "4.6", "60", ""),
-                new TripTravelQueryService.Place("gaode", "food-4", "龙井味道", "杭州", "120.3090", "30.2490", "", "", "4.5", "90", "")
-        ));
+        when(queryService.queryRestaurants(anyString(), anyInt())).thenAnswer(invocation -> {
+            restaurantTraceId.set(MDC.get("traceId"));
+            return List.of(
+                    new TripTravelQueryService.Place("gaode", "food-1", "知味观", "杭州", "120.1010", "30.2010", "", "", "4.8", "80", ""),
+                    new TripTravelQueryService.Place("gaode", "food-2", "楼外楼", "杭州", "120.1150", "30.2080", "", "", "4.7", "120", ""),
+                    new TripTravelQueryService.Place("gaode", "food-3", "灵隐素斋", "杭州", "120.3010", "30.2410", "", "", "4.6", "60", ""),
+                    new TripTravelQueryService.Place("gaode", "food-4", "龙井味道", "杭州", "120.3090", "30.2490", "", "", "4.5", "90", "")
+            );
+        });
         when(queryService.queryHotels(anyString(), anyInt())).thenReturn(List.of(
                 new TripTravelQueryService.Place("gaode", "hotel-1", "西湖国宾馆", "杭州", "120.0900", "30.1950", "", "", "4.9", "800", "")
         ));
@@ -51,10 +57,16 @@ class TripItineraryAssemblerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         TripItineraryAssembler assembler = createAssembler(queryService, meterRegistry);
 
-        Map<String, Object> itinerary = assembler.assemble(Map.of(
-                "departure", "上海", "destination", "杭州", "startDate", "2026-09-10", "days", 2,
-                "travelerCount", 2, "budget", "1500", "interests", List.of("人文"), "mustVisit", List.of("西湖")
-        ));
+        Map<String, Object> itinerary;
+        MDC.put("traceId", "trip-assembler-test-trace");
+        try {
+            itinerary = assembler.assemble(Map.of(
+                    "departure", "上海", "destination", "杭州", "startDate", "2026-09-10", "days", 2,
+                    "travelerCount", 2, "budget", "人均预算1,500元", "interests", List.of("人文"), "mustVisit", List.of("西湖")
+            ));
+        } finally {
+            MDC.remove("traceId");
+        }
 
         List<?> days = (List<?>) itinerary.get("daily_itinerary");
         assertEquals(2, days.size());
@@ -91,6 +103,7 @@ class TripItineraryAssemblerTest {
                 .filter(Map.class::isInstance).map(Map.class::cast).map(slot -> (String) slot.get("poiId"))
                 .filter(poiId -> poiId != null && poiId.startsWith("poi-")).toList();
         assertEquals(scenicPoiIds.size(), scenicPoiIds.stream().distinct().count());
+        assertEquals("trip-assembler-test-trace", restaurantTraceId.get());
         assertEquals(1, meterRegistry.find("yudao.gift.trip.itinerary.assemble")
                 .tags("phase", "assemble", "category", "all", "outcome", "success").timer().count());
         assertEquals(3, meterRegistry.find("yudao.gift.trip.itinerary.assemble")
