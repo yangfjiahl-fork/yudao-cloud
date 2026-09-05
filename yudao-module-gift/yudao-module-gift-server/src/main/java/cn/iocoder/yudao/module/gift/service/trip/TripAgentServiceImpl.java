@@ -1073,6 +1073,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         itinerarySlot.setDay(day);
         itinerarySlot.setSlot(slot);
         itinerarySlot.setSkeleton(StrUtil.blankToDefault(ObjUtil.toString(slotData.get("skeleton")), "待补充"));
+        itinerarySlot.setPoiId(trimNullable(slotData.get("poiId")));
         itinerarySlot.setStatus(StrUtil.blankToDefault(ObjUtil.toString(slotData.get("status")), "PENDING"));
         itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_PENDING);
         tripItinerarySlotMapper.insertIgnore(itinerarySlot);
@@ -1143,10 +1144,11 @@ public class TripAgentServiceImpl implements TripAgentService {
         List<Map<String, Object>> result = new ArrayList<>(candidates.size());
         for (Map<String, Object> candidate : candidates) {
             Map<String, Object> bound = new LinkedHashMap<>(candidate);
-            String externalId = StrUtil.blankToDefault(ObjUtil.toString(bound.get("externalId")),
+            String poiId = StrUtil.blankToDefault(ObjUtil.toString(bound.get("poiId")),
                     ObjUtil.toString(bound.get("id")));
-            bound.put("externalId", externalId);
-            bound.put("id", "slot-" + slotId + "-" + externalId);
+            bound.remove("externalId");
+            bound.put("poiId", poiId);
+            bound.put("id", "slot-" + slotId + "-" + poiId);
             Map<String, Object> metadata = bound.get("metadata") instanceof Map<?, ?> rawMetadata
                     ? new LinkedHashMap<>((Map<String, Object>) rawMetadata) : new LinkedHashMap<>();
             metadata.put("slotId", slotId);

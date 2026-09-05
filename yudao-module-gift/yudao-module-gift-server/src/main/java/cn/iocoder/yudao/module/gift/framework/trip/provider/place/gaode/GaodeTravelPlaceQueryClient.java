@@ -106,7 +106,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
             String[] coordinates = StrUtil.splitToArray(text(poi, "location"), ',');
             JsonNode business = poi.path("business");
             Place place = new Place();
-            place.setExternalId(text(poi, "id"));
+            place.setPoiId(text(poi, "id"));
             place.setName(name);
             place.setAddress(text(poi, "address"));
             place.setLongitude(coordinates.length > 0 ? coordinates[0] : "");

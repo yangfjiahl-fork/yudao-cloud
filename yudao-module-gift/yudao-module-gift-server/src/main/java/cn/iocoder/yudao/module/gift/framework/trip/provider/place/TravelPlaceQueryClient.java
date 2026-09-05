@@ -56,7 +56,7 @@ public interface TravelPlaceQueryClient {
     @Data
     class Place {
 
-        private String externalId;
+        private String poiId;
         private String name;
         private String address;
         private String longitude;

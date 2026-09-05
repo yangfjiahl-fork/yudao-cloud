@@ -666,7 +666,7 @@ public class TripItineraryAssembler {
             result.put("skeleton", "待补充游览地点");
             return result;
         }
-        result.put("poiId", candidate.spot().externalId());
+        result.put("poiId", candidate.spot().poiId());
         result.put("poiName", candidate.spot().name());
         result.put("area", destination);
         result.put("longitude", candidate.spot().longitude());
@@ -691,7 +691,7 @@ public class TripItineraryAssembler {
             result.put("skeleton", "在" + destination + "品尝当地美食");
             return result;
         }
-        result.put("poiId", place.externalId());
+        result.put("poiId", place.poiId());
         result.put("poiName", place.name());
         result.put("longitude", place.longitude());
         result.put("latitude", place.latitude());
@@ -714,7 +714,7 @@ public class TripItineraryAssembler {
             result.put("skeleton", "在" + destination + "安排住宿");
             return result;
         }
-        result.put("poiId", hotel.externalId());
+        result.put("poiId", hotel.poiId());
         result.put("poiName", hotel.name());
         result.put("longitude", hotel.longitude());
         result.put("latitude", hotel.latitude());
@@ -745,7 +745,7 @@ public class TripItineraryAssembler {
             String keyword = keywords.get(index);
             boolean required = index < mustVisit.size();
             for (TripTravelQueryService.ScenicSpot spot : queryScenicSpots(destination, keyword, candidateLimit)) {
-                String identity = StrUtil.blankToDefault(spot.externalId(), spot.name());
+                String identity = StrUtil.blankToDefault(spot.poiId(), spot.name());
                 ScenicCandidate candidate = new ScenicCandidate(spot, preferenceScore(index),
                         required && StrUtil.containsIgnoreCase(spot.name(), keyword));
                 candidates.merge(identity, candidate, (left, right) -> left.mustVisit() ? left
@@ -754,7 +754,7 @@ public class TripItineraryAssembler {
         }
         if (candidates.size() < candidateLimit && !interests.isEmpty()) {
             for (TripTravelQueryService.ScenicSpot spot : queryScenicSpots(destination, destination, candidateLimit)) {
-                String identity = StrUtil.blankToDefault(spot.externalId(), spot.name());
+                String identity = StrUtil.blankToDefault(spot.poiId(), spot.name());
                 candidates.putIfAbsent(identity, new ScenicCandidate(spot, 0, false));
             }
         }
@@ -814,7 +814,7 @@ public class TripItineraryAssembler {
     }
 
     private static String scenicIdentity(ScenicCandidate candidate) {
-        return StrUtil.blankToDefault(candidate.spot().externalId(), candidate.spot().name());
+        return StrUtil.blankToDefault(candidate.spot().poiId(), candidate.spot().name());
     }
 
     private static double scenicRating(TripTravelQueryService.ScenicSpot spot) {

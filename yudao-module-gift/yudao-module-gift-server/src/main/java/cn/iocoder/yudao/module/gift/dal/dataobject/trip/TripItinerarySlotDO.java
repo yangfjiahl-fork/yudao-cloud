@@ -22,6 +22,7 @@ public class TripItinerarySlotDO extends TenantBaseDO {
     private Integer day;
     private String slot;
     private String skeleton;
+    private String poiId;
     private String status;
     private Integer resolveStatus;
     private String detail;

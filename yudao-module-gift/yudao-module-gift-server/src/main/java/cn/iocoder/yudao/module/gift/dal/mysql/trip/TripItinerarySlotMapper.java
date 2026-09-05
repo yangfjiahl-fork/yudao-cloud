@@ -34,8 +34,8 @@ public interface TripItinerarySlotMapper extends BaseMapperX<TripItinerarySlotDO
 
     @Insert("""
             INSERT IGNORE INTO gift_trip_itinerary_slot
-            (tenant_id, itinerary_id, day, slot, skeleton, status, resolve_status)
-            VALUES (#{tenantId}, #{itineraryId}, #{day}, #{slot}, #{skeleton}, #{status}, #{resolveStatus})
+            (tenant_id, itinerary_id, day, slot, skeleton, poi_id, status, resolve_status)
+            VALUES (#{tenantId}, #{itineraryId}, #{day}, #{slot}, #{skeleton}, #{poiId}, #{status}, #{resolveStatus})
             """)
     int insertIgnore(TripItinerarySlotDO slot);
 

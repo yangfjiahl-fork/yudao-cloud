@@ -5,7 +5,7 @@ public interface TripHotelQueryClient {
 
     HotelCandidate queryByCity(String city);
 
-    record HotelCandidate(String name, String imageUrl, String externalId) {
+    record HotelCandidate(String name, String imageUrl, String poiId) {
     }
 
 }

@@ -230,7 +230,7 @@ public class TripResearchExecutor {
             }
             Map<String, Object> value = JsonUtils.parseMap(fact.getValueJson());
             getCandidateList(value.get("candidates")).forEach(candidate ->
-                    result.add(StrUtil.blankToDefault(ObjUtil.toString(candidate.get("externalId")),
+                    result.add(StrUtil.blankToDefault(ObjUtil.toString(candidate.get("poiId")),
                             ObjUtil.toString(candidate.get("id")))));
         });
         return result;
@@ -245,7 +245,7 @@ public class TripResearchExecutor {
     }
 
     private static String scenicCandidateIdentity(TripTravelQueryService.ScenicSpot spot) {
-        return StrUtil.blankToDefault(StrUtil.trim(spot.externalId()), StrUtil.trim(spot.name()));
+        return StrUtil.blankToDefault(StrUtil.trim(spot.poiId()), StrUtil.trim(spot.name()));
     }
 
     private static String pendingDetail(String detail, String skeleton) {
@@ -281,11 +281,11 @@ public class TripResearchExecutor {
 
     private static Map<String, Object> toScenicCandidate(TripTravelQueryService.ScenicSpot spot) {
         Map<String, Object> candidate = new LinkedHashMap<>();
-        candidate.put("id", spot.externalId());
+        candidate.put("id", spot.poiId());
         candidate.put("type", "POI");
         candidate.put("name", spot.name());
         candidate.put("provider", spot.provider());
-        candidate.put("externalId", spot.externalId());
+        candidate.put("poiId", spot.poiId());
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("address", spot.address());
         metadata.put("imageUrl", spot.imageUrl());
@@ -297,11 +297,11 @@ public class TripResearchExecutor {
 
     private static Map<String, Object> toTravelPlaceCandidate(TripTravelQueryService.Place place, String type) {
         Map<String, Object> candidate = new LinkedHashMap<>();
-        candidate.put("id", place.externalId());
+        candidate.put("id", place.poiId());
         candidate.put("type", type);
         candidate.put("name", place.name());
         candidate.put("provider", place.provider());
-        candidate.put("externalId", place.externalId());
+        candidate.put("poiId", place.poiId());
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("address", place.address());
         metadata.put("imageUrl", place.imageUrl());

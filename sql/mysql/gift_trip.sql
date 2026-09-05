@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (
   `day` int NOT NULL COMMENT '行程天数；交通节点固定为 0',
   `slot` varchar(32) NOT NULL,
   `skeleton` varchar(500) NOT NULL,
+  `poi_id` varchar(64) DEFAULT NULL COMMENT '高德 POI 标识',
   `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '节点展示状态：PENDING/RESOLVED',
   `resolve_status` tinyint NOT NULL DEFAULT 0 COMMENT '补充状态：0待处理 1处理中 2已完成 3失败',
   `detail` varchar(500) DEFAULT NULL,
@@ -155,6 +156,7 @@ CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (
   `day` int NOT NULL COMMENT '行程天数；交通节点固定为 0',
   `slot` varchar(32) NOT NULL,
   `skeleton` varchar(500) NOT NULL,
+  `poi_id` varchar(64) DEFAULT NULL COMMENT '高德 POI 标识',
   `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT '节点展示状态：PENDING/RESOLVED',
   `resolve_status` tinyint NOT NULL DEFAULT 0 COMMENT '补充状态：0待处理 1处理中 2已完成 3失败',
   `detail` varchar(500) DEFAULT NULL,
@@ -169,6 +171,10 @@ CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (
   UNIQUE KEY `uk_itinerary_day_slot` (`tenant_id`, `itinerary_id`, `day`, `slot`),
   KEY `idx_itinerary_resolve_status` (`tenant_id`, `itinerary_id`, `resolve_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行行程节点补充结果';
+
+-- 已部署独立节点表补充高德 POI 标识
+ALTER TABLE `gift_trip_itinerary_slot`
+  ADD COLUMN IF NOT EXISTS `poi_id` varchar(64) DEFAULT NULL COMMENT '高德 POI 标识' AFTER `skeleton`;
 
 -- 修复初版独立节点表因 INSERT IGNORE 写入的租户编号 0
 UPDATE `gift_trip_itinerary_slot` slot

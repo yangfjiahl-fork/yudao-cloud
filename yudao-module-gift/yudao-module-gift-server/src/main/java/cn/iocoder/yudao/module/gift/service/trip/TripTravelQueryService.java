@@ -142,7 +142,7 @@ public class TripTravelQueryService {
             }
             int before = result.size();
             for (TravelPlaceQueryClient.Place place : places) {
-                Place converted = new Place(provider, place.getExternalId(), place.getName(), place.getAddress(),
+                Place converted = new Place(provider, place.getPoiId(), place.getName(), place.getAddress(),
                         place.getLongitude(), place.getLatitude(), place.getImageUrl(), place.getTelephone(),
                         place.getRating(), place.getCost(), place.getTag(), place.getBusinessHours());
                 result.putIfAbsent(placeIdentity(converted), converted);
@@ -158,11 +158,11 @@ public class TripTravelQueryService {
     }
 
     private static String scenicIdentity(ScenicSpot spot) {
-        return StrUtil.blankToDefault(spot.externalId(), spot.name());
+        return StrUtil.blankToDefault(spot.poiId(), spot.name());
     }
 
     private static String placeIdentity(Place place) {
-        return StrUtil.blankToDefault(place.externalId(), place.name());
+        return StrUtil.blankToDefault(place.poiId(), place.name());
     }
 
     private static String firstImage(JsonNode item) {
@@ -199,22 +199,22 @@ public class TripTravelQueryService {
                           String windDirection, String windPower, String queryTime) {
     }
 
-    public record ScenicSpot(String provider, String externalId, String name, String address, String longitude,
+    public record ScenicSpot(String provider, String poiId, String name, String address, String longitude,
                              String latitude, String imageUrl, String businessHours, String rating, String cost) {
 
-        public ScenicSpot(String provider, String externalId, String name, String address, String longitude,
+        public ScenicSpot(String provider, String poiId, String name, String address, String longitude,
                           String latitude, String imageUrl) {
-            this(provider, externalId, name, address, longitude, latitude, imageUrl, "", "", "");
+            this(provider, poiId, name, address, longitude, latitude, imageUrl, "", "", "");
         }
     }
 
-    public record Place(String provider, String externalId, String name, String address, String longitude,
+    public record Place(String provider, String poiId, String name, String address, String longitude,
                         String latitude, String imageUrl, String telephone, String rating, String cost, String tag,
                         String businessHours) {
 
-        public Place(String provider, String externalId, String name, String address, String longitude,
+        public Place(String provider, String poiId, String name, String address, String longitude,
                      String latitude, String imageUrl, String telephone, String rating, String cost, String tag) {
-            this(provider, externalId, name, address, longitude, latitude, imageUrl, telephone, rating, cost, tag, "");
+            this(provider, poiId, name, address, longitude, latitude, imageUrl, telephone, rating, cost, tag, "");
         }
     }
 
