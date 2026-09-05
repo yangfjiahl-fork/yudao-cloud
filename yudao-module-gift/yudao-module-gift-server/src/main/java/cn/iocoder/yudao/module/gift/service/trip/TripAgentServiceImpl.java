@@ -74,6 +74,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static final int SLOT_RESOLVE_STATUS_PROCESSING = 1;
     private static final int SLOT_RESOLVE_STATUS_COMPLETED = 2;
     private static final int SLOT_RESOLVE_STATUS_FAILED = 3;
+    private static final int TRIP_OVERVIEW_MIN_LENGTH = 40;
+    private static final int TRIP_OVERVIEW_MAX_LENGTH = 60;
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("\\d[\\d,]*");
     private static final Set<String> DAILY_ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "ACCOMMODATION");
@@ -168,11 +170,14 @@ public class TripAgentServiceImpl implements TripAgentService {
         tripPlanMapper.updateById(trip);
         log.info("[handleMessage][tripId({}) 状态字段({}) 缺失字段({})]",
                 trip.getId(), state.keySet(), missingRequired);
-        eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
         int questionCount = getQuestionCount();
-        TripInteraction interaction = generateInteraction(conversationId, memberId, state, missingRequired, trip.getId(),
-                promptVariables, questionCount);
-        List<Map<String, String>> suggestions = interaction.suggestions();
+        boolean needFollowUp = CollUtil.isNotEmpty(missingRequired) || !generateRequested;
+        if (needFollowUp) {
+            eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
+        }
+        TripInteraction interaction = needFollowUp ? generateInteraction(conversationId, memberId, state, missingRequired,
+                trip.getId(), promptVariables, questionCount) : null;
+        List<Map<String, String>> suggestions = needFollowUp ? interaction.suggestions() : List.of();
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
                 .setMissingRequired(missingRequired).setSuggestions(suggestions));
 
@@ -341,6 +346,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                     buildOverviewContext(TripAgentFormatUtils.parseMap(trip.getStateJson()), itinerary, day, slot),
                     "OVERVIEW", trip.getId(), buildPromptVariables(conversationId, memberId));
             String detail = trimNullable(TripAgentFormatUtils.parseMap(response.getContent()).get("overview"));
+            detail = shortenTripOverview(detail, slot);
             if (StrUtil.isBlank(detail)) {
                 throw new IllegalStateException("行程总览生成结果为空");
             }
@@ -358,6 +364,19 @@ public class TripAgentServiceImpl implements TripAgentService {
             tripItinerarySlotMapper.updateById(itinerarySlot);
             throw e;
         }
+    }
+
+    static String shortenTripOverview(String detail, String slot) {
+        if (!StrUtil.equalsIgnoreCase(slot, "TRIP_OVERVIEW") || detail.length() <= TRIP_OVERVIEW_MAX_LENGTH) {
+            return detail;
+        }
+        String prefix = detail.substring(0, TRIP_OVERVIEW_MAX_LENGTH);
+        for (int index = prefix.length() - 1; index >= TRIP_OVERVIEW_MIN_LENGTH - 1; index--) {
+            if ("。！？；".indexOf(prefix.charAt(index)) >= 0) {
+                return prefix.substring(0, index + 1);
+            }
+        }
+        return prefix.substring(0, TRIP_OVERVIEW_MAX_LENGTH - 1).stripTrailing() + "…";
     }
 
     /**

@@ -58,4 +58,23 @@ class TripAgentServiceImplTest {
         assertEquals("1500", state.get("budget"));
         assertEquals(500, state.get("hotelBudget"));
     }
+
+    @Test
+    void shortenTripOverview_shouldKeepCompleteSentenceWithinTargetLength() {
+        String detail = "甲".repeat(49) + "。" + "乙".repeat(20);
+
+        String shortened = TripAgentServiceImpl.shortenTripOverview(detail, "TRIP_OVERVIEW");
+
+        assertEquals(50, shortened.length());
+        assertEquals("。", shortened.substring(shortened.length() - 1));
+    }
+
+    @Test
+    void shortenTripOverview_shouldCapLongTripOverviewAndLeaveDayOverviewUnchanged() {
+        String detail = "甲".repeat(70);
+
+        assertEquals(60, TripAgentServiceImpl.shortenTripOverview(detail, "TRIP_OVERVIEW").length());
+        assertEquals("…", TripAgentServiceImpl.shortenTripOverview(detail, "TRIP_OVERVIEW").substring(59));
+        assertEquals(detail, TripAgentServiceImpl.shortenTripOverview(detail, "DAY_OVERVIEW"));
+    }
 }

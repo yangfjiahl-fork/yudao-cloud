@@ -1,7 +1,7 @@
 Gift 旅行规划 C 端接口
 =====================
 
-更新日期：2026-09-01
+更新日期：2026-09-05
 
 一、通用约定
 ------------
@@ -36,7 +36,7 @@ Gift 旅行规划 C 端接口
       "content":"请告诉我出发地、目的地、出发日期、旅行天数、同行人数和预算，我来帮你规划旅程。"
     }}
 
-保存 `conversationId`；`content` 可作为首条助手消息展示。
+保存 `conversationId`；响应中的 `content` 为助手首条消息内容。
 
 ### 2. 会话列表
 
@@ -90,7 +90,7 @@ Gift 旅行规划 C 端接口
       "createTime":"2026-09-01 21:31:00"
     }
 
-- `itinerary` 仅行程消息存在；前端用它直接恢复行程卡片。
+- `itinerary` 仅行程消息存在。
 - 普通文本消息的 `itinerary` 为 `null` 或不存在。
 
 ### 2. 发送消息
@@ -108,25 +108,25 @@ Gift 旅行规划 C 端接口
       "content":"我计划10月1日从上海去杭州，玩3天，2人，人均预算2000元"
     }
 
-前端可先乐观展示用户 `content`；助手侧内容以 SSE 事件为准。
+请求受理后，服务端通过 SSE 返回处理进度与结果事件。
 
 ### 3. SSE 事件
 
-| 事件 | 前端需要处理的字段 | 处理方式 |
+| 事件 | 字段 | 服务端语义 |
 | --- | --- | --- |
-| `accepted` | `conversationId`、`content` | 开始本轮 loading。 |
-| `stage` | `stage`、`content` | 更新 loading 文案，不写入聊天记录。`stage` 可能为 `INTAKE`、`FOLLOW_UP`、`ASSEMBLE`；生成行程时会连续收到多个 `ASSEMBLE` 事件，用于展示 POI 查询、每日排程和行程卡片生成进度。 |
-| `intake_completed` | `content`、`missingRequired`、`suggestions` | 可展示本轮摘要；不创建正式聊天消息。 |
-| `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 创建一条助手文本消息并展示胶囊。 |
-| `itinerary_skeleton` | `messageId`、`content`、`itinerary`、`suggestions` | 创建一条助手行程消息，用 `itinerary` 渲染或替换行程卡。 |
-| `done` | `conversationId` | 结束 loading。 |
-| `error` | `conversationId`、`content` | 展示错误并结束 loading。 |
+| `accepted` | `conversationId`、`content` | 已受理本轮用户消息。 |
+| `stage` | `stage`、`content` | 当前处理阶段。`stage` 可能为 `INTAKE`、`FOLLOW_UP`、`ASSEMBLE`；生成行程时会连续返回多个 `ASSEMBLE` 事件，分别对应 POI 查询、每日排程和行程卡片生成。 |
+| `intake_completed` | `content`、`missingRequired`、`suggestions` | 信息收集完成事件，包含本轮信息摘要及缺失必填项。 |
+| `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 服务端生成的追问消息。 |
+| `itinerary_skeleton` | `messageId`、`content`、`itinerary`、`suggestions` | 服务端生成的行程骨架消息。 |
+| `done` | `conversationId` | 本轮流式响应结束。 |
+| `error` | `conversationId`、`content` | 本轮处理失败。 |
 
 常见事件顺序：
 
 - 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`accepted → stage(INTAKE) → stage(FOLLOW_UP) → intake_completed → question → done`。
-- 用户点击“立即生成行程”后：`accepted → stage(INTAKE) → stage(ASSEMBLE: POI 查询) → stage(ASSEMBLE: 每日排程) → stage(ASSEMBLE: 行程卡片生成) → itinerary_skeleton → done`。POI 查询仍在服务端并行执行，但 `stage` 事件按上述顺序推送。
-- `intake_completed`、`question` 的 `missingRequired` 为空，不代表本轮一定生成行程；前端仍需展示 `question` 及其中的“立即生成行程”胶囊。
+- 触发行程生成时：`accepted → stage(INTAKE) → stage(ASSEMBLE: POI 查询) → stage(ASSEMBLE: 每日排程) → stage(ASSEMBLE: 行程卡片生成) → itinerary_skeleton → done`。POI 查询仍在服务端并行执行，但 `stage` 事件按上述顺序推送。
+- `intake_completed`、`question` 的 `missingRequired` 为空，仅表示必填信息完整；该事件仍可能包含后续追问及 `suggestions`。
 
 事件字段示例：
 
@@ -144,12 +144,10 @@ Gift 旅行规划 C 端接口
       ]
     }
 
-### 4. 胶囊交互
+### 4. `suggestions` 字段
 
-- `suggestions` 最多 5 项；每项都有 `label`（展示文案）和 `content`（发送内容）。
-- 点击胶囊后，将其 `content` 原样作为下一次 `/send-stream` 的 `content` 提交。
-- 当 `missingRequired` 为空时，前端仍应展示 `question` 及胶囊；其中会包含“立即生成行程”，用户也可以继续自由输入补充信息。
-- 用户选择“立即生成行程”后，等待本轮的 `itinerary_skeleton`；不要自行拼装行程。
+- `suggestions` 最多 5 项；每项包含 `label` 和 `content`。
+- 当 `missingRequired` 为空时，服务端返回的 `suggestions` 会包含 `label` 为“立即生成行程”、`content` 为“请立即生成行程”的项。
 
 四、行程骨架
 ------------
@@ -200,14 +198,14 @@ Gift 旅行规划 C 端接口
       "citation_ids":[]
     }
 
-- `overview` 是行程总览节点；前端以 `day=0`、`slot=TRIP_OVERVIEW` 调用节点补全接口获得模型生成的总览文案。
-- 每个 `daily_itinerary` 的 `overview` 是每日总览节点；前端以该日 `day`、`slot=DAY_OVERVIEW` 调用节点补全接口获得模型生成的每日总览文案。
-- `daily_itinerary` 按 `day` 展示；`date` 可能不存在。
+- `overview` 是行程总览节点；使用 `day=0`、`slot=TRIP_OVERVIEW` 调用节点补全接口可获取模型生成的总览文案。
+- 每个 `daily_itinerary` 的 `overview` 是每日总览节点；使用该日 `day`、`slot=DAY_OVERVIEW` 调用节点补全接口可获取模型生成的每日总览文案。
+- `daily_itinerary` 按 `day` 排序；`date` 可能不存在。
 - 每日 `slots` 的类型为 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`ACCOMMODATION`。
-- 每日可选 `planning` 字段由后端确定性排程写入，包含 `solver`、`status`、`routeDataStatus`、`budgetStatus`、`droppedNodeIds` 及日间起止时间；前端可用于展示“已校验”或“已降级”，缺失时按旧骨架处理。
+- 每日可选 `planning` 字段由后端确定性排程写入，包含 `solver`、`status`、`routeDataStatus`、`budgetStatus`、`droppedNodeIds` 及日间起止时间。
 - 当每日候选不足或完整排程不可行时，后端会在不跳过必去景点、午晚餐和住宿约束的前提下减少当日景点数量；`status` 仍为 `FEASIBLE`，并通过可选 `selectionStatus=DEGRADED`、`requestedScenicCount`、`selectedScenicCount` 标识降级结果。
-- 节点可选 `plannedStartTime`、`plannedEndTime`、`travelMinutesFromPrevious`、`routeStatus`、`planningStatus`；它们表示当前行程版本的排程结果，前端不应自行重排。
-- 节点字段可能因暂无候选而缺失 `poiId`、`poiName`、经纬度或停留时长；前端应使用 `skeleton` 兜底展示。
+- 节点可选 `plannedStartTime`、`plannedEndTime`、`travelMinutesFromPrevious`、`routeStatus`、`planningStatus`；它们表示当前行程版本的排程结果。
+- 节点字段可能因暂无候选而缺失 `poiId`、`poiName`、经纬度或停留时长；此时 `skeleton` 仍会返回。
 - `status` 初始为 `PENDING`；补全成功后以节点补全接口响应为准。
 
 五、节点补全
@@ -266,9 +264,9 @@ Gift 旅行规划 C 端接口
       }
     }
 
-- 总览节点的模型生成文本在 `detail` 返回，`candidates`、`citationIds`、`weather` 可为空或不存在，前端需兼容。
-- `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`；失败时保留骨架展示并允许重试。
-- `transportSegments` 为当前 `day` 全部相邻 POI（含住宿点）的批量测距结果；`day=0` 时为空数组。每段含距离、耗时、出行方式和状态；`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。前端可直接用于当天各 POI 间的距离展示。
+- 总览节点的模型生成文本在 `detail` 返回，`candidates`、`citationIds`、`weather` 可为空或不存在。
+- `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`。
+- `transportSegments` 为当前 `day` 全部相邻 POI（含住宿点）的批量测距结果；`day=0` 时为空数组。每段含距离、耗时、出行方式和状态；`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。
 
 六、按天获取交通路线
 --------------------
@@ -316,16 +314,6 @@ Gift 旅行规划 C 端接口
       }
     }
 
-- 坐标均为高德 GCJ-02；`routePoints` 可直接绘制地图折线。
-- 顶层和单段 `status` 为 `VERIFIED`、`ESTIMATED` 或 `PENDING`。`ESTIMATED` 时可使用虚线或“预估路线”样式；`PENDING` 时显示无路线提示。
-- `transportSegments` 可能为空，前端须兼容。
-
-七、前端调用顺序
-----------------
-
-1. 创建或选择会话。
-2. 使用 `/send-stream` 发送用户消息；收到 `stage` 时仅更新 loading 文案，收到 `question` 或 `itinerary_skeleton` 后再创建相应的聊天内容。
-3. 收到 `question` 时展示 `suggestions`；点击后继续调用 `/send-stream`。
-4. 收到 `itinerary_skeleton` 后保存 `messageId`，按可见卡片调用 `/itinerary/slot/resolve`；该响应已包含当前天的 `transportSegments`，可直接用于距离和路线展示。
-5. 需要重新获取整天路线、或尚未解析任一日程节点时，再调用 `/itinerary/route/resolve`。
-6. 冷启动或返回页面时，使用消息历史接口恢复聊天和行程卡。
+- 坐标均为高德 GCJ-02。
+- 顶层和单段 `status` 为 `VERIFIED`、`ESTIMATED` 或 `PENDING`。
+- `transportSegments` 可能为空。
