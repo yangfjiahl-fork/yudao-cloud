@@ -37,6 +37,8 @@ public class TripItineraryAssembler {
     private static final int DAILY_SCENIC_CANDIDATE_LIMIT = 30;
     private static final int DAILY_MEAL_CANDIDATE_LIMIT = 10;
     private static final int DAILY_HOTEL_CANDIDATE_LIMIT = 10;
+    /** 目的地为省、区域等宽范围时，单日 POI 应收敛到同一落地城市周边。 */
+    private static final double LOCALITY_RADIUS_METERS = 80_000D;
     private static final double WALKING_DISTANCE_METERS = 1_500D;
     private static final double EARTH_RADIUS_METERS = 6_371_000D;
     private static final int DEFAULT_DAY_START_MINUTES = 9 * 60;
@@ -88,6 +90,10 @@ public class TripItineraryAssembler {
             List<ScenicCandidate> scenicCandidates = scenicFuture.join();
             List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
             List<TripTravelQueryService.Place> hotels = hotelFuture.join();
+            CandidatePool candidatePool = localizeCandidatePool(scenicCandidates, restaurants, hotels);
+            scenicCandidates = candidatePool.scenicCandidates();
+            restaurants = candidatePool.restaurants();
+            hotels = candidatePool.hotels();
             progressConsumer.accept(StrUtil.format("已筛选 {} 个景点、{} 家餐厅和 {} 家住宿，正在安排每日路线…",
                     scenicCandidates.size(), restaurants.size(), hotels.size()));
 
@@ -204,6 +210,85 @@ public class TripItineraryAssembler {
             }
         }
         return result;
+    }
+
+    /**
+     * 供应商以省份等宽范围检索时可能混入相隔数百公里的 POI。先选择同时具备景点、餐饮和住宿候选的高密度区域，
+     * 再交给单日求解器，避免把跨城市节点组成一日路线。
+     */
+    private static CandidatePool localizeCandidatePool(List<ScenicCandidate> scenicCandidates,
+                                                        List<TripTravelQueryService.Place> restaurants,
+                                                        List<TripTravelQueryService.Place> hotels) {
+        if (!isWideArea(scenicCandidates) || restaurants.isEmpty() || hotels.isEmpty()) {
+            return new CandidatePool(scenicCandidates, restaurants, hotels);
+        }
+        LocalityAnchor best = null;
+        for (ScenicCandidate candidate : scenicCandidates) {
+            best = chooseBetterAnchor(best, localityAnchor(candidate.spot().longitude(), candidate.spot().latitude(),
+                    candidate.mustVisit(), scenicCandidates, restaurants, hotels));
+        }
+        for (TripTravelQueryService.Place place : restaurants) {
+            best = chooseBetterAnchor(best, localityAnchor(place.longitude(), place.latitude(), false,
+                    scenicCandidates, restaurants, hotels));
+        }
+        for (TripTravelQueryService.Place hotel : hotels) {
+            best = chooseBetterAnchor(best, localityAnchor(hotel.longitude(), hotel.latitude(), false,
+                    scenicCandidates, restaurants, hotels));
+        }
+        if (best == null || best.scenicCount() == 0 || best.restaurantCount() == 0 || best.hotelCount() == 0) {
+            return new CandidatePool(scenicCandidates, restaurants, hotels);
+        }
+        LocalityAnchor selectedAnchor = best;
+        List<ScenicCandidate> localizedScenic = scenicCandidates.stream()
+                .filter(candidate -> isNearby(selectedAnchor, candidate.spot().longitude(), candidate.spot().latitude())).toList();
+        List<TripTravelQueryService.Place> localizedRestaurants = restaurants.stream()
+                .filter(place -> isNearby(selectedAnchor, place.longitude(), place.latitude())).toList();
+        List<TripTravelQueryService.Place> localizedHotels = hotels.stream()
+                .filter(place -> isNearby(selectedAnchor, place.longitude(), place.latitude())).toList();
+        log.info("[localizeCandidatePool][候选跨区域，收敛至经纬度({}, {}) 半径({}km)：景点({}->{}) 餐厅({}->{}) 住宿({}->{})]",
+                selectedAnchor.longitude(), selectedAnchor.latitude(), (int) (LOCALITY_RADIUS_METERS / 1000), scenicCandidates.size(),
+                localizedScenic.size(), restaurants.size(), localizedRestaurants.size(), hotels.size(), localizedHotels.size());
+        return new CandidatePool(localizedScenic, localizedRestaurants, localizedHotels);
+    }
+
+    private static LocalityAnchor chooseBetterAnchor(LocalityAnchor current, LocalityAnchor candidate) {
+        return candidate == null || current != null && current.score() >= candidate.score() ? current : candidate;
+    }
+
+    private static LocalityAnchor localityAnchor(String longitude, String latitude, boolean mustVisit,
+                                                 List<ScenicCandidate> scenicCandidates,
+                                                 List<TripTravelQueryService.Place> restaurants,
+                                                 List<TripTravelQueryService.Place> hotels) {
+        if (!hasCoordinate(longitude, latitude)) {
+            return null;
+        }
+        LocalityAnchor anchor = new LocalityAnchor(longitude, latitude, mustVisit, 0, 0, 0);
+        int scenicCount = (int) scenicCandidates.stream()
+                .filter(candidate -> isNearby(anchor, candidate.spot().longitude(), candidate.spot().latitude())).count();
+        int restaurantCount = (int) restaurants.stream()
+                .filter(place -> isNearby(anchor, place.longitude(), place.latitude())).count();
+        int hotelCount = (int) hotels.stream()
+                .filter(place -> isNearby(anchor, place.longitude(), place.latitude())).count();
+        return new LocalityAnchor(longitude, latitude, mustVisit, scenicCount, restaurantCount, hotelCount);
+    }
+
+    private static boolean isWideArea(List<ScenicCandidate> scenicCandidates) {
+        for (int left = 0; left < scenicCandidates.size(); left++) {
+            TripTravelQueryService.ScenicSpot origin = scenicCandidates.get(left).spot();
+            for (int right = left + 1; right < scenicCandidates.size(); right++) {
+                TripTravelQueryService.ScenicSpot destination = scenicCandidates.get(right).spot();
+                if (distance(origin.longitude(), origin.latitude(), destination.longitude(), destination.latitude())
+                        > LOCALITY_RADIUS_METERS * 2) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNearby(LocalityAnchor anchor, String longitude, String latitude) {
+        double meters = distance(anchor.longitude(), anchor.latitude(), longitude, latitude);
+        return meters >= 0D && meters <= LOCALITY_RADIUS_METERS;
     }
 
     private <T extends List<?>> T measureCandidateQuery(String category, Supplier<T> supplier) {
@@ -1046,6 +1131,18 @@ public class TripItineraryAssembler {
     }
 
     private record ScenicCandidate(TripTravelQueryService.ScenicSpot spot, int preferenceScore, boolean mustVisit) {
+    }
+
+    private record CandidatePool(List<ScenicCandidate> scenicCandidates, List<TripTravelQueryService.Place> restaurants,
+                                 List<TripTravelQueryService.Place> hotels) {
+    }
+
+    private record LocalityAnchor(String longitude, String latitude, boolean mustVisit, int scenicCount,
+                                  int restaurantCount, int hotelCount) {
+
+        private long score() {
+            return (mustVisit ? 1_000_000L : 0L) + scenicCount * 1_000L + restaurantCount * 100L + hotelCount * 100L;
+        }
     }
 
     private record NodeBinding(String id, Map<String, Object> slot, int sourceNodeIndex, int solverNodeIndex,

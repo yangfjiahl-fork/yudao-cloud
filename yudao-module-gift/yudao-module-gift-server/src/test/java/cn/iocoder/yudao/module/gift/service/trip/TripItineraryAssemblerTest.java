@@ -178,6 +178,35 @@ class TripItineraryAssemblerTest {
         assertEquals("高档酒店", ((Map<?, ?>) ((List<?>) firstDay.get("slots")).get(4)).get("poiName"));
     }
 
+    @Test
+    void assemble_shouldLocalizeWideAreaCandidatesBeforeScheduling() {
+        TripTravelQueryService queryService = mock(TripTravelQueryService.class);
+        when(queryService.queryScenicSpots(anyString(), anyString(), anyInt())).thenReturn(List.of(
+                new TripTravelQueryService.ScenicSpot("gaode", "km-1", "昆明翠湖", "昆明", "102.7000", "25.0500", "", "", "4.9", ""),
+                new TripTravelQueryService.ScenicSpot("gaode", "km-2", "昆明石林", "昆明", "102.8300", "24.8100", "", "", "4.8", ""),
+                new TripTravelQueryService.ScenicSpot("gaode", "km-3", "昆明滇池", "昆明", "102.6600", "24.9500", "", "", "4.7", ""),
+                new TripTravelQueryService.ScenicSpot("gaode", "lj-1", "玉龙雪山", "丽江", "100.2300", "26.8700", "", "", "4.9", ""),
+                new TripTravelQueryService.ScenicSpot("gaode", "lj-2", "丽江古城", "丽江", "100.2400", "26.8700", "", "", "4.8", ""),
+                new TripTravelQueryService.ScenicSpot("gaode", "lj-3", "束河古镇", "丽江", "100.2100", "26.8800", "", "", "4.7", "")
+        ));
+        when(queryService.queryRestaurants(anyString(), anyInt())).thenReturn(List.of(
+                new TripTravelQueryService.Place("gaode", "food-1", "昆明米线", "昆明", "102.7010", "25.0510", "", "", "4.8", "60", ""),
+                new TripTravelQueryService.Place("gaode", "food-2", "昆明汽锅鸡", "昆明", "102.7020", "25.0520", "", "", "4.7", "80", "")
+        ));
+        when(queryService.queryHotels(anyString(), anyInt())).thenReturn(List.of(
+                new TripTravelQueryService.Place("gaode", "hotel-1", "昆明酒店", "昆明", "102.7000", "25.0500", "", "", "4.8", "300", "")
+        ));
+        TripItineraryAssembler assembler = createAssembler(queryService);
+
+        Map<String, Object> itinerary = assembler.assemble(Map.of("destination", "云南", "days", 2));
+
+        List<?> days = (List<?>) itinerary.get("daily_itinerary");
+        assertTrue(days.stream().map(Map.class::cast)
+                .allMatch(day -> "FEASIBLE".equals(((Map<?, ?>) day.get("planning")).get("status"))));
+        assertTrue(days.stream().map(Map.class::cast).flatMap(day -> ((List<?>) day.get("slots")).stream()).map(Map.class::cast)
+                .noneMatch(slot -> String.valueOf(slot.get("poiName")).contains("丽江")));
+    }
+
     private static TripItineraryAssembler createAssembler(TripTravelQueryService queryService) {
         return createAssembler(queryService, new SimpleMeterRegistry());
     }

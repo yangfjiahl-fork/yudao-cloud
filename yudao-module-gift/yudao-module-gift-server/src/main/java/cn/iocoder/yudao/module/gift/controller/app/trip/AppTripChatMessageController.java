@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.controller.app.trip;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
 import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageRespVO;
@@ -96,7 +97,7 @@ public class AppTripChatMessageController {
         }).subscribeOn(Schedulers.boundedElastic());
         CommonResult<AppTripChatStreamRespVO> done = success(new AppTripChatStreamRespVO().setEvent("done")
                 .setConversationId(reqVO.getConversationId()));
-        return Flux.concat(Flux.just(accepted), execution, Flux.just(done))
+        return MdcContextUtils.withReactorContext(Flux.concat(Flux.just(accepted), execution, Flux.just(done))
                 .onErrorResume(e -> {
                     log.error("[sendMessageStream][conversationId({}) 生成旅行方案失败]", reqVO.getConversationId(), e);
                     return Flux.just(success(new AppTripChatStreamRespVO().setEvent("error")
@@ -109,7 +110,7 @@ public class AppTripChatMessageController {
                 .doOnCancel(() -> log.info("[sendMessageStream][conversationId({}) 客户端取消 SSE]",
                         reqVO.getConversationId()))
                 .doOnComplete(() -> log.info("[sendMessageStream][conversationId({}) SSE 完成]",
-                        reqVO.getConversationId()));
+                        reqVO.getConversationId())));
     }
 
     @PostMapping("/itinerary/slot/resolve")
