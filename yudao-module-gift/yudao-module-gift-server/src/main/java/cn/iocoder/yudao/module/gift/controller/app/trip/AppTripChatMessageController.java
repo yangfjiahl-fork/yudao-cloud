@@ -84,17 +84,21 @@ public class AppTripChatMessageController {
                 reqVO.getConversationId(), memberId, tenantId);
         CommonResult<AppTripChatStreamRespVO> accepted = success(new AppTripChatStreamRespVO().setEvent("accepted")
                 .setConversationId(reqVO.getConversationId()).setContent("正在分析您的需求…"));
-        Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> {
-            try {
-                TenantUtils.execute(tenantId, () -> {
-                    tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent(),
-                            event -> sink.next(success(toStreamResponse(reqVO.getConversationId(), event))));
-                });
-                sink.complete();
-            } catch (Exception e) {
-                sink.error(e);
-            }
-        }).subscribeOn(Schedulers.boundedElastic());
+        Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.deferContextual(context -> {
+            @SuppressWarnings("unchecked")
+            Map<String, String> mdcContext = context.getOrDefault(MdcContextUtils.REACTOR_CONTEXT_MDC_KEY, Map.of());
+            return Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> MdcContextUtils.runWithContext(mdcContext, () -> {
+                try {
+                    TenantUtils.execute(tenantId, () -> {
+                        tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent(),
+                                event -> sink.next(success(toStreamResponse(reqVO.getConversationId(), event))));
+                    });
+                    sink.complete();
+                } catch (Exception e) {
+                    sink.error(e);
+                }
+            })).subscribeOn(Schedulers.boundedElastic());
+        });
         CommonResult<AppTripChatStreamRespVO> done = success(new AppTripChatStreamRespVO().setEvent("done")
                 .setConversationId(reqVO.getConversationId()));
         return MdcContextUtils.withReactorContext(Flux.concat(Flux.just(accepted), execution, Flux.just(done))

@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.framework.tracer.config.YudaoReactorMdcAutoConfiguration;
 import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageSendReqVO;
@@ -55,6 +56,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
 
         TenantContextHolder.setTenantId(1L);
         MDC.put("traceId", "sse-test-trace");
+        YudaoReactorMdcAutoConfiguration configuration = new YudaoReactorMdcAutoConfiguration();
         try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock = mockStatic(SecurityFrameworkUtils.class)) {
             securityFrameworkUtilsMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
 
@@ -64,6 +66,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
 
             assertEquals("sse-test-trace", traceId.get());
         } finally {
+            configuration.destroy();
             MDC.clear();
             TenantContextHolder.clear();
         }
