@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,6 +58,15 @@ public class TripItineraryAssembler {
     private Executor tripItineraryTaskExecutor;
 
     public Map<String, Object> assemble(Map<String, Object> state) {
+        return assemble(state, ignored -> {
+        });
+    }
+
+    /**
+     * 组装行程骨架，并在 POI 查询、每日排程等耗时阶段通知调用方更新进度。
+     * 进度回调始终由当前线程顺序调用，避免并行查询导致 SSE 事件乱序。
+     */
+    public Map<String, Object> assemble(Map<String, Object> state, Consumer<String> progressConsumer) {
         Timer.Sample sample = Timer.start(meterRegistry);
         String outcome = "success";
         long start = System.currentTimeMillis();
@@ -67,6 +77,7 @@ public class TripItineraryAssembler {
             List<String> mustVisit = texts(state.get("mustVisit"));
             int candidateLimit = candidateLimit(days);
             log.info("[assemble][destination({}) days({}) candidateLimit({}) 开始组装行程骨架]", destination, days, candidateLimit);
+            progressConsumer.accept("正在为你挑选景点、餐厅和住宿…");
             CompletableFuture<List<ScenicCandidate>> scenicFuture = CompletableFuture.supplyAsync(
                     () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)),
                     tripItineraryTaskExecutor);
@@ -77,6 +88,8 @@ public class TripItineraryAssembler {
             List<ScenicCandidate> scenicCandidates = scenicFuture.join();
             List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
             List<TripTravelQueryService.Place> hotels = hotelFuture.join();
+            progressConsumer.accept(StrUtil.format("已筛选 {} 个景点、{} 家餐厅和 {} 家住宿，正在安排每日路线…",
+                    scenicCandidates.size(), restaurants.size(), hotels.size()));
 
             Map<String, Object> itinerary = new LinkedHashMap<>();
             List<Map<String, Object>> dailyItinerary = buildDays(state, days, destination, scenicCandidates, restaurants, hotels);
@@ -85,6 +98,7 @@ public class TripItineraryAssembler {
             itinerary.put("transport", buildTransport(destination));
             itinerary.put("citation_ids", List.of());
             applyOverrides(itinerary, state.get("itineraryOverrides"));
+            progressConsumer.accept("每日行程已安排完成，正在生成行程卡片…");
             log.info("[assemble][destination({}) days({}) scenicCandidates({}) restaurants({}) hotels({}) 耗时({}ms) 骨架组装完成]",
                     destination, days, scenicCandidates.size(), restaurants.size(), hotels.size(), System.currentTimeMillis() - start);
             return itinerary;

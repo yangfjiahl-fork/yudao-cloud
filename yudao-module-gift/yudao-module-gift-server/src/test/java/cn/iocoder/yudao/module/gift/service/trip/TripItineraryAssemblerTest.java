@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -61,16 +62,22 @@ class TripItineraryAssemblerTest {
         TripItineraryAssembler assembler = createAssembler(queryService, meterRegistry);
 
         Map<String, Object> itinerary;
+        List<String> progressMessages = new ArrayList<>();
         MDC.put("traceId", "trip-assembler-test-trace");
         try {
             itinerary = assembler.assemble(Map.of(
                     "departure", "上海", "destination", "杭州", "startDate", "2026-09-10", "days", 2,
                     "travelerCount", 2, "budget", "人均预算1,500元", "interests", List.of("人文"), "mustVisit", List.of("西湖")
-            ));
+            ), progressMessages::add);
         } finally {
             MDC.remove("traceId");
         }
 
+        assertEquals(List.of(
+                "正在为你挑选景点、餐厅和住宿…",
+                "已筛选 6 个景点、4 家餐厅和 1 家住宿，正在安排每日路线…",
+                "每日行程已安排完成，正在生成行程卡片…"
+        ), progressMessages);
         List<?> days = (List<?>) itinerary.get("daily_itinerary");
         assertEquals(2, days.size());
         assertEquals("TRIP_OVERVIEW", ((Map<?, ?>) itinerary.get("overview")).get("slot"));

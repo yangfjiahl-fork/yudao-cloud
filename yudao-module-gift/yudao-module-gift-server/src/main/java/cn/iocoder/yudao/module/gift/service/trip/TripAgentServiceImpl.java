@@ -198,8 +198,8 @@ public class TripAgentServiceImpl implements TripAgentService {
             return result;
         }
 
-        eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", "正在查询并组装行程框架…"));
-        Map<String, Object> itinerary = tripItineraryAssembler.assemble(state);
+        Map<String, Object> itinerary = tripItineraryAssembler.assemble(state,
+                progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
         int version = (maxVersion == null ? 0 : maxVersion) + 1;
         itinerary.put("version", version);
