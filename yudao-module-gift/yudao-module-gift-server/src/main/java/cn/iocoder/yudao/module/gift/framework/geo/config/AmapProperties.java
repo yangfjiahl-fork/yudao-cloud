@@ -13,4 +13,7 @@ public class AmapProperties {
     /** 高德逆地理编码接口地址。 */
     private String reverseGeocodingUrl = "https://restapi.amap.com/v3/geocode/regeo";
 
+    /** 高德地理编码接口地址。 */
+    private String geocodingUrl = "https://restapi.amap.com/v3/geocode/geo";
+
 }

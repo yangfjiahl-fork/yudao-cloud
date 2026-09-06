@@ -42,4 +42,6 @@ public interface ErrorCodeConstants {
 
     ErrorCode ARTICLE_SUFFIX_NOT_EXISTS = new ErrorCode(1_044_001_001, "文章后缀不存在");
 
+    ErrorCode TRIP_ITINERARY_NOT_EXISTS = new ErrorCode(1_045_000_001, "旅行行程不存在");
+
 }

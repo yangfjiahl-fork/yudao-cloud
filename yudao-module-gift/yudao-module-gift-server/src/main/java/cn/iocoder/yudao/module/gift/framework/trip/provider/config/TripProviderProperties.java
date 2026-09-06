@@ -34,7 +34,6 @@ public class TripProviderProperties {
         private String appCode;
         private String amapUrl = "https://restapi.amap.com/v5/place/text";
         private String amapKey;
-        private String amapTypes = "110000";
     }
 
     @Data

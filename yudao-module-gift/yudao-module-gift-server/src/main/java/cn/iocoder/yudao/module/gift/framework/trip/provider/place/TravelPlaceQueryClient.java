@@ -17,16 +17,13 @@ public interface TravelPlaceQueryClient {
 
     Response query(Request request);
 
-    enum PlaceType {
-        HOTEL,
-        RESTAURANT
-    }
-
     @Data
     class Request {
 
-        private PlaceType type;
+        private AmapPoiTypeEnum type;
         private String region;
+        /** 关键词；为空时按地点类型查询。 */
+        private String keyword;
         private Integer limit;
         /** 结果页码；供应商按该值分页返回地点候选。 */
         private Integer page;

@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.framework.trip.provider.place.gaode;
 
 import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +45,7 @@ class GaodeTravelPlaceQueryClientTest {
 
     @Test
     void queryHotel() {
-        server.expect(requestTo(AMAP_URL + "?key=test-amap-key&types=100000&region="
+        server.expect(requestTo(AMAP_URL + "?key=test-amap-key&types=" + AmapPoiTypeEnum.HOTEL.getAmapTypeCode() + "&region="
                         + UriUtils.encodeQueryParam("杭州市", StandardCharsets.UTF_8)
                         + "&city_limit=true&show_fields=business,photos&page_size=2&page_num=1&output=json"))
                 .andExpect(method(HttpMethod.GET))
@@ -57,7 +58,7 @@ class GaodeTravelPlaceQueryClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         TravelPlaceQueryClient.Response response = client.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.HOTEL).setRegion("杭州市").setLimit(2));
+                .setType(AmapPoiTypeEnum.HOTEL).setRegion("杭州市").setLimit(2));
 
         assertTrue(response.getSuccess());
         assertEquals("杭州示例酒店", response.getPlaces().get(0).getName());
@@ -67,7 +68,7 @@ class GaodeTravelPlaceQueryClientTest {
 
     @Test
     void queryRestaurant() {
-        server.expect(requestTo(AMAP_URL + "?key=test-amap-key&types=050000&region="
+        server.expect(requestTo(AMAP_URL + "?key=test-amap-key&types=" + AmapPoiTypeEnum.FOOD.getAmapTypeCode() + "&region="
                         + UriUtils.encodeQueryParam("杭州市", StandardCharsets.UTF_8)
                         + "&city_limit=true&show_fields=business,photos&page_size=1&page_num=1&output=json"))
                 .andExpect(method(HttpMethod.GET))
@@ -79,7 +80,7 @@ class GaodeTravelPlaceQueryClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         TravelPlaceQueryClient.Response response = client.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.RESTAURANT).setRegion("杭州市").setLimit(1));
+                .setType(AmapPoiTypeEnum.FOOD).setRegion("杭州市").setLimit(1));
 
         assertTrue(response.getSuccess());
         assertEquals("杭州示例餐厅", response.getPlaces().get(0).getName());
@@ -91,7 +92,7 @@ class GaodeTravelPlaceQueryClientTest {
     void queryRestaurantAround() {
         server.expect(requestTo(org.hamcrest.Matchers.startsWith(AMAP_AROUND_URL)))
                 .andExpect(method(HttpMethod.GET))
-                .andExpect(queryParam("types", "050000"))
+                .andExpect(queryParam("types", AmapPoiTypeEnum.FOOD.getAmapTypeCode()))
                 .andExpect(queryParam("location", "120.1,30.2"))
                 .andExpect(queryParam("radius", "1500"))
                 .andRespond(withSuccess("""
@@ -101,11 +102,30 @@ class GaodeTravelPlaceQueryClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         TravelPlaceQueryClient.Response response = client.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.RESTAURANT).setRegion("杭州市")
+                .setType(AmapPoiTypeEnum.FOOD).setRegion("杭州市")
                 .setLocation("120.1,30.2").setRadius(1_500).setLimit(1));
 
         assertTrue(response.getSuccess());
         assertEquals("西湖边餐厅", response.getPlaces().get(0).getName());
+    }
+
+    @Test
+    void queryShoppingWithKeyword() {
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith(AMAP_URL)))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(queryParam("types", AmapPoiTypeEnum.SHOPPING.getAmapTypeCode()))
+                .andExpect(queryParam("keywords", UriUtils.encodeQueryParam("商场", StandardCharsets.UTF_8)))
+                .andRespond(withSuccess("""
+                        {"status":"1","info":"OK","infocode":"10000","pois":[{
+                          "id":"B0FFSHOP","name":"杭州示例商场","typecode":"060100","location":"120.2,30.3"
+                        }]}
+                        """, MediaType.APPLICATION_JSON));
+
+        TravelPlaceQueryClient.Response response = client.query(new TravelPlaceQueryClient.Request()
+                .setType(AmapPoiTypeEnum.SHOPPING).setRegion("杭州市").setKeyword("商场").setLimit(1));
+
+        assertTrue(response.getSuccess());
+        assertEquals("B0FFSHOP", response.getPlaces().get(0).getPoiId());
     }
 
 }

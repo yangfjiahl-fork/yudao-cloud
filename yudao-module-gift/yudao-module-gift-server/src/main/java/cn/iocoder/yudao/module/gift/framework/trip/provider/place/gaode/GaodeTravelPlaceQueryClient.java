@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.place.gaode;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
@@ -22,8 +23,6 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
 
     private static final String DEFAULT_URL = "https://restapi.amap.com/v5/place/text";
     private static final String DEFAULT_AROUND_URL = "https://restapi.amap.com/v5/place/around";
-    private static final String HOTEL_TYPES = "100000";
-    private static final String RESTAURANT_TYPES = "050000";
     private static final int DEFAULT_LIMIT = 25;
     private static final int MAX_LIMIT = 25;
     private static final int MAX_PAGE = 100;
@@ -44,13 +43,16 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         if (request == null || request.getType() == null || StrUtil.isBlank(request.getRegion())) {
             return Response.failure("旅行地点查询缺少类型或城市");
         }
+        if (request.getType() == AmapPoiTypeEnum.SCENIC) {
+            return Response.failure("景点请使用景点查询服务");
+        }
         if (config == null || StrUtil.isBlank(config.getAmapKey())) {
             log.warn("[query][高德旅行地点查询配置缺失，type({}) region({})]", request.getType(), request.getRegion());
             return Response.failure("高德旅行地点查询服务未配置 AMAP_WEB_SERVICE_KEY");
         }
         int limit = Math.min(Math.max(request.getLimit() == null ? DEFAULT_LIMIT : request.getLimit(), 1), MAX_LIMIT);
         int page = Math.min(Math.max(request.getPage() == null ? 1 : request.getPage(), 1), MAX_PAGE);
-        String types = request.getType() == PlaceType.HOTEL ? HOTEL_TYPES : RESTAURANT_TYPES;
+        String types = request.getType().getAmapTypeCode();
         boolean around = StrUtil.isNotBlank(request.getLocation());
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
                 .fromUriString(around ? StrUtil.blankToDefault(config.getAmapAroundUrl(), DEFAULT_AROUND_URL)
@@ -62,6 +64,9 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
                     .queryParam("radius", Math.min(Math.max(request.getRadius() == null ? 1_500 : request.getRadius(), 1), 50_000));
         } else {
             uriBuilder.queryParam("region", request.getRegion()).queryParam("city_limit", true);
+        }
+        if (StrUtil.isNotBlank(request.getKeyword())) {
+            uriBuilder.queryParam("keywords", request.getKeyword());
         }
         uriBuilder.queryParam("show_fields", "business,photos").queryParam("page_size", limit)
                 .queryParam("page_num", page).queryParam("output", "json");
@@ -86,11 +91,11 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         }
     }
 
-    private static List<Place> parsePlaces(JsonNode pois, PlaceType type, int limit) {
+    private static List<Place> parsePlaces(JsonNode pois, AmapPoiTypeEnum type, int limit) {
         if (!pois.isArray()) {
             return List.of();
         }
-        String expectedTypePrefix = type == PlaceType.HOTEL ? "10" : "05";
+        String expectedTypePrefix = type.getAmapTypePrefix();
         List<Place> result = new ArrayList<>();
         for (JsonNode poi : pois) {
             String name = text(poi, "name");

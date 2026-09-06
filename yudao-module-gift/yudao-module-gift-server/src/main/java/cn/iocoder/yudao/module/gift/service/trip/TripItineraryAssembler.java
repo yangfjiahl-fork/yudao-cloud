@@ -4,6 +4,7 @@ import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.framework.trip.config.TripAsyncConfiguration;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
@@ -84,9 +85,9 @@ public class TripItineraryAssembler {
                     () -> measureCandidateQuery("scenic", () -> collectScenicCandidates(destination, interests, mustVisit, candidateLimit)),
                     tripItineraryTaskExecutor);
             CompletableFuture<List<TripTravelQueryService.Place>> restaurantFuture = CompletableFuture.supplyAsync(
-                    () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, false, candidateLimit)), tripItineraryTaskExecutor);
+                    () -> measureCandidateQuery("restaurant", () -> queryPlaces(destination, AmapPoiTypeEnum.FOOD, candidateLimit)), tripItineraryTaskExecutor);
             CompletableFuture<List<TripTravelQueryService.Place>> hotelFuture = CompletableFuture.supplyAsync(
-                    () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, true, candidateLimit)), tripItineraryTaskExecutor);
+                    () -> measureCandidateQuery("hotel", () -> queryPlaces(destination, AmapPoiTypeEnum.HOTEL, candidateLimit)), tripItineraryTaskExecutor);
             List<ScenicCandidate> scenicCandidates = scenicFuture.join();
             List<TripTravelQueryService.Place> restaurants = restaurantFuture.join();
             List<TripTravelQueryService.Place> hotels = hotelFuture.join();
@@ -837,10 +838,13 @@ public class TripItineraryAssembler {
         }
     }
 
-    private List<TripTravelQueryService.Place> queryPlaces(String destination, boolean hotel, int limit) {
+    private List<TripTravelQueryService.Place> queryPlaces(String destination, AmapPoiTypeEnum poiType, int limit) {
         try {
-            return hotel ? tripTravelQueryService.queryHotels(destination, limit)
-                    : tripTravelQueryService.queryRestaurants(destination, limit);
+            return switch (poiType) {
+                case HOTEL -> tripTravelQueryService.queryHotels(destination, limit);
+                case FOOD -> tripTravelQueryService.queryRestaurants(destination, limit);
+                default -> throw new IllegalArgumentException("行程候选地点类型不支持：" + poiType);
+            };
         } catch (RuntimeException ignored) {
             return List.of();
         }

@@ -35,7 +35,7 @@ class TravelPlaceQueryClientFacadeTest {
         when(gaode.query(org.mockito.ArgumentMatchers.any())).thenReturn(expected);
 
         TravelPlaceQueryClient.Response result = facade.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.HOTEL).setRegion("杭州"));
+                .setType(AmapPoiTypeEnum.HOTEL).setRegion("杭州"));
 
         assertSame(expected, result);
         verify(configApi).getConfigValueByKey(TravelPlaceQueryClientFacade.HOTEL_QUERY_FROM_CONFIG_KEY);
@@ -50,7 +50,7 @@ class TravelPlaceQueryClientFacadeTest {
         when(gaode.query(org.mockito.ArgumentMatchers.any())).thenReturn(expected);
 
         TravelPlaceQueryClient.Response result = facade.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.RESTAURANT).setRegion("杭州"));
+                .setType(AmapPoiTypeEnum.FOOD).setRegion("杭州"));
 
         assertSame(expected, result);
         verify(configApi).getConfigValueByKey(TravelPlaceQueryClientFacade.RESTAURANT_QUERY_FROM_CONFIG_KEY);
@@ -64,7 +64,7 @@ class TravelPlaceQueryClientFacadeTest {
         when(gaode.query(org.mockito.ArgumentMatchers.any())).thenReturn(expected);
 
         assertSame(expected, facade.query(new TravelPlaceQueryClient.Request()
-                .setType(TravelPlaceQueryClient.PlaceType.HOTEL).setRegion("杭州")));
+                .setType(AmapPoiTypeEnum.HOTEL).setRegion("杭州")));
     }
 
 }

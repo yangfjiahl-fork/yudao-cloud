@@ -56,6 +56,36 @@ public class AmapGeocodingClient {
         }
     }
 
+    /**
+     * 将城市名称转换为高德 GCJ-02 坐标，用作无定位授权时的地图视口中心。
+     */
+    @Cacheable(cacheNames = "giftGeoAmap#1h", key = "'city:' + #city")
+    public Point geocodeCity(String city) {
+        validateConfig();
+        if (StrUtil.isBlank(city) || StrUtil.isBlank(properties.getGeocodingUrl())) {
+            throw new IllegalArgumentException("城市名称或高德地理编码接口不能为空");
+        }
+        URI uri = UriComponentsBuilder.fromUriString(properties.getGeocodingUrl())
+                .queryParam("key", properties.getKey()).queryParam("address", city).queryParam("output", "JSON")
+                .build().encode().toUri();
+        try {
+            JsonNode response = restTemplate.getForObject(uri, JsonNode.class);
+            JsonNode geocodes = response == null ? null : response.path("geocodes");
+            if (response == null || !SUCCESS_STATUS.equals(response.path("status").asText())
+                    || geocodes == null || !geocodes.isArray() || geocodes.isEmpty()) {
+                throw new IllegalStateException("高德地理编码未返回城市坐标");
+            }
+            String[] location = StrUtil.splitToArray(textValue(geocodes.get(0).path("location")), ',');
+            if (location.length != 2) {
+                throw new IllegalStateException("高德地理编码返回坐标无效");
+            }
+            return new Point(new BigDecimal(location[0]), new BigDecimal(location[1]));
+        } catch (RestClientException ex) {
+            log.error("[geocodeCity][调用高德地理编码失败，city({}) errorType({})]", city, ex.getClass().getSimpleName());
+            throw new IllegalStateException("调用高德地理编码接口失败");
+        }
+    }
+
     private Location convertResponse(JsonNode response) {
         if (response == null || !SUCCESS_STATUS.equals(response.path("status").asText())) {
             String info = response == null ? "接口无响应" : response.path("info").asText("未知错误");
@@ -106,6 +136,10 @@ public class AmapGeocodingClient {
     }
 
     public record Location(String province, String city, String district, String adcode, String formattedAddress) {
+    }
+
+    /** 高德 GCJ-02 经纬度，longitude 在前。 */
+    public record Point(BigDecimal longitude, BigDecimal latitude) {
     }
 
 }

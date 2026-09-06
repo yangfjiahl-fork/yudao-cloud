@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClientFacade;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.route.amap.AmapRouteQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClientFacade;
@@ -40,10 +41,14 @@ public class TripTravelQueryService {
     }
 
     public List<ScenicSpot> queryScenicSpots(String city, String keyword, int limit) {
+        return queryScenicSpots(city, keyword, 1, limit);
+    }
+
+    public List<ScenicSpot> queryScenicSpots(String city, String keyword, int startPage, int limit) {
         String provider = scenicSpotQueryClientFacade.provider();
         int candidateLimit = Math.max(1, limit);
         Map<String, ScenicSpot> result = new LinkedHashMap<>();
-        for (int page = 1; result.size() < candidateLimit; page++) {
+        for (int page = Math.max(1, startPage); result.size() < candidateLimit; page++) {
             ScenicSpotQueryClient.Response response = scenicSpotQueryClientFacade.query(new ScenicSpotQueryClient.Request()
                     .setType(ScenicSpotQueryClient.QueryType.SCENIC_SPOT).setRegion(city).setKeyword(keyword).setPage(page));
             if (!Boolean.TRUE.equals(response.getSuccess())) {
@@ -81,26 +86,41 @@ public class TripTravelQueryService {
     }
 
     public List<Place> queryHotels(String city, int limit) {
-        return queryPlaces(TravelPlaceQueryClient.PlaceType.HOTEL, city, limit);
+        return queryPlaces(AmapPoiTypeEnum.HOTEL, city, limit);
+    }
+
+    public List<Place> queryHotels(String city, String keyword, int page, int limit) {
+        return queryPlaces(AmapPoiTypeEnum.HOTEL, city, keyword, null, null, page, limit,
+                "旅行地点查询失败");
     }
 
     public List<Place> queryRestaurants(String city, int limit) {
-        return queryPlaces(TravelPlaceQueryClient.PlaceType.RESTAURANT, city, limit);
+        return queryPlaces(AmapPoiTypeEnum.FOOD, city, limit);
+    }
+
+    public List<Place> queryRestaurants(String city, String keyword, int page, int limit) {
+        return queryPlaces(AmapPoiTypeEnum.FOOD, city, keyword, null, null, page, limit,
+                "旅行地点查询失败");
+    }
+
+    public List<Place> queryShopping(String city, String keyword, int page, int limit) {
+        return queryPlaces(AmapPoiTypeEnum.SHOPPING, city, keyword, null, null, page, limit,
+                "旅行地点查询失败");
     }
 
     /** 以已选景点为中心查询 5km 内餐厅；坐标必须是高德 GCJ-02。 */
     public List<Place> queryRestaurantsAround(String city, String longitude, String latitude, int limit) {
-        return queryPlacesAround(TravelPlaceQueryClient.PlaceType.RESTAURANT, city, longitude, latitude, 5_000, limit);
+        return queryPlacesAround(AmapPoiTypeEnum.FOOD, city, longitude, latitude, 5_000, limit);
     }
 
     /** 以当日最后一个景点为中心查询 10km 内酒店；坐标必须是高德 GCJ-02。 */
     public List<Place> queryHotelsAround(String city, String longitude, String latitude, int limit) {
-        return queryPlacesAround(TravelPlaceQueryClient.PlaceType.HOTEL, city, longitude, latitude, 10_000, limit);
+        return queryPlacesAround(AmapPoiTypeEnum.HOTEL, city, longitude, latitude, 10_000, limit);
     }
 
-    private List<Place> queryPlacesAround(TravelPlaceQueryClient.PlaceType type, String city, String longitude,
+    private List<Place> queryPlacesAround(AmapPoiTypeEnum type, String city, String longitude,
                                           String latitude, int radius, int limit) {
-        return queryPlaces(type, city, longitude + ',' + latitude, radius, limit, "周边地点查询失败");
+        return queryPlaces(type, city, null, longitude + ',' + latitude, radius, 1, limit, "周边地点查询失败");
     }
 
     public boolean isRouteAvailable() {
@@ -117,19 +137,20 @@ public class TripTravelQueryService {
         return new Route("gaode", mode, route.distanceMeters(), route.durationSeconds(), routePoints);
     }
 
-    private List<Place> queryPlaces(TravelPlaceQueryClient.PlaceType type, String city, int limit) {
-        return queryPlaces(type, city, null, null, limit, "旅行地点查询失败");
+    private List<Place> queryPlaces(AmapPoiTypeEnum type, String city, int limit) {
+        return queryPlaces(type, city, null, null, null, 1, limit, "旅行地点查询失败");
     }
 
-    private List<Place> queryPlaces(TravelPlaceQueryClient.PlaceType type, String city, String location, Integer radius,
-                                    int limit, String failureMessage) {
+    private List<Place> queryPlaces(AmapPoiTypeEnum type, String city, String keyword, String location,
+                                    Integer radius, int startPage, int limit, String failureMessage) {
         String provider = travelPlaceQueryClientFacade.provider(type);
         int candidateLimit = Math.max(1, limit);
         Map<String, Place> result = new LinkedHashMap<>();
-        for (int page = 1; result.size() < candidateLimit; page++) {
+        for (int page = Math.max(1, startPage); result.size() < candidateLimit; page++) {
             int pageLimit = Math.min(POI_PAGE_SIZE, candidateLimit - result.size());
             TravelPlaceQueryClient.Response response = travelPlaceQueryClientFacade.query(new TravelPlaceQueryClient.Request()
-                    .setType(type).setRegion(city).setLocation(location).setRadius(radius).setLimit(pageLimit).setPage(page));
+                    .setType(type).setRegion(city).setKeyword(keyword).setLocation(location).setRadius(radius)
+                    .setLimit(pageLimit).setPage(page));
             if (!Boolean.TRUE.equals(response.getSuccess())) {
                 if (page == 1) {
                     throw new IllegalStateException(StrUtil.blankToDefault(response.getMessage(), failureMessage));

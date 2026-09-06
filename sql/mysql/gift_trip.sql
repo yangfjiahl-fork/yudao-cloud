@@ -181,3 +181,21 @@ UPDATE `gift_trip_itinerary_slot` slot
 INNER JOIN `gift_trip_itinerary` itinerary ON itinerary.id = slot.itinerary_id
 SET slot.tenant_id = itinerary.tenant_id
 WHERE slot.tenant_id = 0 AND itinerary.tenant_id <> 0;
+
+-- 高德旅行 POI 类型（value 与 AmapPoiTypeEnum.category 保持一致）
+INSERT INTO `system_dict_type` (`name`, `type`, `status`, `remark`, `creator`, `updater`, `deleted`)
+SELECT '高德 POI 类型', 'gift_amap_poi_type', 0, '旅行规划和探索页使用的高德 POI 大类', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_type` WHERE `type` = 'gift_amap_poi_type' AND `deleted` = b'0');
+
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 1, '景点', 'sightseeing', 'gift_amap_poi_type', 0, 'primary', '', '高德类型 110000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'sightseeing' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 2, '酒店', 'hotel', 'gift_amap_poi_type', 0, 'success', '', '高德类型 100000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'hotel' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 3, '美食', 'food', 'gift_amap_poi_type', 0, 'warning', '', '高德类型 050000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'food' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 4, '购物', 'shopping', 'gift_amap_poi_type', 0, 'info', '', '高德类型 060000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'shopping' AND `deleted` = b'0');

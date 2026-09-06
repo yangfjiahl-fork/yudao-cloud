@@ -41,8 +41,8 @@ public class TravelPlaceQueryClientFacade {
         return client.query(request);
     }
 
-    public String provider(TravelPlaceQueryClient.PlaceType type) {
-        String configKey = type == TravelPlaceQueryClient.PlaceType.HOTEL
+    public String provider(AmapPoiTypeEnum type) {
+        String configKey = type == AmapPoiTypeEnum.HOTEL
                 ? HOTEL_QUERY_FROM_CONFIG_KEY : RESTAURANT_QUERY_FROM_CONFIG_KEY;
         String configuredProvider;
         try {

@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.gaode;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -21,7 +22,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
 
     private static final String DEFAULT_URL = "https://restapi.amap.com/v5/place/text";
-    private static final String DEFAULT_TYPES = "110000";
 
     private final RestTemplate restTemplate;
     private final TripProviderProperties.ScenicSpot config;
@@ -41,7 +41,7 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
             return Response.failure(type, "高德景点查询服务未配置 AMAP_WEB_SERVICE_KEY");
         }
         String keywords = request == null ? null : request.getKeyword();
-        String types = StrUtil.blankToDefault(config.getAmapTypes(), DEFAULT_TYPES);
+        String types = AmapPoiTypeEnum.SCENIC.getAmapTypeCode();
         if (StrUtil.isAllBlank(keywords, types)) {
             log.warn("[query][高德景点查询参数无效，keyword 和 types 同时为空]");
             return Response.failure(type, "高德景点查询的 keyword 和 types 不能同时为空");
