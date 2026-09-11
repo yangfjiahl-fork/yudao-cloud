@@ -50,6 +50,8 @@ public class AmapRouteQueryClient {
         long start = System.currentTimeMillis();
         try {
             ResponseEntity<String> response = restTemplate.getForEntity(uriBuilder.build().encode().toUri(), String.class);
+            log.info("[query][高德路径规划返回原始数据，mode({}) city({}) httpStatus({}) responseBody({})]",
+                    request.mode(), request.city(), response.getStatusCode(), response.getBody());
             if (!response.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(response.getBody())) {
                 throw new RouteQueryException("HTTP_" + response.getStatusCode().value());
             }

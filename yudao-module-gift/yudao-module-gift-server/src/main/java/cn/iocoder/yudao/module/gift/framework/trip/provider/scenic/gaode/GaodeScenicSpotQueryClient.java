@@ -70,6 +70,8 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
         try {
             ResponseEntity<String> responseEntity = restTemplate.getForEntity(
                     uriBuilder.build().encode().toUri(), String.class);
+            log.info("[query][高德景点查询返回原始数据，httpStatus({}) responseBody({})]",
+                    responseEntity.getStatusCode(), responseEntity.getBody());
             if (!responseEntity.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(responseEntity.getBody())) {
                 log.warn("[query][高德景点查询无有效响应，httpStatus({}) hasBody({}) cost({}ms)]",
                         responseEntity.getStatusCode(), StrUtil.isNotBlank(responseEntity.getBody()),

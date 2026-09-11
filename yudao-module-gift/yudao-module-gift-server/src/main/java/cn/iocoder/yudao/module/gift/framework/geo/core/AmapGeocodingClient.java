@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.framework.geo.core;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
@@ -40,7 +41,9 @@ public class AmapGeocodingClient {
         long startTime = System.currentTimeMillis();
         log.info("[reverseGeocode][开始调用高德逆地理编码，longitude({}) latitude({})]", longitude, latitude);
         try {
-            Location location = convertResponse(restTemplate.getForObject(uri, JsonNode.class));
+            String responseBody = restTemplate.getForObject(uri, String.class);
+            log.info("[reverseGeocode][高德逆地理编码返回原始数据，responseBody({})]", responseBody);
+            Location location = convertResponse(StrUtil.isBlank(responseBody) ? null : JsonUtils.parseTree(responseBody));
             log.info("[reverseGeocode][高德逆地理编码成功，longitude({}) latitude({}) city({}) adcode({}) duration({}ms)]",
                     longitude, latitude, location.city(), location.adcode(), System.currentTimeMillis() - startTime);
             return location;
@@ -69,7 +72,9 @@ public class AmapGeocodingClient {
                 .queryParam("key", properties.getKey()).queryParam("address", city).queryParam("output", "JSON")
                 .build().encode().toUri();
         try {
-            JsonNode response = restTemplate.getForObject(uri, JsonNode.class);
+            String responseBody = restTemplate.getForObject(uri, String.class);
+            log.info("[geocodeCity][高德地理编码返回原始数据，city({}) responseBody({})]", city, responseBody);
+            JsonNode response = StrUtil.isBlank(responseBody) ? null : JsonUtils.parseTree(responseBody);
             JsonNode geocodes = response == null ? null : response.path("geocodes");
             if (response == null || !SUCCESS_STATUS.equals(response.path("status").asText())
                     || geocodes == null || !geocodes.isArray() || geocodes.isEmpty()) {

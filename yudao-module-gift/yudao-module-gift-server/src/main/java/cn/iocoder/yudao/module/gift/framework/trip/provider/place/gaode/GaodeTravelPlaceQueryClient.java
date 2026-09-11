@@ -73,6 +73,8 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         long startTime = System.currentTimeMillis();
         try {
             ResponseEntity<String> responseEntity = restTemplate.getForEntity(uriBuilder.build().encode().toUri(), String.class);
+            log.info("[query][高德旅行地点查询返回原始数据，type({}) region({}) httpStatus({}) responseBody({})]",
+                    request.getType(), request.getRegion(), responseEntity.getStatusCode(), responseEntity.getBody());
             if (!responseEntity.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(responseEntity.getBody())) {
                 return Response.failure("高德旅行地点查询服务无有效响应");
             }

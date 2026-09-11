@@ -18,6 +18,10 @@
         2. 积分获取，兑换
     </description>
 
+    <properties>
+        <ortools.version>9.15.6755</ortools.version>
+    </properties>
+
     <dependencies>
         <!-- Spring Cloud 基础 -->
         <dependency>
@@ -148,7 +152,42 @@
         <dependency>
             <groupId>com.google.ortools</groupId>
             <artifactId>ortools-java</artifactId>
-            <version>9.15.6755</version>
+            <version>${ortools.version}</version>
+            <exclusions>
+                <!-- OR-Tools 默认引入全部平台的原生库，改为按当前运行目标显式选择一个 -->
+                <exclusion>
+                    <groupId>com.google.ortools</groupId>
+                    <artifactId>ortools-linux-x86-64</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.ortools</groupId>
+                    <artifactId>ortools-linux-aarch64</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.ortools</groupId>
+                    <artifactId>ortools-darwin-x86-64</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.ortools</groupId>
+                    <artifactId>ortools-darwin-aarch64</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.ortools</groupId>
+                    <artifactId>ortools-win32-x86-64</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.google.ortools</groupId>
+            <artifactId>ortools-darwin-x86-64</artifactId>
+            <version>${ortools.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.ortools</groupId>
+            <artifactId>ortools-linux-x86-64</artifactId>
+            <version>${ortools.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <dependency>
@@ -187,6 +226,7 @@
         </dependency>
 
     </dependencies>
+
     <build>
         <!-- 设置构建的 jar 包名 -->
         <finalName>${project.artifactId}</finalName>

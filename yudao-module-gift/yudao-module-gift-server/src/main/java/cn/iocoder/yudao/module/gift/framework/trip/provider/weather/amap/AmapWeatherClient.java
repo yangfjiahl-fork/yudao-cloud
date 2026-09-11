@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.weather.amap;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherProvider;
@@ -71,7 +72,9 @@ public class AmapWeatherClient implements WeatherClient {
                 .build().encode().toUri();
         AmapGeocodeRespDTO response;
         try {
-            response = restTemplate.getForObject(uri, AmapGeocodeRespDTO.class);
+            String responseBody = restTemplate.getForObject(uri, String.class);
+            log.info("[resolveAdcode][高德地理编码返回原始数据，city({}) responseBody({})]", city, responseBody);
+            response = JsonUtils.parseObject(responseBody, AmapGeocodeRespDTO.class);
         } catch (RestClientException exception) {
             log.error("[resolveAdcode][调用高德地理编码接口失败，city({})，exception({})]",
                     city, exception.getClass().getSimpleName());
@@ -97,7 +100,10 @@ public class AmapWeatherClient implements WeatherClient {
                 .build().encode().toUri();
         AmapWeatherRespDTO response;
         try {
-            response = restTemplate.getForObject(uri, AmapWeatherRespDTO.class);
+            String responseBody = restTemplate.getForObject(uri, String.class);
+            log.info("[queryWeather][高德天气返回原始数据，city({}) adcode({}) responseBody({})]",
+                    requestedCity, adcode, responseBody);
+            response = JsonUtils.parseObject(responseBody, AmapWeatherRespDTO.class);
         } catch (RestClientException exception) {
             log.error("[queryWeather][调用高德天气接口失败，city({})，adcode({})，exception({})]",
                     requestedCity, adcode, exception.getClass().getSimpleName());
