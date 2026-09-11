@@ -344,6 +344,7 @@ public class AiModelFactoryImpl implements AiModelFactory {
                 .dashScopeApi(dashScopeApi)
                 .defaultOptions(options)
                 .toolCallingManager(getToolCallingManager())
+                .observationRegistry(getObservationRegistry().getObject())
                 .build();
     }
 

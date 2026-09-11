@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.gift.framework.trip.config;
 
 import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -22,7 +24,15 @@ public class TripAsyncConfiguration {
         executor.setMaxPoolSize(6);
         executor.setQueueCapacity(30);
         executor.setThreadNamePrefix("trip-itinerary-");
-        executor.setTaskDecorator(MdcContextUtils::wrap);
+        executor.setTaskDecorator(runnable -> {
+            Context parentContext = Context.current();
+            Runnable mdcRunnable = MdcContextUtils.wrap(runnable);
+            return () -> {
+                try (Scope ignored = parentContext.makeCurrent()) {
+                    mdcRunnable.run();
+                }
+            };
+        });
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);

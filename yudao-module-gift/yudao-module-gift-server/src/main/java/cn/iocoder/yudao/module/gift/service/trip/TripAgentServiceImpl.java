@@ -7,6 +7,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.framework.tracer.core.annotation.BizTrace;
 import cn.iocoder.yudao.framework.tracer.core.util.TracerFrameworkUtils;
 import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
@@ -137,6 +138,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 30000, acquireTimeout = 3000)
+    @BizTrace(operationName = "trip.agent.handle-message", type = "'ai.chat.conversation'", id = "#conversationId")
     public TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
                                          Consumer<TripAgentEvent> eventConsumer) {
         TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
@@ -203,8 +205,21 @@ public class TripAgentServiceImpl implements TripAgentService {
             return result;
         }
 
-        Map<String, Object> itinerary = tripItineraryAssembler.assemble(state,
-                progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
+        Span assembleSpan = tracer.spanBuilder("trip.agent.assemble")
+                .setSpanKind(SpanKind.INTERNAL)
+                .setAttribute("trip.agent.stage", "ASSEMBLE")
+                .setAttribute("trip.id", String.valueOf(trip.getId()))
+                .startSpan();
+        Map<String, Object> itinerary;
+        try (Scope ignored = assembleSpan.makeCurrent()) {
+            itinerary = tripItineraryAssembler.assemble(state,
+                    progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
+        } catch (RuntimeException | Error e) {
+            TracerFrameworkUtils.onError(e, assembleSpan);
+            throw e;
+        } finally {
+            assembleSpan.end();
+        }
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
         int version = (maxVersion == null ? 0 : maxVersion) + 1;
         itinerary.put("version", version);
