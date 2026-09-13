@@ -29,9 +29,15 @@ import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.system.api.area.AreaApi;
+import com.alibaba.loongsuite.otel.util.genai.AgentInvocation;
+import com.alibaba.loongsuite.otel.util.genai.GenAiTelemetryHandler;
+import com.alibaba.loongsuite.otel.util.genai.types.InputMessage;
+import com.alibaba.loongsuite.otel.util.genai.types.OutputMessage;
+import com.alibaba.loongsuite.otel.util.genai.types.TextPart;
 import com.baomidou.lock.annotation.Lock4j;
 import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.annotation.Resource;
+import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
@@ -83,6 +89,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             "ACCOMMODATION");
     private static final Set<String> ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "EVENING", "ACCOMMODATION", "ARRIVAL", "DEPARTURE", "TRIP_OVERVIEW", "DAY_OVERVIEW");
+    private static final GenAiTelemetryHandler GEN_AI_TELEMETRY = GenAiTelemetryHandler.getDefault(GlobalOpenTelemetry.get());
 
     @Resource
     private AiChatApi aiChatApi;
@@ -437,21 +444,15 @@ public class TripAgentServiceImpl implements TripAgentService {
         Long runId = tripRunLogService.create(tripId, stage, JsonUtils.toJsonString(Map.of("content", content)));
         log.info("[generateStream][tripId({}) runId({}) stage({}) 开始调用模型]", tripId, runId, stage);
         StringBuilder output = new StringBuilder();
-        Span span = tracer.spanBuilder("trip.agent." + stage.toLowerCase(Locale.ROOT))
-                .setSpanKind(SpanKind.INTERNAL)
-                .setAttribute("trip.agent.stage", stage)
-                .setAttribute("trip.id", String.valueOf(tripId))
-                .setAttribute("trip.chat.role.id", roleId)
-                .setAttribute("trip.llm.stream", true)
-                .startSpan();
-        try (Scope ignored = span.makeCurrent()) {
+        AgentInvocation invocation = startAgentInvocation(conversationId, tripId, stage, content, roleId);
+        try (invocation) {
             AiChatGenerateRespDTO response = aiChatApi.generateStream(new AiChatGenerateReqDTO()
                     .setConversationId(conversationId).setUserId(memberId).setUserType(UserTypeEnum.MEMBER.getValue())
                     .setRoleId(roleId).setContent(content).setPromptVariables(promptVariables), chunk -> {
                         output.append(chunk.getContent());
                         contentConsumer.accept(chunk.getContent());
                     });
-            setModelResponseAttributes(span, response);
+            setModelResponseAttributes(invocation, response, output.toString());
             tripRunLogService.complete(runId, response.getModel(), response.getPromptTokens(), response.getCompletionTokens(),
                     response.getTotalTokens(), System.currentTimeMillis() - start,
                     JsonUtils.toJsonString(Map.of("response", output.toString())));
@@ -459,28 +460,43 @@ public class TripAgentServiceImpl implements TripAgentService {
                     tripId, runId, stage, response.getModel(), System.currentTimeMillis() - start, response.getTotalTokens());
             return response;
         } catch (RuntimeException e) {
-            TracerFrameworkUtils.onError(e, span);
+            invocation.fail(e);
             tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage());
             log.error("[generate][tripId({}) runId({}) stage({}) 耗时({} ms) 调用失败]",
                     tripId, runId, stage, System.currentTimeMillis() - start, e);
             throw e;
-        } finally {
-            span.end();
         }
     }
 
-    private static void setModelResponseAttributes(Span span, AiChatGenerateRespDTO response) {
+    private static AgentInvocation startAgentInvocation(Long conversationId, Long tripId, String stage, String content, Long roleId) {
+        AgentInvocation invocation = GEN_AI_TELEMETRY.invokeLocalAgent("dashscope", "unknown", "travel-planner");
+        invocation.setAgentId(String.valueOf(tripId));
+        invocation.setConversationId(String.valueOf(conversationId));
+        invocation.setAttribute("trip.agent.stage", stage);
+        invocation.setAttribute("trip.chat.role.id", roleId);
+        invocation.setAttribute("trip.llm.stream", "true");
+        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+            invocation.setInputMessages(List.of(new InputMessage("user", List.of(new TextPart(content)))));
+        }
+        return invocation;
+    }
+
+    private static void setModelResponseAttributes(AgentInvocation invocation, AiChatGenerateRespDTO response,
+                                                   String responseContent) {
         if (StrUtil.isNotBlank(response.getModel())) {
-            span.setAttribute("trip.llm.model", response.getModel());
+            invocation.setAttribute("gen_ai.response.model", response.getModel());
         }
         if (response.getPromptTokens() != null) {
-            span.setAttribute("trip.llm.usage.prompt_tokens", response.getPromptTokens());
+            invocation.setInputTokens(response.getPromptTokens());
         }
         if (response.getCompletionTokens() != null) {
-            span.setAttribute("trip.llm.usage.completion_tokens", response.getCompletionTokens());
+            invocation.setOutputTokens(response.getCompletionTokens());
         }
         if (response.getTotalTokens() != null) {
-            span.setAttribute("trip.llm.usage.total_tokens", response.getTotalTokens());
+            invocation.setAttribute("gen_ai.usage.total_tokens", response.getTotalTokens());
+        }
+        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+            invocation.setOutputMessages(List.of(new OutputMessage("assistant", List.of(new TextPart(responseContent)), "stop")));
         }
     }
 

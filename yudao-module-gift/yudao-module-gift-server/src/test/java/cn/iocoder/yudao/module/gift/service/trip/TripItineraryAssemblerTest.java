@@ -9,6 +9,7 @@ import org.slf4j.MDC;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
@@ -55,7 +57,7 @@ class TripItineraryAssemblerTest {
         ));
         when(queryService.isRouteAvailable()).thenReturn(true);
         when(queryService.queryRoute(anyString(), anyString(), anyString(), any(TripTravelQueryService.RouteMode.class)))
-                .thenReturn(new TripTravelQueryService.Route("gaode", TripTravelQueryService.RouteMode.WALKING, 840, 720,
+                .thenReturn(new TripTravelQueryService.Route("gaode", TripTravelQueryService.RouteMode.TRANSIT, 840, 720,
                         List.of(new TripTravelQueryService.RoutePoint(120.0900D, 30.1950D),
                                 new TripTravelQueryService.RoutePoint(120.1000D, 30.2000D))));
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -96,14 +98,30 @@ class TripItineraryAssemblerTest {
         assertTrue(((Map<?, ?>) slots.get(0)).containsKey("plannedStartTime"));
         verify(queryService).queryRestaurants("杭州", 50);
         verify(queryService).queryHotels("杭州", 50);
-        Map<?, ?> firstSegment = (Map<?, ?>) assembler.resolveTransportSegments(itinerary, 1).get(0);
+        List<Map<String, Object>> segmentsWithoutArrival = assembler.resolveTransportSegments(itinerary, 1);
+        assertTrue(segmentsWithoutArrival.stream().noneMatch(segment -> "hotel-1".equals(segment.get("fromPoiId"))));
+        Map<String, Object> arrival = new LinkedHashMap<>();
+        arrival.put("poiId", "arrival-1");
+        arrival.put("poiName", "杭州东站");
+        arrival.put("longitude", "120.2200");
+        arrival.put("latitude", "30.2900");
+        ((Map<String, Object>) itinerary.get("transport")).put("arrival", arrival);
+        List<Map<String, Object>> firstDaySegments = assembler.resolveTransportSegments(itinerary, 1);
+        Map<?, ?> firstSegment = firstDaySegments.get(0);
         assertEquals("VERIFIED", firstSegment.get("status"));
+        assertEquals("TRANSIT", firstSegment.get("mode"));
         assertEquals(12, firstSegment.get("durationMinutes"));
-        assertEquals("120.0900", firstSegment.get("fromLongitude"));
+        assertEquals("arrival-1", firstSegment.get("fromPoiId"));
+        assertEquals("120.2200", firstSegment.get("fromLongitude"));
         assertTrue(List.of("120.1000", "120.1100").contains(firstSegment.get("toLongitude")));
         assertTrue(((List<?>) firstSegment.get("routePoints")).size() >= 2);
+        for (int index = 1; index < firstDaySegments.size(); index++) {
+            assertEquals(firstDaySegments.get(index - 1).get("toPoiId"), firstDaySegments.get(index).get("fromPoiId"));
+        }
+        assertEquals("hotel-1", firstDaySegments.get(firstDaySegments.size() - 1).get("toPoiId"));
         verify(queryService, atLeastOnce()).isRouteAvailable();
-        verify(queryService, atLeastOnce()).queryRoute(anyString(), anyString(), anyString(), any(TripTravelQueryService.RouteMode.class));
+        verify(queryService, atLeastOnce()).queryRoute(anyString(), anyString(), anyString(),
+                eq(TripTravelQueryService.RouteMode.TRANSIT));
 
         Map<?, ?> secondDay = (Map<?, ?>) days.get(1);
         assertTrue(((List<?>) secondDay.get("slots")).stream().map(Map.class::cast)

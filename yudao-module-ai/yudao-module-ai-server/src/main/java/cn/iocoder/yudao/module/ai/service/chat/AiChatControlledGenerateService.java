@@ -15,14 +15,23 @@ import cn.iocoder.yudao.module.ai.service.model.AiChatRoleService;
 import cn.iocoder.yudao.module.ai.service.model.AiModelService;
 import cn.iocoder.yudao.module.ai.util.AiChatPromptUtils;
 import cn.iocoder.yudao.module.ai.util.AiUtils;
+import com.alibaba.loongsuite.otel.util.genai.GenAiTelemetryHandler;
+import com.alibaba.loongsuite.otel.util.genai.InferenceInvocation;
+import com.alibaba.loongsuite.otel.util.genai.types.InputMessage;
+import com.alibaba.loongsuite.otel.util.genai.types.OutputMessage;
+import com.alibaba.loongsuite.otel.util.genai.types.TextPart;
 import jakarta.annotation.Resource;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
@@ -47,6 +56,7 @@ import static cn.iocoder.yudao.module.ai.enums.ErrorCodeConstants.CHAT_CONVERSAT
 public class AiChatControlledGenerateService {
 
     private static final String CONTROLLED_GENERATE_METRIC_NAME = "yudao.ai.controlled.generate";
+    private static final GenAiTelemetryHandler GEN_AI_TELEMETRY = GenAiTelemetryHandler.getDefault(GlobalOpenTelemetry.get());
 
     @Resource
     private AiChatConversationService conversationService;
@@ -60,50 +70,123 @@ public class AiChatControlledGenerateService {
     @BizTrace(operationName = "ai.controlled.generate", type = "'ai.chat.conversation'", id = "#reqDTO.conversationId")
     public AiChatGenerateRespDTO generate(AiChatGenerateReqDTO reqDTO) {
         GenerateContext context = buildContext(reqDTO);
-        ChatResponse response = observeGenerate(context, "sync",
-                () -> modelService.getChatModel(context.model().getId()).call(context.prompt()));
-        String responseContent = AiUtils.getChatResponseContent(response);
-        log.info("[generate][conversationId({}) userId({}) roleId({}) model({}) responseLength({})]",
-                reqDTO.getConversationId(), reqDTO.getUserId(), reqDTO.getRoleId(), context.model().getModel(),
-                StrUtil.length(responseContent));
-        Usage usage = response != null && response.getMetadata() != null ? response.getMetadata().getUsage() : null;
-        return new AiChatGenerateRespDTO().setModel(context.model().getModel()).setContent(responseContent)
-                .setPromptTokens(usage != null ? ObjUtil.defaultIfNull(usage.getPromptTokens(), 0).longValue() : 0L)
-                .setCompletionTokens(usage != null ? ObjUtil.defaultIfNull(usage.getCompletionTokens(), 0).longValue() : 0L)
-                .setTotalTokens(usage != null ? ObjUtil.defaultIfNull(usage.getTotalTokens(), 0).longValue() : 0L);
+        ChatModel chatModel = modelService.getChatModel(context.model().getId());
+        logModelInstrumentation(context, "sync", chatModel);
+        InferenceInvocation invocation = startModelInvocation(context, false);
+        try (invocation) {
+            ChatResponse response = observeGenerate(context, "sync", () -> chatModel.call(context.prompt()));
+            String responseContent = AiUtils.getChatResponseContent(response);
+            log.info("[generate][conversationId({}) userId({}) roleId({}) model({}) responseLength({})]",
+                    reqDTO.getConversationId(), reqDTO.getUserId(), reqDTO.getRoleId(), context.model().getModel(),
+                    StrUtil.length(responseContent));
+            Usage usage = response != null && response.getMetadata() != null ? response.getMetadata().getUsage() : null;
+            setModelResponseAttributes(invocation, context, usage, responseContent);
+            return new AiChatGenerateRespDTO().setModel(context.model().getModel()).setContent(responseContent)
+                    .setPromptTokens(usage != null ? ObjUtil.defaultIfNull(usage.getPromptTokens(), 0).longValue() : 0L)
+                    .setCompletionTokens(usage != null ? ObjUtil.defaultIfNull(usage.getCompletionTokens(), 0).longValue() : 0L)
+                    .setTotalTokens(usage != null ? ObjUtil.defaultIfNull(usage.getTotalTokens(), 0).longValue() : 0L);
+        } catch (RuntimeException | Error e) {
+            invocation.fail(e);
+            throw e;
+        }
     }
 
     @BizTrace(operationName = "ai.controlled.generate.stream", type = "'ai.chat.conversation'", id = "#reqDTO.conversationId")
     public AiChatGenerateRespDTO generateStream(AiChatGenerateReqDTO reqDTO,
                                                 Consumer<AiChatGenerateStreamRespDTO> callback) {
         GenerateContext context = buildContext(reqDTO);
+        StreamingChatModel chatModel = modelService.getChatModel(context.model().getId());
+        logModelInstrumentation(context, "stream", chatModel);
         StringBuilder responseContent = new StringBuilder();
         AtomicReference<AiChatGenerateStreamRespDTO> lastChunk = new AtomicReference<>();
-        observeGenerate(context, "stream", () -> {
-            modelService.getChatModel(context.model().getId()).stream(context.prompt()).doOnNext(chunk -> {
-                Usage usage = chunk.getMetadata() != null ? chunk.getMetadata().getUsage() : null;
-                AiChatGenerateStreamRespDTO response = new AiChatGenerateStreamRespDTO()
-                        .setModel(context.model().getModel())
-                        .setContent(StrUtil.nullToDefault(AiUtils.getChatResponseContent(chunk), ""))
-                        .setPromptTokens(usage != null ? ObjUtil.defaultIfNull(usage.getPromptTokens(), 0).longValue() : 0L)
-                        .setCompletionTokens(usage != null ? ObjUtil.defaultIfNull(usage.getCompletionTokens(), 0).longValue() : 0L)
-                        .setTotalTokens(usage != null ? ObjUtil.defaultIfNull(usage.getTotalTokens(), 0).longValue() : 0L);
-                responseContent.append(response.getContent());
-                lastChunk.set(response);
-                callback.accept(response);
-            }).blockLast();
-            return null;
-        });
-        AiChatGenerateStreamRespDTO last = lastChunk.get();
-        if (last == null) {
-            throw new IllegalStateException("模型流未返回内容");
+        InferenceInvocation invocation = startModelInvocation(context, true);
+        try (invocation) {
+            observeGenerate(context, "stream", () -> {
+                chatModel.stream(context.prompt()).doOnNext(chunk -> {
+                    Usage usage = chunk.getMetadata() != null ? chunk.getMetadata().getUsage() : null;
+                    AiChatGenerateStreamRespDTO response = new AiChatGenerateStreamRespDTO()
+                            .setModel(context.model().getModel())
+                            .setContent(StrUtil.nullToDefault(AiUtils.getChatResponseContent(chunk), ""))
+                            .setPromptTokens(usage != null ? ObjUtil.defaultIfNull(usage.getPromptTokens(), 0).longValue() : 0L)
+                            .setCompletionTokens(usage != null ? ObjUtil.defaultIfNull(usage.getCompletionTokens(), 0).longValue() : 0L)
+                            .setTotalTokens(usage != null ? ObjUtil.defaultIfNull(usage.getTotalTokens(), 0).longValue() : 0L);
+                    responseContent.append(response.getContent());
+                    lastChunk.set(response);
+                    callback.accept(response);
+                }).blockLast();
+                return null;
+            });
+            AiChatGenerateStreamRespDTO last = lastChunk.get();
+            if (last == null) {
+                throw new IllegalStateException("模型流未返回内容");
+            }
+            log.info("[generateStream][conversationId({}) userId({}) roleId({}) model({}) responseLength({}) 完成]",
+                    reqDTO.getConversationId(), reqDTO.getUserId(), reqDTO.getRoleId(), context.model().getModel(),
+                    responseContent.length());
+            setModelResponseAttributes(invocation, context, last, responseContent.toString());
+            return new AiChatGenerateRespDTO().setModel(last.getModel()).setContent(responseContent.toString())
+                    .setPromptTokens(last.getPromptTokens()).setCompletionTokens(last.getCompletionTokens())
+                    .setTotalTokens(last.getTotalTokens());
+        } catch (RuntimeException | Error e) {
+            invocation.fail(e);
+            throw e;
         }
-        log.info("[generateStream][conversationId({}) userId({}) roleId({}) model({}) responseLength({}) 完成]",
-                reqDTO.getConversationId(), reqDTO.getUserId(), reqDTO.getRoleId(), context.model().getModel(),
-                responseContent.length());
-        return new AiChatGenerateRespDTO().setModel(last.getModel()).setContent(responseContent.toString())
-                .setPromptTokens(last.getPromptTokens()).setCompletionTokens(last.getCompletionTokens())
-                .setTotalTokens(last.getTotalTokens());
+    }
+
+    private void logModelInstrumentation(GenerateContext context, String mode, Object chatModel) {
+        log.info("[modelInstrumentation][mode({}) platform({}) model({}) chatModelClass({}) otelSpanRecording({})]",
+                mode, context.model().getPlatform(), context.model().getModel(), chatModel.getClass().getName(),
+                Span.current().isRecording());
+    }
+
+    private static InferenceInvocation startModelInvocation(GenerateContext context, boolean stream) {
+        String provider = getGenAiProvider(context.model().getPlatform());
+        boolean dashscope = "dashscope".equals(provider);
+        InferenceInvocation invocation = GEN_AI_TELEMETRY.inference(provider, context.model().getModel(),
+                dashscope ? "dashscope.aliyuncs.com" : null, dashscope ? 443 : null, null);
+        invocation.setStream(stream);
+        if (context.model().getMaxTokens() != null) {
+            invocation.setMaxTokens(context.model().getMaxTokens().longValue());
+        }
+        if (context.model().getTemperature() != null) {
+            invocation.setTemperature(context.model().getTemperature());
+        }
+        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+            invocation.setSystemInstruction(List.of(new TextPart(context.prompt().getSystemMessage().getText())));
+            invocation.setInputMessages(List.of(new InputMessage("user",
+                    List.of(new TextPart(context.prompt().getUserMessage().getText())))));
+        }
+        return invocation;
+    }
+
+    private static String getGenAiProvider(String platform) {
+        return AiPlatformEnum.TONG_YI.getPlatform().equals(platform) ? "dashscope" : platform;
+    }
+
+    private static void setModelResponseAttributes(InferenceInvocation invocation, GenerateContext context, Usage usage,
+                                                   String responseContent) {
+        invocation.setResponseModel(context.model().getModel());
+        if (usage == null) {
+            setModelOutput(invocation, responseContent);
+            return;
+        }
+        invocation.setInputTokens(ObjUtil.defaultIfNull(usage.getPromptTokens(), 0).longValue());
+        invocation.setOutputTokens(ObjUtil.defaultIfNull(usage.getCompletionTokens(), 0).longValue());
+        setModelOutput(invocation, responseContent);
+    }
+
+    private static void setModelResponseAttributes(InferenceInvocation invocation, GenerateContext context,
+                                                   AiChatGenerateStreamRespDTO response, String responseContent) {
+        invocation.setResponseModel(context.model().getModel());
+        invocation.setInputTokens(ObjUtil.defaultIfNull(response.getPromptTokens(), 0L));
+        invocation.setOutputTokens(ObjUtil.defaultIfNull(response.getCompletionTokens(), 0L));
+        setModelOutput(invocation, responseContent);
+    }
+
+    private static void setModelOutput(InferenceInvocation invocation, String responseContent) {
+        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+            invocation.setOutputMessages(List.of(new OutputMessage("assistant", List.of(new TextPart(responseContent)), "stop")));
+        }
     }
 
     private <T> T observeGenerate(GenerateContext context, String mode, Supplier<T> supplier) {

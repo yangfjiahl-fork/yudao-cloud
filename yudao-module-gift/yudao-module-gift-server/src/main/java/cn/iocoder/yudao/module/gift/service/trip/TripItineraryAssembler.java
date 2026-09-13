@@ -40,7 +40,6 @@ public class TripItineraryAssembler {
     private static final int DAILY_HOTEL_CANDIDATE_LIMIT = 10;
     /** 目的地为省、区域等宽范围时，单日 POI 应收敛到同一落地城市周边。 */
     private static final double LOCALITY_RADIUS_METERS = 80_000D;
-    private static final double WALKING_DISTANCE_METERS = 1_500D;
     private static final double EARTH_RADIUS_METERS = 6_371_000D;
     private static final int DEFAULT_DAY_START_MINUTES = 9 * 60;
     private static final int DEFAULT_DAY_END_MINUTES = 20 * 60;
@@ -337,7 +336,10 @@ public class TripItineraryAssembler {
                     .filter(slot -> "ACCOMMODATION".equals(text(slot.get("slot")))).findFirst().orElse(null);
             String city = slots.stream().map(slot -> text(slot.get("city"))).filter(StrUtil::isNotBlank)
                     .findFirst().orElse("");
-            return buildTransportSegments(city, slots, accommodation == null ? null : point(accommodation));
+            // 首日从已确认的抵达机场/车站出发；住宿只作为当天最后一个节点，不能误作首段起点。
+            Map<String, Object> initialPoint = day == 1 ? arrivalPoint(itinerary)
+                    : accommodation == null ? null : point(accommodation);
+            return buildTransportSegments(city, slots, initialPoint);
         }
         throw new IllegalArgumentException("行程天数不存在");
     }
@@ -881,10 +883,19 @@ public class TripItineraryAssembler {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> arrivalPoint(Map<String, Object> itinerary) {
+        Object transport = itinerary.get("transport");
+        if (!(transport instanceof Map<?, ?> transportMap) || !(transportMap.get("arrival") instanceof Map<?, ?> arrival)) {
+            return null;
+        }
+        return point((Map<String, Object>) arrival);
+    }
+
     private void enrichRouteSegment(Map<String, Object> segment, String city, String originLongitude, String originLatitude,
                                     String destinationLongitude, String destinationLatitude, double estimatedDistance) {
-        TripTravelQueryService.RouteMode mode = estimatedDistance <= WALKING_DISTANCE_METERS
-                ? TripTravelQueryService.RouteMode.WALKING : TripTravelQueryService.RouteMode.TRANSIT;
+        // 行程节点间按公共交通测距；短距离也不以步行作为出游交通方案。
+        TripTravelQueryService.RouteMode mode = TripTravelQueryService.RouteMode.TRANSIT;
         if (tripTravelQueryService.isRouteAvailable()) {
             try {
                 TripTravelQueryService.Route route = tripTravelQueryService.queryRoute(city,
@@ -964,9 +975,6 @@ public class TripItineraryAssembler {
     }
 
     private static int estimateDurationMinutes(double distanceMeters) {
-        if (distanceMeters <= WALKING_DISTANCE_METERS) {
-            return Math.max(1, (int) Math.ceil(distanceMeters / 75D));
-        }
         return 8 + Math.max(1, (int) Math.ceil(distanceMeters / 333D));
     }
 

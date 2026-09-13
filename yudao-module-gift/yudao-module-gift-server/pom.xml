@@ -200,6 +200,10 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>yudao-spring-boot-starter-monitor</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.alibaba.loongsuite</groupId>
+            <artifactId>otel-util-genai</artifactId>
+        </dependency>
 
 <!--        <dependency>-->
 <!--            <groupId>de.codecentric</groupId>-->
