@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -157,10 +158,12 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> previousState = TripAgentFormatUtils.parseMap(JsonUtils.toJsonString(state));
         sanitizeTravelerProfile(state);
         state.remove("destinationEntityId"); // 兼容已存的旧状态，不再持久化外部实体副本
+        AtomicInteger modelDeltaSequence = new AtomicInteger();
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
         AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
                 buildIntakeContext(state, content),
-                "INTAKE", trip.getId(), promptVariables);
+                "INTAKE", trip.getId(), promptVariables,
+                chunk -> emitModelDelta(eventConsumer, "INTAKE", chunk, modelDeltaSequence));
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
         mergeInformationState(state, extractState(intake), content);
         applyItineraryPatch(state, intake.get("itinerary_patch"));
@@ -178,7 +181,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
         }
         TripInteraction interaction = needFollowUp ? generateInteraction(conversationId, memberId, state, missingRequired,
-                trip.getId(), promptVariables, questionCount) : null;
+                trip.getId(), promptVariables, questionCount, eventConsumer, modelDeltaSequence) : null;
         List<Map<String, String>> suggestions = needFollowUp ? interaction.suggestions() : List.of();
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
                 .setMissingRequired(missingRequired).setSuggestions(suggestions));
@@ -570,12 +573,14 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private TripInteraction generateInteraction(Long conversationId, Long memberId, Map<String, Object> state,
                                                 List<String> missingRequired, Long tripId,
-                                                Map<String, Object> promptVariables, int questionCount) {
+                                                Map<String, Object> promptVariables, int questionCount,
+                                                Consumer<TripAgentEvent> eventConsumer, AtomicInteger modelDeltaSequence) {
         List<Map<String, String>> fallbackSuggestions = buildInformationSuggestions(state, missingRequired);
         String fallbackQuestion = composeQuestions(buildFallbackQuestions(state, missingRequired, questionCount));
         try {
             AiChatGenerateRespDTO response = generateStream(conversationId, memberId,
-                    buildInteractionContext(state, missingRequired, questionCount), "FOLLOW_UP", tripId, promptVariables);
+                    buildInteractionContext(state, missingRequired, questionCount), "FOLLOW_UP", tripId, promptVariables,
+                    chunk -> emitModelDelta(eventConsumer, "FOLLOW_UP", chunk, modelDeltaSequence));
             Map<String, Object> interaction = TripAgentFormatUtils.parseMap(response.getContent());
             List<String> questions = parseQuestions(interaction.get("questions"), questionCount);
             if (CollUtil.isEmpty(questions)) {
@@ -589,6 +594,18 @@ public class TripAgentServiceImpl implements TripAgentService {
             log.warn("[generateInteraction][tripId({}) 追问文案生成失败，使用字段默认文案]", tripId, e);
             return new TripInteraction(fallbackQuestion, ensureGenerateSuggestion(fallbackSuggestions, missingRequired));
         }
+    }
+
+    /**
+     * 流式模型内容只供前端渐进展示，旅行状态仍以 intake_completed、question 等已校验事件为准。
+     */
+    private static void emitModelDelta(Consumer<TripAgentEvent> eventConsumer, String stage, String chunk,
+                                       AtomicInteger sequence) {
+        if (chunk == null || chunk.isEmpty()) {
+            return;
+        }
+        eventConsumer.accept(TripAgentEvent.of("model_delta", stage, chunk)
+                .setSequence(sequence.incrementAndGet()));
     }
 
     private static String buildInteractionContext(Map<String, Object> state, List<String> missingRequired, int questionCount) {

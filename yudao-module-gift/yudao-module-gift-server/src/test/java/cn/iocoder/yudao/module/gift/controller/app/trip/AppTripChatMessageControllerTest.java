@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.slf4j.MDC;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -48,6 +49,8 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
             @SuppressWarnings("unchecked")
             Consumer<TripAgentEvent> eventConsumer = invocation.getArgument(3);
             eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在收集信息"));
+            eventConsumer.accept(TripAgentEvent.of("model_delta", "INTAKE", "{\"state\":")
+                    .setSequence(1));
             return null;
         }).when(tripAgentService).handleMessage(eq(conversationId), eq(memberId), any(), any());
         AppTripChatMessageSendReqVO reqVO = new AppTripChatMessageSendReqVO();
@@ -62,9 +65,14 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
 
             var stream = controller.sendMessageStream(reqVO);
             MDC.clear(); // 模拟 MVC 异步返回后 TraceFilter 已清理请求线程的 MDC
-            stream.collectList().block();
+            var responses = stream.collectList().block();
 
             assertEquals("sse-test-trace", traceId.get());
+            assertEquals(List.of("accepted", "stage", "model_delta", "done"),
+                    responses.stream().map(response -> response.getData().getEvent()).toList());
+            assertEquals("INTAKE", responses.get(2).getData().getStage());
+            assertEquals("{\"state\":", responses.get(2).getData().getContent());
+            assertEquals(1, responses.get(2).getData().getSequence());
         } finally {
             configuration.destroy();
             MDC.clear();

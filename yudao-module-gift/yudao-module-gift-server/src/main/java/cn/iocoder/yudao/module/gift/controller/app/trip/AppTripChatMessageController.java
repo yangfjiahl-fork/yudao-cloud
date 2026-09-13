@@ -20,6 +20,8 @@ import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -84,20 +86,26 @@ public class AppTripChatMessageController {
                 reqVO.getConversationId(), memberId, tenantId);
         CommonResult<AppTripChatStreamRespVO> accepted = success(new AppTripChatStreamRespVO().setEvent("accepted")
                 .setConversationId(reqVO.getConversationId()).setContent("正在分析您的需求…"));
+        // SSE 在 boundedElastic 线程执行，显式保留 HTTP 请求的 OTel 上下文，保证 Agent 和 LLM Span 归属同一条调用链。
+        Context parentOtelContext = Context.current();
         Flux<CommonResult<AppTripChatStreamRespVO>> execution = Flux.deferContextual(context -> {
             @SuppressWarnings("unchecked")
             Map<String, String> mdcContext = context.getOrDefault(MdcContextUtils.REACTOR_CONTEXT_MDC_KEY, Map.of());
-            return Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> MdcContextUtils.runWithContext(mdcContext, () -> {
-                try {
-                    TenantUtils.execute(tenantId, () -> {
-                        tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent(),
-                                event -> sink.next(success(toStreamResponse(reqVO.getConversationId(), event))));
+            return Flux.<CommonResult<AppTripChatStreamRespVO>>create(sink -> {
+                try (Scope ignored = parentOtelContext.makeCurrent()) {
+                    MdcContextUtils.runWithContext(mdcContext, () -> {
+                        try {
+                            TenantUtils.execute(tenantId, () -> {
+                                tripAgentService.handleMessage(reqVO.getConversationId(), memberId, reqVO.getContent(),
+                                        event -> sink.next(success(toStreamResponse(reqVO.getConversationId(), event))));
+                            });
+                            sink.complete();
+                        } catch (Exception e) {
+                            sink.error(e);
+                        }
                     });
-                    sink.complete();
-                } catch (Exception e) {
-                    sink.error(e);
                 }
-            })).subscribeOn(Schedulers.boundedElastic());
+            }).subscribeOn(Schedulers.boundedElastic());
         });
         CommonResult<AppTripChatStreamRespVO> done = success(new AppTripChatStreamRespVO().setEvent("done")
                 .setConversationId(reqVO.getConversationId()));

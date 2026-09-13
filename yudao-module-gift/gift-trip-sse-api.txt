@@ -116,6 +116,7 @@ Gift 旅行规划 C 端接口
 | --- | --- | --- |
 | `accepted` | `conversationId`、`content` | 已受理本轮用户消息。 |
 | `stage` | `stage`、`content` | 当前处理阶段。`stage` 可能为 `INTAKE`、`FOLLOW_UP`、`ASSEMBLE`；生成行程时会连续返回多个 `ASSEMBLE` 事件，分别对应 POI 查询、每日排程和行程卡片生成。 |
+| `model_delta` | `stage`、`sequence`、`content` | `INTAKE` 或 `FOLLOW_UP` 模型输出的原始文本分片。前端按 `sequence` 递增拼接，仅用于渐进展示；分片可能是未闭合的 JSON，不能据此更新旅行状态。 |
 | `intake_completed` | `content`、`missingRequired`、`suggestions` | 信息收集完成事件，包含本轮信息摘要及缺失必填项。 |
 | `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 服务端生成的追问消息。 |
 | `itinerary_skeleton` | `messageId`、`content`、`itinerary`、`suggestions` | 服务端生成的行程骨架消息。 |
@@ -124,9 +125,10 @@ Gift 旅行规划 C 端接口
 
 常见事件顺序：
 
-- 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`accepted → stage(INTAKE) → stage(FOLLOW_UP) → intake_completed → question → done`。
-- 触发行程生成时：`accepted → stage(INTAKE) → stage(ASSEMBLE: POI 查询) → stage(ASSEMBLE: 每日排程) → stage(ASSEMBLE: 行程卡片生成) → itinerary_skeleton → done`。POI 查询仍在服务端并行执行，但 `stage` 事件按上述顺序推送。
+- 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`accepted → stage(INTAKE) → model_delta(INTAKE)* → stage(FOLLOW_UP) → model_delta(FOLLOW_UP)* → intake_completed → question → done`。模型未返回文本分片时对应的 `model_delta` 序列为空。
+- 触发行程生成时：`accepted → stage(INTAKE) → model_delta(INTAKE)* → stage(ASSEMBLE: POI 查询) → stage(ASSEMBLE: 每日排程) → stage(ASSEMBLE: 行程卡片生成) → itinerary_skeleton → done`。POI 查询仍在服务端并行执行，但 `stage` 事件按上述顺序推送。
 - `intake_completed`、`question` 的 `missingRequired` 为空，仅表示必填信息完整；该事件仍可能包含后续追问及 `suggestions`。
+- `model_delta` 的 `content` 不是经过后端校验的事实数据；仅 `intake_completed`、`question`、`itinerary_skeleton` 的结构化字段可驱动前端状态更新。
 
 事件字段示例：
 
