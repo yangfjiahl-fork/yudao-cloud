@@ -21,7 +21,6 @@ import com.alibaba.loongsuite.otel.util.genai.types.InputMessage;
 import com.alibaba.loongsuite.otel.util.genai.types.OutputMessage;
 import com.alibaba.loongsuite.otel.util.genai.types.TextPart;
 import jakarta.annotation.Resource;
-import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -56,7 +55,6 @@ import static cn.iocoder.yudao.module.ai.enums.ErrorCodeConstants.CHAT_CONVERSAT
 public class AiChatControlledGenerateService {
 
     private static final String CONTROLLED_GENERATE_METRIC_NAME = "yudao.ai.controlled.generate";
-    private static final GenAiTelemetryHandler GEN_AI_TELEMETRY = GenAiTelemetryHandler.getDefault(GlobalOpenTelemetry.get());
 
     @Resource
     private AiChatConversationService conversationService;
@@ -66,6 +64,8 @@ public class AiChatControlledGenerateService {
     private AiChatRoleService chatRoleService;
     @Resource
     private MeterRegistry meterRegistry;
+    @Resource
+    private GenAiTelemetryHandler genAiTelemetryHandler;
 
     @BizTrace(operationName = "ai.controlled.generate", type = "'ai.chat.conversation'", id = "#reqDTO.conversationId")
     public AiChatGenerateRespDTO generate(AiChatGenerateReqDTO reqDTO) {
@@ -139,10 +139,10 @@ public class AiChatControlledGenerateService {
                 Span.current().isRecording());
     }
 
-    private static InferenceInvocation startModelInvocation(GenerateContext context, boolean stream) {
+    private InferenceInvocation startModelInvocation(GenerateContext context, boolean stream) {
         String provider = getGenAiProvider(context.model().getPlatform());
         boolean dashscope = "dashscope".equals(provider);
-        InferenceInvocation invocation = GEN_AI_TELEMETRY.inference(provider, context.model().getModel(),
+        InferenceInvocation invocation = genAiTelemetryHandler.inference(provider, context.model().getModel(),
                 dashscope ? "dashscope.aliyuncs.com" : null, dashscope ? 443 : null, null);
         invocation.setStream(stream);
         if (context.model().getMaxTokens() != null) {
@@ -151,7 +151,7 @@ public class AiChatControlledGenerateService {
         if (context.model().getTemperature() != null) {
             invocation.setTemperature(context.model().getTemperature());
         }
-        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+        if (genAiTelemetryHandler.shouldCaptureContent()) {
             invocation.setSystemInstruction(List.of(new TextPart(context.prompt().getSystemMessage().getText())));
             invocation.setInputMessages(List.of(new InputMessage("user",
                     List.of(new TextPart(context.prompt().getUserMessage().getText())))));
@@ -163,8 +163,8 @@ public class AiChatControlledGenerateService {
         return AiPlatformEnum.TONG_YI.getPlatform().equals(platform) ? "dashscope" : platform;
     }
 
-    private static void setModelResponseAttributes(InferenceInvocation invocation, GenerateContext context, Usage usage,
-                                                   String responseContent) {
+    private void setModelResponseAttributes(InferenceInvocation invocation, GenerateContext context, Usage usage,
+                                            String responseContent) {
         invocation.setResponseModel(context.model().getModel());
         if (usage == null) {
             setModelOutput(invocation, responseContent);
@@ -175,16 +175,16 @@ public class AiChatControlledGenerateService {
         setModelOutput(invocation, responseContent);
     }
 
-    private static void setModelResponseAttributes(InferenceInvocation invocation, GenerateContext context,
-                                                   AiChatGenerateStreamRespDTO response, String responseContent) {
+    private void setModelResponseAttributes(InferenceInvocation invocation, GenerateContext context,
+                                            AiChatGenerateStreamRespDTO response, String responseContent) {
         invocation.setResponseModel(context.model().getModel());
         invocation.setInputTokens(ObjUtil.defaultIfNull(response.getPromptTokens(), 0L));
         invocation.setOutputTokens(ObjUtil.defaultIfNull(response.getCompletionTokens(), 0L));
         setModelOutput(invocation, responseContent);
     }
 
-    private static void setModelOutput(InferenceInvocation invocation, String responseContent) {
-        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+    private void setModelOutput(InferenceInvocation invocation, String responseContent) {
+        if (genAiTelemetryHandler.shouldCaptureContent()) {
             invocation.setOutputMessages(List.of(new OutputMessage("assistant", List.of(new TextPart(responseContent)), "stop")));
         }
     }

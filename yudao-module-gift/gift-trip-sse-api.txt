@@ -1,7 +1,7 @@
 Gift 旅行规划 C 端接口
 =====================
 
-更新日期：2026-09-05
+更新日期：2026-09-14
 
 一、通用约定
 ------------
@@ -10,7 +10,7 @@ Gift 旅行规划 C 端接口
 - 全部接口需要会员登录态：`Authorization: Bearer <accessToken>`；多租户请求同时传 `tenant-id`。
 - 所有编号字段（如 `conversationId`、`messageId`、`slotId`）按字符串处理，不要转成 JavaScript `number`。
 - 普通接口统一返回：`{"code":0,"msg":"","data":...}`。
-- 流式接口使用 `POST + text/event-stream`。建议使用 `fetch + ReadableStream`；每帧格式为 `data:{...}\n\n`，业务内容位于 `data`。
+- 流式接口使用 `POST + text/event-stream`，每帧格式为 `data:{...}\n\n`。所有帧统一使用 `CommonResult`：前端先读取外层 `code`、`msg`、`data`，AG-UI 事件对象位于 `data`。
 
 二、会话接口
 ------------
@@ -93,58 +93,72 @@ Gift 旅行规划 C 端接口
 - `itinerary` 仅行程消息存在。
 - 普通文本消息的 `itinerary` 为 `null` 或不存在。
 
-### 2. 发送消息
+### 2. 运行旅行 Agent（AG-UI）
 
-`POST /app-api/ai/chat/message/send-stream`
+`POST /app-api/ai/chat/message/run`
 
-请求头增加：
+请求头：
 
     Accept: text/event-stream
 
-请求体：
+请求体遵循 AG-UI `RunAgentInput` 的核心字段：
 
     {
-      "conversationId":"1781604279872581776",
-      "content":"我计划10月1日从上海去杭州，玩3天，2人，人均预算2000元"
+      "threadId":"1781604279872581776",
+      "runId":"7b26e4e6-5bdf-4488-8c7b-3f16dd090d2b",
+      "messages":[
+        {
+          "id":"e0aa3e40-8f19-4ed0-b9b3-7ae6caea1234",
+          "role":"user",
+          "content":"我计划10月1日从上海去杭州，玩3天，2人，人均预算2000元"
+        }
+      ]
     }
 
-请求受理后，服务端通过 SSE 返回处理进度与结果事件。
+- `threadId` 是已创建的旅行 `conversationId` 的字符串形式；服务端按当前登录会员校验其归属。
+- `runId` 由客户端为本轮运行生成并保持唯一；它不等于 `messageId`。
+- 当前旅行入口只接受一条 `role=user` 的纯文本消息。会话历史由服务端保存，不能通过 `messages` 覆盖；`state`、`tools`、`context`、`forwardedProps` 不是本期输入能力。
+- 本接口每帧均返回 `{"code":0,"msg":"","data":{...AG-UI event...}}`；前端统一解出 `data` 后再按 AG-UI 的 `type` 分发。这是唯一的旅行规划 SSE 入口；`/send-stream` 已移除。
 
-### 3. SSE 事件
+### 3. AG-UI SSE 事件
 
-| 事件 | 字段 | 服务端语义 |
+所有帧均只使用 `data:`；事件类型由 `CommonResult.data.type` 判定。客户端必须先按 SSE 规范重组完整帧，再反序列化 JSON、校验外层 `code`、提取 `data`；不能按网络分块解析。
+
+| AG-UI `type` | 字段 | 旅行规划语义 |
 | --- | --- | --- |
-| `accepted` | `conversationId`、`content` | 已受理本轮用户消息。 |
-| `stage` | `stage`、`content` | 当前处理阶段。`stage` 可能为 `INTAKE`、`FOLLOW_UP`、`ASSEMBLE`；生成行程时会连续返回多个 `ASSEMBLE` 事件，分别对应 POI 查询、每日排程和行程卡片生成。 |
-| `model_delta` | `stage`、`sequence`、`content` | `INTAKE` 或 `FOLLOW_UP` 模型输出的原始文本分片。前端按 `sequence` 递增拼接，仅用于渐进展示；分片可能是未闭合的 JSON，不能据此更新旅行状态。 |
-| `intake_completed` | `content`、`missingRequired`、`suggestions` | 信息收集完成事件，包含本轮信息摘要及缺失必填项。 |
-| `question` | `messageId`、`content`、`missingRequired`、`suggestions` | 服务端生成的追问消息。 |
-| `itinerary_skeleton` | `messageId`、`content`、`itinerary`、`suggestions` | 服务端生成的行程骨架消息。 |
-| `done` | `conversationId` | 本轮流式响应结束。 |
-| `error` | `conversationId`、`content` | 本轮处理失败。 |
+| `RUN_STARTED` | `threadId`、`runId` | 本轮运行已开始；首帧。 |
+| `ACTIVITY_SNAPSHOT` | `messageId`、`activityType=TRIP_PROGRESS`、`content` | 当前阶段快照。`content.stage` 为 `INTAKE`、`FOLLOW_UP` 或 `ASSEMBLE`，`content.content` 是可展示进度文字；同一 `messageId` 的后续快照应替换旧进度。 |
+| `CUSTOM`，`name=trip_progress_card` | `value.cardId`、`value.messageId`、`value.stage`、`value.content`、`value.state` | 稳定的进度卡片。`cardId`、`messageId` 均为 `trip-progress-{runId}`；同 id 的快照直接替换。`state=active` 表示仍在处理，`completed` 表示本轮已输出追问或行程结果。 |
+| `CUSTOM`，`name=trip_intake_completed` | `value.content`、`value.missingRequired`、`value.suggestions` | 后端已校验的信息收集结果。 |
+| `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` | `messageId`、`role=assistant`、`delta` | 已持久化的助手追问或行程摘要。一个消息会有多个 `TEXT_MESSAGE_CONTENT`，客户端必须按到达顺序追加同一 `messageId` 的 `delta`，直至 `TEXT_MESSAGE_END`。 |
+| `CUSTOM`，`name=trip_question_card` | `value.cardId`、`value.messageId`、`value.missingRequired`、`value.suggestions` | 追问卡片，位于对应文本结束后。`cardId=trip-question-{messageId}`；建议项使用 `label`、`content`。 |
+| `CUSTOM`，`name=trip_itinerary_card` | `value.cardId`、`value.messageId`、`value.itinerary`、`value.suggestions` | 行程卡片，位于对应文本结束后。`cardId=trip-itinerary-{messageId}`。只使用这里或兼容事件中服务端已保存的 `itinerary` 渲染真实行程。 |
+| `CUSTOM`，`name=trip_question` | `value.messageId`、`value.missingRequired`、`value.suggestions` | 兼容别名，语义与 `trip_question_card` 相同。 |
+| `CUSTOM`，`name=trip_itinerary_skeleton` | `value.messageId`、`value.itinerary`、`value.suggestions` | 兼容别名，语义与 `trip_itinerary_card` 相同。 |
+| `RUN_FINISHED` | `threadId`、`runId`、`outcome`、`result.conversationId` | 正常终态。`outcome.type=success`。 |
+| `RUN_ERROR` | `threadId`、`runId`、`code`、`message` | 已建立 SSE 后发生的失败终态；收到后不得再等待 `RUN_FINISHED`。 |
 
 常见事件顺序：
 
-- 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`accepted → stage(INTAKE) → model_delta(INTAKE)* → stage(FOLLOW_UP) → model_delta(FOLLOW_UP)* → intake_completed → question → done`。模型未返回文本分片时对应的 `model_delta` 序列为空。
-- 触发行程生成时：`accepted → stage(INTAKE) → model_delta(INTAKE)* → stage(ASSEMBLE: POI 查询) → stage(ASSEMBLE: 每日排程) → stage(ASSEMBLE: 行程卡片生成) → itinerary_skeleton → done`。POI 查询仍在服务端并行执行，但 `stage` 事件按上述顺序推送。
-- `intake_completed`、`question` 的 `missingRequired` 为空，仅表示必填信息完整；该事件仍可能包含后续追问及 `suggestions`。
-- `model_delta` 的 `content` 不是经过后端校验的事实数据；仅 `intake_completed`、`question`、`itinerary_skeleton` 的结构化字段可驱动前端状态更新。
+- 每个阶段：`ACTIVITY_SNAPSHOT → CUSTOM(trip_progress_card, state=active)`；两者均保留，旧客户端继续使用 `ACTIVITY_SNAPSHOT`。
+- 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`RUN_STARTED → 阶段事件* → CUSTOM(trip_intake_completed) → TEXT_MESSAGE_START → TEXT_MESSAGE_CONTENT+ → TEXT_MESSAGE_END → CUSTOM(trip_question_card) → CUSTOM(trip_question) → CUSTOM(trip_progress_card, state=completed) → RUN_FINISHED`。
+- 触发行程生成时：`RUN_STARTED → 阶段事件* → CUSTOM(trip_intake_completed) → TEXT_MESSAGE_START → TEXT_MESSAGE_CONTENT+ → TEXT_MESSAGE_END → CUSTOM(trip_itinerary_card) → CUSTOM(trip_itinerary_skeleton) → CUSTOM(trip_progress_card, state=completed) → RUN_FINISHED`。
+- `missingRequired=[]` 仅表示必填信息完整；仍可能存在可选信息追问和“立即生成行程”建议。
+- 服务端不会向本接口发送 `trip_model_delta`。模型原始 JSON、系统提示词和推理过程均不是客户端协议内容；不得将它们作为文本或卡片展示。
 
-事件字段示例：
+追问的事件片段示例：
 
-    {
-      "event":"question",
-      "stage":"INTAKE",
-      "conversationId":"1781604279872581776",
-      "messageId":"1781604279872581780",
-      "content":"你还想补充旅行偏好或同行人情况吗？",
-      "missingRequired":[],
-      "suggestions":[
-        {"label":"亲子友好","content":"希望行程亲子友好"},
-        {"label":"美食与人文","content":"偏好美食和人文"},
-        {"label":"立即生成行程","content":"请立即生成行程"}
-      ]
-    }
+    data:{"code":0,"msg":"","data":{"type":"TEXT_MESSAGE_START","messageId":"1781604279872581780","role":"assistant"}}
+
+    data:{"code":0,"msg":"","data":{"type":"TEXT_MESSAGE_CONTENT","messageId":"1781604279872581780","delta":"你还想补充旅行"}}
+
+    data:{"code":0,"msg":"","data":{"type":"TEXT_MESSAGE_CONTENT","messageId":"1781604279872581780","delta":"偏好或同行人情况吗？"}}
+
+    data:{"code":0,"msg":"","data":{"type":"TEXT_MESSAGE_END","messageId":"1781604279872581780"}}
+
+    data:{"code":0,"msg":"","data":{"type":"CUSTOM","name":"trip_question_card","value":{"cardId":"trip-question-1781604279872581780","stage":"INTAKE","messageId":"1781604279872581780","missingRequired":[],"suggestions":[{"label":"亲子友好","content":"希望行程亲子友好"},{"label":"美食与人文","content":"偏好美食和人文"},{"label":"立即生成行程","content":"请立即生成行程"}]}}}
+
+    data:{"code":0,"msg":"","data":{"type":"CUSTOM","name":"trip_question","value":{"stage":"INTAKE","messageId":"1781604279872581780","missingRequired":[],"suggestions":[{"label":"亲子友好","content":"希望行程亲子友好"},{"label":"美食与人文","content":"偏好美食和人文"},{"label":"立即生成行程","content":"请立即生成行程"}]}}}
 
 ### 4. `suggestions` 字段
 
@@ -154,7 +168,7 @@ Gift 旅行规划 C 端接口
 四、行程骨架
 ------------
 
-`itinerary_skeleton.itinerary` 和消息历史中的 `itinerary` 使用同一结构：
+`CUSTOM(name=trip_itinerary_skeleton).value.itinerary` 和消息历史中的 `itinerary` 使用同一结构：
 
     {
       "version":1,
@@ -243,8 +257,8 @@ Gift 旅行规划 C 端接口
         "citationIds":[],
         "transportSegments":[
           {
-            "fromPoiId":"hotel-1",
-            "fromPoiName":"西湖舒适酒店",
+            "fromPoiId":"arrival-1",
+            "fromPoiName":"杭州东站",
             "toPoiId":"poi-1",
             "toPoiName":"西湖",
             "distanceMeters":840,
@@ -268,7 +282,7 @@ Gift 旅行规划 C 端接口
 
 - 总览节点的模型生成文本在 `detail` 返回，`candidates`、`citationIds`、`weather` 可为空或不存在。
 - `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`。
-- `transportSegments` 为当前 `day` 全部相邻 POI（含住宿点）的批量测距结果；`day=0` 时为空数组。每段含距离、耗时、出行方式和状态；`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。
+- `transportSegments` 为当前 `day` 的相邻节点批量测距结果；首日存在已确认 `transport.arrival` 经纬度时，以抵达机场/车站为首段起点，之后按 POI 相邻顺序计算，住宿仅为最后一段终点。到达点尚未确认坐标时，不会伪造“住宿 → 首个 POI”首段；`day=0` 时为空数组。每段含距离、耗时、出行方式和状态；`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。
 
 六、按天获取交通路线
 --------------------
@@ -294,10 +308,10 @@ Gift 旅行规划 C 端接口
         "status":"VERIFIED",
         "transportSegments":[
           {
-            "fromPoiId":"B0...",
-            "fromPoiName":"西湖国宾馆",
-            "fromLongitude":"120.0900",
-            "fromLatitude":"30.1950",
+            "fromPoiId":"arrival-1",
+            "fromPoiName":"杭州东站",
+            "fromLongitude":"120.2200",
+            "fromLatitude":"30.2900",
             "toPoiId":"B0...",
             "toPoiName":"断桥残雪",
             "toLongitude":"120.1000",
@@ -308,7 +322,7 @@ Gift 旅行规划 C 端接口
             "provider":"gaode",
             "status":"VERIFIED",
             "routePoints":[
-              {"longitude":120.0900,"latitude":30.1950},
+              {"longitude":120.2200,"latitude":30.2900},
               {"longitude":120.1000,"latitude":30.2000}
             ]
           }

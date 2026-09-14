@@ -12,9 +12,7 @@ public class TripAgentEvent {
     private String event;
     private String stage;
     private Long messageId;
-    /**
-     * event=model_delta 时为模型原始文本分片；前端只能按 sequence 拼接展示，不能据此更新旅行状态。
-     */
+    /** event=model_delta 时为仅服务端使用的模型原始文本分片。 */
     private String content;
     private Integer sequence;
     private String itemType;

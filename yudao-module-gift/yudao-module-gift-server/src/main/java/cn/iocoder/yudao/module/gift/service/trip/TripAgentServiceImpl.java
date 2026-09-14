@@ -37,7 +37,6 @@ import com.alibaba.loongsuite.otel.util.genai.types.TextPart;
 import com.baomidou.lock.annotation.Lock4j;
 import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.annotation.Resource;
-import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
@@ -89,10 +88,10 @@ public class TripAgentServiceImpl implements TripAgentService {
             "ACCOMMODATION");
     private static final Set<String> ITINERARY_SLOTS = Set.of("MORNING", "LUNCH", "AFTERNOON", "DINNER",
             "EVENING", "ACCOMMODATION", "ARRIVAL", "DEPARTURE", "TRIP_OVERVIEW", "DAY_OVERVIEW");
-    private static final GenAiTelemetryHandler GEN_AI_TELEMETRY = GenAiTelemetryHandler.getDefault(GlobalOpenTelemetry.get());
-
     @Resource
     private AiChatApi aiChatApi;
+    @Resource
+    private GenAiTelemetryHandler genAiTelemetryHandler;
     @Resource
     private TripPlanMapper tripPlanMapper;
     @Resource
@@ -468,21 +467,21 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private static AgentInvocation startAgentInvocation(Long conversationId, Long tripId, String stage, String content, Long roleId) {
-        AgentInvocation invocation = GEN_AI_TELEMETRY.invokeLocalAgent("dashscope", "unknown", "travel-planner");
+    private AgentInvocation startAgentInvocation(Long conversationId, Long tripId, String stage, String content, Long roleId) {
+        AgentInvocation invocation = genAiTelemetryHandler.invokeLocalAgent("dashscope", "unknown", "travel-planner");
         invocation.setAgentId(String.valueOf(tripId));
         invocation.setConversationId(String.valueOf(conversationId));
         invocation.setAttribute("trip.agent.stage", stage);
         invocation.setAttribute("trip.chat.role.id", roleId);
         invocation.setAttribute("trip.llm.stream", "true");
-        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+        if (genAiTelemetryHandler.shouldCaptureContent()) {
             invocation.setInputMessages(List.of(new InputMessage("user", List.of(new TextPart(content)))));
         }
         return invocation;
     }
 
-    private static void setModelResponseAttributes(AgentInvocation invocation, AiChatGenerateRespDTO response,
-                                                   String responseContent) {
+    private void setModelResponseAttributes(AgentInvocation invocation, AiChatGenerateRespDTO response,
+                                            String responseContent) {
         if (StrUtil.isNotBlank(response.getModel())) {
             invocation.setAttribute("gen_ai.response.model", response.getModel());
         }
@@ -495,7 +494,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (response.getTotalTokens() != null) {
             invocation.setAttribute("gen_ai.usage.total_tokens", response.getTotalTokens());
         }
-        if (GEN_AI_TELEMETRY.shouldCaptureContent()) {
+        if (genAiTelemetryHandler.shouldCaptureContent()) {
             invocation.setOutputMessages(List.of(new OutputMessage("assistant", List.of(new TextPart(responseContent)), "stop")));
         }
     }
