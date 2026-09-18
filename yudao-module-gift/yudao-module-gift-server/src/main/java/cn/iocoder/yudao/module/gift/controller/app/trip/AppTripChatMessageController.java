@@ -18,6 +18,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripWeatherRespVO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
+import cn.iocoder.yudao.module.gift.service.trip.ManagedTripAgentService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
@@ -65,6 +66,8 @@ public class AppTripChatMessageController {
     private AiChatApi aiChatApi;
     @Resource
     private TripAgentService tripAgentService;
+    @Resource
+    private ManagedTripAgentService managedTripAgentService;
 
     @GetMapping("/list-by-conversation-id")
     @Operation(summary = "获得旅行规划消息列表")
@@ -115,6 +118,40 @@ public class AppTripChatMessageController {
                         conversationId, reqVO.getRunId()))
                 .doOnComplete(() -> log.info("[runAgUi][conversationId({}) runId({}) AG-UI SSE 完成]",
                         conversationId, reqVO.getRunId())));
+    }
+
+    /**
+     * 百炼 Managed Agents 新入口。请求、AG-UI 事件和行程持久化结构与原入口保持一致，原 /run 链路不变。
+     */
+    @PostMapping(value = "/managed/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "运行托管旅行规划 Agent（AG-UI）")
+    public Flux<CommonResult<Map<String, Object>>> runManagedAgUi(
+            @Valid @RequestBody AppTripAgUiRunReqVO reqVO) {
+        Long conversationId = parseConversationId(reqVO.getThreadId());
+        AppTripAgUiMessageReqVO message = reqVO.getMessages().get(0);
+        if (!StrUtil.equalsIgnoreCase("user", message.getRole())) {
+            throw new IllegalArgumentException("旅行规划仅接受 user 消息");
+        }
+        Long memberId = getLoginUserId();
+        AiChatConversationRespDTO conversation = aiChatApi.getConversation(conversationId, memberId,
+                UserTypeEnum.MEMBER.getValue());
+        if (conversation == null) {
+            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+        }
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        log.info("[runManagedAgUi][conversationId({}) runId({}) memberId({}) tenantId({}) 创建 Managed Agents SSE 流]",
+                conversationId, reqVO.getRunId(), memberId, tenantId);
+        Flux<Map<String, Object>> execution = executeManagedTrip(conversationId, memberId, tenantId, message.getContent())
+                .concatMap(event -> Flux.fromIterable(toAgUiEvents(event, reqVO.getRunId())));
+        return MdcContextUtils.withReactorContext(Flux.concat(
+                        Flux.just(agUiRunStarted(reqVO.getThreadId(), reqVO.getRunId())), execution,
+                        Flux.just(agUiRunFinished(reqVO.getThreadId(), reqVO.getRunId(), conversationId)))
+                .map(event -> success(event))
+                .onErrorResume(e -> {
+                    log.error("[runManagedAgUi][conversationId({}) runId({}) 生成托管旅行方案失败]",
+                            conversationId, reqVO.getRunId(), e);
+                    return Flux.just(success(agUiRunError(reqVO.getThreadId(), reqVO.getRunId())));
+                }));
     }
 
     @PostMapping("/itinerary/slot/resolve")
@@ -186,6 +223,27 @@ public class AppTripChatMessageController {
                                 Consumer<TripAgentEvent> eventConsumer = sink::next;
                                 tripAgentService.handleMessage(conversationId, memberId, content, eventConsumer);
                             });
+                            sink.complete();
+                        } catch (Exception e) {
+                            sink.error(e);
+                        }
+                    });
+                }
+            }).subscribeOn(Schedulers.boundedElastic());
+        });
+    }
+
+    private Flux<TripAgentEvent> executeManagedTrip(Long conversationId, Long memberId, Long tenantId, String content) {
+        Context parentOtelContext = Context.current();
+        return Flux.deferContextual(context -> {
+            @SuppressWarnings("unchecked")
+            Map<String, String> mdcContext = context.getOrDefault(MdcContextUtils.REACTOR_CONTEXT_MDC_KEY, Map.of());
+            return Flux.<TripAgentEvent>create(sink -> {
+                try (Scope ignored = parentOtelContext.makeCurrent()) {
+                    MdcContextUtils.runWithContext(mdcContext, () -> {
+                        try {
+                            TenantUtils.execute(tenantId, () -> managedTripAgentService.handleMessage(
+                                    conversationId, memberId, content, sink::next));
                             sink.complete();
                         } catch (Exception e) {
                             sink.error(e);

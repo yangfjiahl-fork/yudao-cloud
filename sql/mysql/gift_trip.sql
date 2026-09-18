@@ -7,6 +7,7 @@ CREATE TABLE `gift_trip_plan` (
   `conversation_id` bigint NOT NULL,
   `member_id` bigint NOT NULL,
   `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号',
+  `managed_agent_session_id` varchar(64) DEFAULT NULL COMMENT '百炼 Managed Agents Session 编号',
   `state_json` text NOT NULL,
   `missing_required_json` text NOT NULL,
   `status` tinyint NOT NULL DEFAULT 1,
@@ -147,6 +148,11 @@ ALTER TABLE `gift_trip_itinerary`
 -- 已部署旅行状态表的当前行程指针扩展（仅执行一次）
 ALTER TABLE `gift_trip_plan`
   ADD COLUMN `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号' AFTER `member_id`;
+
+-- 托管旅行 Agent 会话：同一旅行计划持续复用 Session，避免每次生成都重新创建沙箱
+ALTER TABLE `gift_trip_plan`
+  ADD COLUMN IF NOT EXISTS `managed_agent_session_id` varchar(64) DEFAULT NULL
+    COMMENT '百炼 Managed Agents Session 编号' AFTER `current_itinerary_id`;
 
 -- 已部署旅行行程的独立节点补充表（历史骨架会在首次节点请求时按需初始化）
 CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (

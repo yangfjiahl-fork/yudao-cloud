@@ -20,6 +20,7 @@
 
     <properties>
         <ortools.version>9.15.6755</ortools.version>
+        <dashscope.version>2.23.1</dashscope.version>
     </properties>
 
     <dependencies>
@@ -203,6 +204,11 @@
         <dependency>
             <groupId>com.alibaba.loongsuite</groupId>
             <artifactId>otel-util-genai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>dashscope-sdk-java</artifactId>
+            <version>${dashscope.version}</version>
         </dependency>
 
 <!--        <dependency>-->

@@ -21,6 +21,10 @@ public class TripPlanDO extends TenantBaseDO {
      * 当前生效的行程快照。历史行程仍通过关联的聊天消息保留。
      */
     private Long currentItineraryId;
+    /**
+     * 百炼 Managed Agents 会话。一个旅行会话只创建一次，后续重规划继续复用其沙箱与上下文。
+     */
+    private String managedAgentSessionId;
     private String stateJson;
     private String missingRequiredJson;
     private Integer status;
