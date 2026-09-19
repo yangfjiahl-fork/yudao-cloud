@@ -12,20 +12,22 @@
 
 ## 服务配置
 
-通过 Nacos 或部署环境注入：
+通过部署侧受保护的 Nacos YAML 注入（不要使用环境变量，也不要将 API Key 提交到仓库）：
 
 ```yaml
 yudao:
   gift:
     trip-managed-agent:
-      workspace: ${DASHSCOPE_WORKSPACE}
+      api-key: <百炼 API Key>
+      workspace: ws-nryr94at12b2jm8d
       region: cn-beijing
-      agent-id: ${TRIP_MANAGED_AGENT_ID}
-      environment-id: ${TRIP_MANAGED_ENVIRONMENT_ID}
+      agent-id: TripPlanAgent_qw37plus
+      environment-id: TripPlanAgent_Env
       stream-timeout: 5m
 ```
 
-API Key 使用 `DASHSCOPE_API_KEY` 环境变量。若专有网络需要显式地址，可改配 `base-url`。
+若专有网络需要显式地址，可改配 `base-url`，其值为
+`https://ws-nryr94at12b2jm8d.cn-beijing.maas.aliyuncs.com/api/v1/agentstudio`。
 
 应用数据库先执行 `sql/mysql/gift_trip.sql` 中的 `managed_agent_session_id` 增量语句。新入口为：
 

@@ -64,6 +64,9 @@ public class ManagedAgentSessionClient implements AutoCloseable {
     }
 
     private void validateConfig() {
+        if (StrUtil.isBlank(properties.getApiKey())) {
+            throw new IllegalStateException("未配置 yudao.gift.trip-managed-agent.api-key");
+        }
         if (StrUtil.isBlank(properties.getAgentId())) {
             throw new IllegalStateException("未配置 yudao.gift.trip-managed-agent.agent-id");
         }
@@ -84,9 +87,7 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             if (client == null) {
                 validateConfig();
                 AgentStudioClient.Builder builder = AgentStudioClient.builder();
-                if (StrUtil.isNotBlank(properties.getApiKey())) {
-                    builder.apiKey(properties.getApiKey());
-                }
+                builder.apiKey(properties.getApiKey());
                 if (StrUtil.isNotBlank(properties.getBaseUrl())) {
                     builder.baseUrl(properties.getBaseUrl());
                 } else {

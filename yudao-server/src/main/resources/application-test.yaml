@@ -157,6 +157,13 @@ yudao:
   gift:
     amap:
       key: 6d38ae5896a9d622a8751a9226daed69
+    trip-managed-agent:
+      # API Key 请仅配置在 ECS/Nacos 的受保护 YAML 中，不要提交到仓库。
+      workspace: ws-nryr94at12b2jm8d
+      region: cn-beijing
+      agent-id: TripPlanAgent_qw37plus
+      environment-id: TripPlanAgent_Env
+      stream-timeout: 5m
   pay:
     order-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/order # 支付渠道的【支付】回调地址
     refund-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/refund # 支付渠道的【退款】回调地址

@@ -16,7 +16,7 @@ public class ManagedAgentProperties {
     private String region = "cn-beijing";
     /** 可选的完整 API 地址；为空时由 workspace 与 region 生成。 */
     private String baseUrl;
-    /** 建议通过 DASHSCOPE_API_KEY 环境变量注入；此项为空时 SDK 会自动读取该变量。 */
+    /** 百炼 API Key；仅通过部署侧受保护的 YAML/Nacos 配置注入。 */
     private String apiKey;
     /** 控制台预先创建并配置好高德 MCP、旅行 Skill 的 Agent 编号。 */
     private String agentId;
