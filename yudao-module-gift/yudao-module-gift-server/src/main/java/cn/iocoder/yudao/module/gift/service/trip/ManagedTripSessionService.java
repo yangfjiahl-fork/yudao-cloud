@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
-/** 独立事务持久化云端 Session，保证后续规划失败时仍可复用同一会话。 */
+/** 独立事务创建云端 Session，避免上一轮工具输出被带入下一次旅行规划。 */
 @Service
 @Slf4j
 public class ManagedTripSessionService {
@@ -23,17 +23,14 @@ public class ManagedTripSessionService {
     private TripPlanMapper tripPlanMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public String ensureSession(Long tripId, Long conversationId, Map<String, Object> state) {
+    public String createSession(Long tripId, Long conversationId, Map<String, Object> state) {
         TripPlanDO current = tripPlanMapper.selectById(tripId);
         if (current == null) {
             throw new IllegalStateException("旅行计划不存在");
         }
-        if (StrUtil.isNotBlank(current.getManagedAgentSessionId())) {
-            return current.getManagedAgentSessionId();
-        }
         String sessionId = managedAgentSessionClient.createSession(buildSessionTitle(state), tripId, conversationId);
         tripPlanMapper.updateById(new TripPlanDO().setId(tripId).setManagedAgentSessionId(sessionId));
-        log.info("[ensureSession][tripId({}) Managed Agents sessionId({}) 创建成功]", tripId, sessionId);
+        log.info("[createSession][tripId({}) Managed Agents sessionId({}) 创建成功]", tripId, sessionId);
         return sessionId;
     }
 

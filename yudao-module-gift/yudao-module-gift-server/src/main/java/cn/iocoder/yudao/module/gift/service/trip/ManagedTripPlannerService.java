@@ -34,12 +34,12 @@ public class ManagedTripPlannerService {
                 "tripState", state)));
         String response = null;
         try {
-            String sessionId = managedTripSessionService.ensureSession(trip.getId(), trip.getConversationId(), state);
+            String sessionId = managedTripSessionService.createSession(trip.getId(), trip.getConversationId(), state);
             trip.setManagedAgentSessionId(sessionId);
             String task = buildTask(state, latestUserMessage);
             progressConsumer.accept("托管旅行 Agent 正在规划跨城路线与每日主题…");
             response = managedAgentSessionClient.execute(sessionId, task);
-            progressConsumer.accept("已完成高德 POI 与路线核验，正在校验行程结构…");
+            progressConsumer.accept("已完成核心高德 POI 核验，正在校验行程结构…");
             Map<String, Object> itinerary = ManagedTripPlanValidator.validateAndNormalize(
                     TripAgentFormatUtils.parseMap(response), state);
             tripRunLogService.complete(runId, "managed-agent", null, null, null,
@@ -68,9 +68,9 @@ public class ManagedTripPlannerService {
                 "dailyEndTime", "20:00"));
         request.put("requiredOutput", List.of(
                 "只输出一个 JSON 对象，不要 Markdown",
-                "先规划跨城/跨区域主路线，再规划每日 POI",
-                "POI 必须经高德 MCP 核验并包含 poiId、poiName、longitude、latitude",
-                "使用托管沙箱批量检查路线时间、营业时间、重复 POI 与每日可行性",
+                "先规划跨城/跨区域主路线，再为每天选择 1～2 个核心游览 POI 和住宿锚点",
+                "核心游览 POI 与住宿锚点必须经高德 MCP 核验并包含 poiId、poiName、longitude、latitude",
+                "不要在生成阶段查询日内相邻 POI 路线；路线由后端在用户查看时按需批量计算",
                 "daily_itinerary 数量必须与 days 完全一致",
                 "每天至少包含一个游览节点与一个 ACCOMMODATION 节点"));
         return JsonUtils.toJsonString(request);

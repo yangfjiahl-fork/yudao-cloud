@@ -5,9 +5,9 @@
 ## 控制台配置
 
 1. 创建 Managed Agent，并将 `SYSTEM_PROMPT.md` 设为系统指令。
-2. 上传 `skills/travel-planner` Skill，保留其中的 `scripts/validate_plan.py`。
-3. 为 Agent 添加高德地图 MCP，至少开放 POI 搜索、详情、路线规划与距离/耗时查询能力。
-4. 创建云端托管 Environment，确认 Agent 能使用高德 MCP 和沙箱。
+2. 上传 `skills/travel-planner` Skill。该 Skill 只生成粗粒度行程骨架，服务端负责最终结构校验。
+3. 为 Agent 添加高德地图 MCP，仅开放 POI 文本搜索与详情查询能力。日内路线由 C 端按需调用后端批量测距接口，不应让 Agent 在生成时逐段导航。
+4. 创建云端托管 Environment，确认 Agent 能使用高德 MCP。
 5. 将 Agent 与 Environment 发布到同一个 Workspace。
 
 ## 服务配置
