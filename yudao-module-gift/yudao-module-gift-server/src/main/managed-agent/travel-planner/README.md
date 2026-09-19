@@ -12,17 +12,18 @@
 
 ## 服务配置
 
-通过部署侧受保护的 Nacos YAML 注入（不要使用环境变量，也不要将 API Key 提交到仓库）：
+通过部署侧受保护的 YAML 注入。API Key 在 ECS 以环境变量注入，YAML 只引用该变量，禁止将密钥提交到仓库：
 
 ```yaml
 yudao:
   gift:
     trip-managed-agent:
-      api-key: <百炼 API Key>
+      api-key: ${YUDAO_GIFT_TRIP_MANAGED_AGENT_API_KEY:}
       workspace: ws-nryr94at12b2jm8d
       region: cn-beijing
-      agent-id: TripPlanAgent_qw37plus
-      environment-id: TripPlanAgent_Env
+      # 使用 Sessions API 返回的 ID，而不是控制台中显示的名称。
+      agent-id: agent_01M2VYR70XKESBBK3A9TS27FJ1
+      environment-id: env_ZDUyZTk1MDU1YzQ1NDFmOG
       stream-timeout: 5m
 ```
 
@@ -32,9 +33,9 @@ yudao:
 应用数据库先执行 `sql/mysql/gift_trip.sql` 中的 `managed_agent_session_id` 增量语句。新入口为：
 
 ```text
-POST /ai/chat/message/managed/run
+POST /app-api/ai/chat/message/managed/run
 Content-Type: application/json
 Accept: text/event-stream
 ```
 
-请求和 AG-UI 响应与原 `/ai/chat/message/run` 保持一致。新链路复用已保存的 TripState；首次生成至少需要目的地、出发日期、旅行天数和出行人数，出发地与预算可选。
+请求和 AG-UI 响应与统一旅行接口保持一致。新链路复用已保存的 TripState；首次生成需补齐出发地、目的地、出发日期、旅行天数、出行人数和预算。

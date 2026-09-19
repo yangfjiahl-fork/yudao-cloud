@@ -29,15 +29,16 @@ public class ManagedTripPlannerService {
 
     public Map<String, Object> plan(TripPlanDO trip, Map<String, Object> state, String latestUserMessage,
                                     Consumer<String> progressConsumer) {
-        String sessionId = managedTripSessionService.ensureSession(trip.getId(), trip.getConversationId(), state);
-        trip.setManagedAgentSessionId(sessionId);
-        String task = buildTask(state, latestUserMessage);
         long start = System.currentTimeMillis();
         Long runId = tripRunLogService.create(trip.getId(), STAGE, JsonUtils.toJsonString(Map.of(
-                "sessionId", sessionId, "tripState", state)));
+                "tripState", state)));
+        String response = null;
         try {
+            String sessionId = managedTripSessionService.ensureSession(trip.getId(), trip.getConversationId(), state);
+            trip.setManagedAgentSessionId(sessionId);
+            String task = buildTask(state, latestUserMessage);
             progressConsumer.accept("托管旅行 Agent 正在规划跨城路线与每日主题…");
-            String response = managedAgentSessionClient.execute(sessionId, task);
+            response = managedAgentSessionClient.execute(sessionId, task);
             progressConsumer.accept("已完成高德 POI 与路线核验，正在校验行程结构…");
             Map<String, Object> itinerary = ManagedTripPlanValidator.validateAndNormalize(
                     TripAgentFormatUtils.parseMap(response), state);
@@ -47,7 +48,8 @@ public class ManagedTripPlannerService {
             progressConsumer.accept("行程约束校验通过，正在生成行程卡片…");
             return itinerary;
         } catch (RuntimeException e) {
-            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage());
+            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(), response == null ? null
+                    : JsonUtils.toJsonString(Map.of("response", response)));
             throw e;
         }
     }

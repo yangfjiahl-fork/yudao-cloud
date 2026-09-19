@@ -24,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -65,19 +64,23 @@ public class ManagedTripAgentServiceImpl implements ManagedTripAgentService {
         }
         createTranscriptMessage(conversationId, memberId, content, false);
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
-        List<String> missingRequired = validateManagedState(state);
+        List<String> missingRequired = TripAgentServiceImpl.validateState(state);
         if (CollUtil.isNotEmpty(missingRequired)) {
             String question = "请先补充" + String.join("、", missingRequired) + "，再生成托管行程。";
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
-            eventConsumer.accept(TripAgentEvent.of("question", "MANAGED_INTAKE", question)
+            eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", "需求尚未补充完整")
+                    .setMissingRequired(missingRequired).setSuggestions(List.of()));
+            eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question)
                     .setMessageId(assistant.getId()).setMissingRequired(missingRequired).setSuggestions(List.of()));
             return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(missingRequired);
         }
 
-        eventConsumer.accept(TripAgentEvent.of("stage", "MANAGED_PLAN", "正在启动托管旅行 Agent…"));
+        eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", "需求已整理，开始生成行程。")
+                .setMissingRequired(List.of()).setSuggestions(List.of()));
+        eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", "正在启动托管旅行 Agent…"));
         Map<String, Object> itinerary = managedTripPlannerService.plan(trip, state, content,
-                progress -> eventConsumer.accept(TripAgentEvent.of("stage", "MANAGED_PLAN", progress)));
+                progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
         int version = (maxVersion == null ? 0 : maxVersion) + 1;
         itinerary.put("version", version);
@@ -101,29 +104,10 @@ public class ManagedTripAgentServiceImpl implements ManagedTripAgentService {
                 trip.getId(), itineraryDO.getId(), version);
         TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON").setMessageId(assistant.getId())
                 .setContent(displayText).setItinerary(itinerary).setMissingRequired(List.of());
-        eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "MANAGED_PLAN", displayText)
+        eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", displayText)
                 .setMessageId(assistant.getId()).setItinerary(itinerary).setMissingRequired(List.of())
                 .setSuggestions(List.of()));
         return result;
-    }
-
-    private static List<String> validateManagedState(Map<String, Object> state) {
-        List<String> missing = new ArrayList<>();
-        if (StrUtil.isBlank(text(state.get("destination")))) {
-            missing.add("目的地");
-        }
-        if (StrUtil.isBlank(text(state.get("startDate")))) {
-            missing.add("出发日期");
-        }
-        Integer days = MapUtil.getInt(state, "days");
-        if (days == null || days < 1 || days > 30) {
-            missing.add("旅行天数");
-        }
-        Integer travelerCount = MapUtil.getInt(state, "travelerCount");
-        if (travelerCount == null || travelerCount < 1 || travelerCount > 20) {
-            missing.add("出行人数");
-        }
-        return missing;
     }
 
     private AiChatMessageRespDTO createTranscriptMessage(Long conversationId, Long memberId, String content,

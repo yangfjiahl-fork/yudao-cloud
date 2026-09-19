@@ -1,7 +1,7 @@
 Gift 旅行规划 C 端接口
 =====================
 
-更新日期：2026-09-14
+更新日期：2026-09-19
 
 一、通用约定
 ------------
@@ -11,6 +11,7 @@ Gift 旅行规划 C 端接口
 - 所有编号字段（如 `conversationId`、`messageId`、`slotId`）按字符串处理，不要转成 JavaScript `number`。
 - 普通接口统一返回：`{"code":0,"msg":"","data":...}`。
 - 流式接口使用 `POST + text/event-stream`，每帧格式为 `data:{...}\n\n`。所有帧统一使用 `CommonResult`：前端先读取外层 `code`、`msg`、`data`，AG-UI 事件对象位于 `data`。
+- 旅行 Agent 的执行方式由服务端决定；前端不传 Agent 标识、模型参数、工作空间或 API Key，也不应依据后端实现入口分支协议。
 
 二、会话接口
 ------------
@@ -95,10 +96,11 @@ Gift 旅行规划 C 端接口
 
 ### 2. 运行旅行 Agent（AG-UI）
 
-`POST /app-api/ai/chat/message/run`
+`POST /app-api/ai/chat/message/managed/run`
 
 请求头：
 
+    Content-Type: application/json
     Accept: text/event-stream
 
 请求体遵循 AG-UI `RunAgentInput` 的核心字段：
@@ -118,7 +120,9 @@ Gift 旅行规划 C 端接口
 - `threadId` 是已创建的旅行 `conversationId` 的字符串形式；服务端按当前登录会员校验其归属。
 - `runId` 由客户端为本轮运行生成并保持唯一；它不等于 `messageId`。
 - 当前旅行入口只接受一条 `role=user` 的纯文本消息。会话历史由服务端保存，不能通过 `messages` 覆盖；`state`、`tools`、`context`、`forwardedProps` 不是本期输入能力。
-- 本接口每帧均返回 `{"code":0,"msg":"","data":{...AG-UI event...}}`；前端统一解出 `data` 后再按 AG-UI 的 `type` 分发。这是唯一的旅行规划 SSE 入口；`/send-stream` 已移除。
+- 本接口同时覆盖信息收集、可选信息补充和行程生成；通过阶段事件及后续卡片区分当前流程，不能为信息收集改用其他接口。
+- 本接口每帧均返回 `{"code":0,"msg":"","data":{...AG-UI event...}}`；前端统一解出 `data` 后再按 AG-UI 的 `type` 分发。这是唯一受支持的旅行规划 SSE 入口；`/run` 与已移除的 `/send-stream` 都不是前端联调入口。
+- 鉴权、请求校验或会话归属校验在 SSE 建立前失败时，服务端返回普通 `CommonResult` 错误响应，而不是 `RUN_ERROR` 事件。
 
 ### 3. AG-UI SSE 事件
 
@@ -145,6 +149,7 @@ Gift 旅行规划 C 端接口
 - 触发行程生成时：`RUN_STARTED → 阶段事件* → CUSTOM(trip_intake_completed) → TEXT_MESSAGE_START → TEXT_MESSAGE_CONTENT+ → TEXT_MESSAGE_END → CUSTOM(trip_itinerary_card) → CUSTOM(trip_itinerary_skeleton) → CUSTOM(trip_progress_card, state=completed) → RUN_FINISHED`。
 - `missingRequired=[]` 仅表示必填信息完整；仍可能存在可选信息追问和“立即生成行程”建议。
 - 服务端不会向本接口发送 `trip_model_delta`。模型原始 JSON、系统提示词和推理过程均不是客户端协议内容；不得将它们作为文本或卡片展示。
+- `RUN_STARTED`、`RUN_FINISHED`、`RUN_ERROR` 是单轮边界事件；其余事件均应按 `runId` 和关联的 `messageId` 归并，避免并发运行时互相覆盖。
 
 追问的事件片段示例：
 

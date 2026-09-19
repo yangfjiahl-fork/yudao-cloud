@@ -967,7 +967,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 ? day == 0 : day >= 1 && day <= 30 && DAILY_ITINERARY_SLOTS.contains(slot);
     }
 
-    private static List<String> validateState(Map<String, Object> state) {
+    static List<String> validateState(Map<String, Object> state) {
         List<String> missing = new ArrayList<>();
         if (StrUtil.isBlank(trimNullable(state.get("departure")))) {
             missing.add("departure");

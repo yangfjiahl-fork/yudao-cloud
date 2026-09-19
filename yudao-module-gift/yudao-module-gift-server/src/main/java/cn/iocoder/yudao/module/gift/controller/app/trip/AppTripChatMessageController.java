@@ -234,6 +234,11 @@ public class AppTripChatMessageController {
     }
 
     private Flux<TripAgentEvent> executeManagedTrip(Long conversationId, Long memberId, Long tenantId, String content) {
+        // 信息收集沿用既有 Intake：它负责提取并持久化 TripState，同时输出前端约定的阶段与追问事件。
+        // “立即生成行程”由前端建议项固定发送，才切换到 Managed Agent 生成最终骨架。
+        if (!isManagedGenerationRequest(content)) {
+            return executeTrip(conversationId, memberId, tenantId, content);
+        }
         Context parentOtelContext = Context.current();
         return Flux.deferContextual(context -> {
             @SuppressWarnings("unchecked")
@@ -252,6 +257,10 @@ public class AppTripChatMessageController {
                 }
             }).subscribeOn(Schedulers.boundedElastic());
         });
+    }
+
+    private static boolean isManagedGenerationRequest(String content) {
+        return "请立即生成行程".equals(StrUtil.removeSuffix(StrUtil.trim(content), "。"));
     }
 
     private static Long parseConversationId(String threadId) {

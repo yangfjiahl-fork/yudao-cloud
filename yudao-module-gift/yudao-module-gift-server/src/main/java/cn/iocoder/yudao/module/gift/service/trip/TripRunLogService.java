@@ -14,4 +14,6 @@ public interface TripRunLogService {
 
     void fail(Long runId, long durationMs, String errorMessage);
 
+    void fail(Long runId, long durationMs, String errorMessage, String outputJson);
+
 }

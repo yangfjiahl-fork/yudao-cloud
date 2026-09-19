@@ -50,8 +50,14 @@ public class TripRunLogServiceImpl implements TripRunLogService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void fail(Long runId, long durationMs, String errorMessage) {
+        fail(runId, durationMs, errorMessage, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public void fail(Long runId, long durationMs, String errorMessage, String outputJson) {
         tripRunMapper.updateById(new TripRunDO().setId(runId).setStatus(2).setDurationMs(durationMs)
-                .setErrorMessage(StrUtil.sub(errorMessage, 0, 500)));
+                .setErrorMessage(StrUtil.sub(errorMessage, 0, 500)).setOutputJson(outputJson));
     }
 
 }
