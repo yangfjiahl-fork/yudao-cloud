@@ -61,7 +61,7 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
             TripItineraryDO entity = invocation.getArgument(0);
             entity.setId(10L);
             return 1;
-        }).when(tripItineraryMapper).insert(any());
+        }).when(tripItineraryMapper).insert(any(TripItineraryDO.class));
 
         TenantContextHolder.setTenantId(20L);
         try {

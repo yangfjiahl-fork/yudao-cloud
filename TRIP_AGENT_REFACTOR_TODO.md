@@ -13,7 +13,7 @@
 - [x] Remove exact user-text routing from `AppTripChatMessageController`.
 - [x] Add an orchestration decision for `INTAKE`, `UPDATE_STATE`, `GENERATE_PLAN`, `EDIT_PLAN`, and `CHAT` without coupling it to a fixed phrase.
 - [x] Define the Managed Agent session lifecycle: create a fresh Session per planning run and retain only the latest ID for audit.
-- [ ] Run focused tests and the gift-server compile check.
+- [x] Run focused tests and the gift-server compile check.
 
 ## Phase 2 - Managed Agent macro skeleton
 
@@ -57,4 +57,4 @@ Use: `国庆节，2大2小上海出发去云南6天5晚，亲子。`
 - 2026-09-21: Phase 1 started from remote `dev1030` at `5c9a1c9e6`.
 - 2026-09-21: Added the shared itinerary version service and migrated both planner implementations.
 - 2026-09-21: Kept only `/managed/run` and moved routing to the backend orchestration action.
-- 2026-09-21: Source and diff checks passed. Focused Maven tests/compile remain blocked because the sandbox cannot resolve the external Maven BOMs; do not start Phase 2 until a real build passes.
+- 2026-09-21: Restored Maven access with a temporary Aliyun mirror and the sandbox's dynamic HTTPS proxy. The 31-module `test-compile` passed, followed by 10 focused tests for itinerary persistence, orchestration decisions, and `/managed/run` AG-UI behavior.
