@@ -6,7 +6,7 @@
 
 ## Phase 1 - Consolidate planning paths
 
-- [ ] Add `TripItineraryVersionService` as the single owner of itinerary version allocation and persistence.
+- [x] Add `TripItineraryVersionService` as the single owner of itinerary version allocation and persistence.
 - [ ] Move assistant-message association, slot initialization, current-itinerary updates, and conversation-title updates into the version service.
 - [ ] Make `TripAgentServiceImpl` persist generated itineraries through the version service.
 - [ ] Make `ManagedTripAgentServiceImpl` persist generated itineraries through the version service.
