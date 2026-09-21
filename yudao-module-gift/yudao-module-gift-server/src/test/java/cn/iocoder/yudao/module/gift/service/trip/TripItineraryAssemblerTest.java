@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -286,6 +288,27 @@ class TripItineraryAssemblerTest {
                 .allMatch(day -> "FEASIBLE".equals(((Map<?, ?>) day.get("planning")).get("status"))));
         assertTrue(days.stream().map(Map.class::cast).flatMap(day -> ((List<?>) day.get("slots")).stream()).map(Map.class::cast)
                 .noneMatch(slot -> String.valueOf(slot.get("poiName")).contains("丽江")));
+    }
+
+    @Test
+    void replanDays_shouldQueryOnlySelectedMacroDay() {
+        TripTravelQueryService queryService = mock(TripTravelQueryService.class);
+        when(queryService.queryScenicSpots(anyString(), anyString(), anyInt())).thenReturn(List.of());
+        when(queryService.queryRestaurants(anyString(), anyString(), eq(1), eq(25))).thenReturn(List.of());
+        when(queryService.queryHotels(anyString(), anyString(), eq(1), eq(25))).thenReturn(List.of());
+        TripItineraryAssembler assembler = createAssembler(queryService);
+        TripMacroSkeleton macro = new TripMacroSkeleton(List.of(
+                new TripMacroSkeleton.Day(1, "昆明", "滇池", "亲子", List.of("滇池"), false),
+                new TripMacroSkeleton.Day(2, "大理", "古城", "人文", List.of("大理古城"), true)));
+
+        List<Map<String, Object>> days = assembler.replanDays(Map.of("days", 2), macro, Set.of(2), ignored -> { });
+
+        assertEquals(1, days.size());
+        assertEquals(2, days.get(0).get("day"));
+        verify(queryService).queryRestaurants("大理", "古城", 1, 25);
+        verify(queryService).queryHotels("大理", "古城", 1, 25);
+        verify(queryService, never()).queryRestaurants(eq("昆明"), anyString(), anyInt(), anyInt());
+        verify(queryService, never()).queryHotels(eq("昆明"), anyString(), anyInt(), anyInt());
     }
 
     private static TripItineraryAssembler createAssembler(TripTravelQueryService queryService) {

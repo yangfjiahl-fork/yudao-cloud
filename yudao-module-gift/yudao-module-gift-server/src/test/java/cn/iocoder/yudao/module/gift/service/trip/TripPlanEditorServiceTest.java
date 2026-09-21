@@ -15,10 +15,13 @@ import org.mockito.Mock;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -35,6 +38,8 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     private TripItineraryMapper tripItineraryMapper;
     @Mock
     private TripItineraryVersionService versionService;
+    @Mock
+    private TripItineraryAssembler itineraryAssembler;
 
     @Test
     @SuppressWarnings("unchecked")
@@ -76,6 +81,31 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
         verifyNoInteractions(versionService);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void apply_shouldReplanOnlyAffectedDayAndPreserveLockedItem() {
+        TripPlanDO trip = trip();
+        when(tripPlanMapper.selectByConversationIdAndMemberId(2L, 3L)).thenReturn(trip);
+        when(tripItineraryMapper.selectById(10L)).thenReturn(replanItinerary());
+        when(itineraryAssembler.replanDays(anyMap(), any(), eq(Set.of(1)), any(Consumer.class)))
+                .thenReturn(List.of(replannedDay()));
+        when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), anyMap(), anyMap()))
+                .thenReturn(new TripItineraryVersionService.SavedItinerary(11L, 12L, 3, "已更新行程"));
+        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY, 2,
+                null, 1, null, null, Map.of());
+
+        TripPlanEditorService.EditResult result = editorService.apply(2L, 3L, command);
+
+        assertEquals(List.of(1), result.affectedDays());
+        List<Map<String, Object>> days = (List<Map<String, Object>>) result.itinerary().get("daily_itinerary");
+        List<Map<String, Object>> firstDaySlots = (List<Map<String, Object>>) days.get(0).get("slots");
+        assertEquals(List.of("item-a", "item-new"), firstDaySlots.stream().map(item -> item.get("itemId")).toList());
+        assertEquals(true, firstDaySlots.get(0).get("locked"));
+        assertEquals("PENDING", ((Map<?, ?>) days.get(0).get("planning")).get("status"));
+        assertEquals("item-b", ((List<Map<String, Object>>) days.get(1).get("slots")).get(0).get("itemId"));
+        verify(itineraryAssembler).replanDays(anyMap(), any(), eq(Set.of(1)), any(Consumer.class));
+    }
+
     private static TripPlanDO trip() {
         return new TripPlanDO().setId(1L).setConversationId(2L).setMemberId(3L)
                 .setCurrentItineraryId(10L).setStateJson("{}");
@@ -92,6 +122,35 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
                 Map.of("day", 2, "slots", List.of(second))));
         return new TripItineraryDO().setId(10L).setTripId(1L).setVersion(version)
                 .setContentJson(JsonUtils.toJsonString(content));
+    }
+
+    private static TripItineraryDO replanItinerary() {
+        Map<String, Object> first = item("item-a", 1, "MORNING", 0);
+        first.put("poiId", "poi-a");
+        first.put("locked", true);
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("daily_itinerary", List.of(
+                Map.of("day", 1, "slots", List.of(first)),
+                Map.of("day", 2, "slots", List.of(item("item-b", 2, "MORNING", 0)))));
+        content.put("macro_skeleton", Map.of("days", List.of(
+                Map.of("day", 1, "city", "昆明", "area", "滇池", "theme", "亲子",
+                        "anchorPoiNames", List.of("滇池"), "transferDay", false),
+                Map.of("day", 2, "city", "大理", "area", "古城", "theme", "人文",
+                        "anchorPoiNames", List.of("大理古城"), "transferDay", true))));
+        return new TripItineraryDO().setId(10L).setTripId(1L).setVersion(2)
+                .setContentJson(JsonUtils.toJsonString(content));
+    }
+
+    private static Map<String, Object> replannedDay() {
+        Map<String, Object> duplicateLockedPoi = item("generated-a", 1, "MORNING", 0);
+        duplicateLockedPoi.put("poiId", "poi-a");
+        Map<String, Object> newItem = item("item-new", 1, "AFTERNOON", 1);
+        newItem.put("poiId", "poi-new");
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("day", 1);
+        result.put("slots", List.of(duplicateLockedPoi, newItem));
+        result.put("planning", Map.of("status", "FEASIBLE"));
+        return result;
     }
 
     private static Map<String, Object> item(String itemId, int day, String timePeriod, int sort) {

@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import com.baomidou.lock.annotation.Lock4j;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,8 @@ public class TripPlanEditorService {
     private TripItineraryMapper tripItineraryMapper;
     @Resource
     private TripItineraryVersionService tripItineraryVersionService;
+    @Resource
+    private TripItineraryAssembler tripItineraryAssembler;
 
     @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 360000, acquireTimeout = 3000)
@@ -48,27 +52,116 @@ public class TripPlanEditorService {
         }
 
         Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(current.getContentJson());
-        LinkedHashSet<Integer> affectedDays = applyCommand(itinerary, command);
+        Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
+        LinkedHashSet<Integer> affectedDays = isReplan(command)
+                ? replan(itinerary, state, command) : applyLocalCommand(itinerary, command);
         itinerary.put("last_change", Map.of(
                 "operation", command.operation().name(),
                 "baseVersion", command.baseVersion(),
                 "affectedDays", List.copyOf(affectedDays)));
-        Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
         TripItineraryVersionService.SavedItinerary saved = tripItineraryVersionService.saveGeneratedItinerary(
                 trip, memberId, state, itinerary);
         return new EditResult(saved, List.copyOf(affectedDays), itinerary);
     }
 
-    private static LinkedHashSet<Integer> applyCommand(Map<String, Object> itinerary, TripChangeCommand command) {
+    private static boolean isReplan(TripChangeCommand command) {
+        return command.operation() == TripChangeCommand.Operation.REPLAN_DAY
+                || command.operation() == TripChangeCommand.Operation.REPLAN_TRIP;
+    }
+
+    private static LinkedHashSet<Integer> applyLocalCommand(Map<String, Object> itinerary, TripChangeCommand command) {
         return switch (command.operation()) {
             case REMOVE_ITEM -> removeItem(itinerary, command.itemId());
             case MOVE_ITEM -> moveItem(itinerary, command);
             case UPDATE_ITEM -> updateItem(itinerary, command);
             case LOCK_ITEM -> setLocked(itinerary, command.itemId(), true);
             case UNLOCK_ITEM -> setLocked(itinerary, command.itemId(), false);
-            case ADD_ITEM, REPLACE_ITEM, REPLAN_DAY, REPLAN_TRIP ->
+            case ADD_ITEM, REPLACE_ITEM ->
                     throw new UnsupportedOperationException("该操作需要 POI 核验或重新规划，尚未接入：" + command.operation());
+            case REPLAN_DAY, REPLAN_TRIP -> throw new IllegalStateException("重排命令应进入重排流程");
         };
+    }
+
+    private LinkedHashSet<Integer> replan(Map<String, Object> itinerary, Map<String, Object> state,
+                                           TripChangeCommand command) {
+        TripMacroSkeleton macroSkeleton = macroSkeleton(itinerary);
+        LinkedHashSet<Integer> affectedDays = new LinkedHashSet<>();
+        if (command.operation() == TripChangeCommand.Operation.REPLAN_DAY) {
+            if (command.day() == null) {
+                throw new IllegalArgumentException("REPLAN_DAY 缺少目标 day");
+            }
+            affectedDays.add(command.day());
+        } else {
+            macroSkeleton.days().stream().map(TripMacroSkeleton.Day::day).sorted().forEach(affectedDays::add);
+        }
+        List<Map<String, Object>> replannedDays = tripItineraryAssembler.replanDays(
+                state, macroSkeleton, affectedDays, ignored -> {
+                });
+        replannedDays.forEach(replanned -> mergeReplannedDay(itinerary, replanned));
+        return affectedDays;
+    }
+
+    private static void mergeReplannedDay(Map<String, Object> itinerary, Map<String, Object> replanned) {
+        Integer dayNumber = MapUtil.getInt(replanned, "day");
+        if (dayNumber == null) {
+            throw new IllegalArgumentException("重排结果缺少 day");
+        }
+        DayLocation current = requireDay(itinerary, dayNumber);
+        List<Map<String, Object>> lockedItems = current.slots().stream()
+                .filter(item -> MapUtil.getBool(item, "locked", false))
+                .sorted(Comparator.comparingInt(item -> MapUtil.getInt(item, "sort", Integer.MAX_VALUE))).toList();
+        List<Map<String, Object>> mergedSlots = new ArrayList<>(slots(replanned));
+        for (Map<String, Object> lockedItem : lockedItems) {
+            mergedSlots.removeIf(candidate -> sameItem(candidate, lockedItem));
+            int lockedSort = MapUtil.getInt(lockedItem, "sort", mergedSlots.size());
+            mergedSlots.add(Math.max(0, Math.min(lockedSort, mergedSlots.size())), lockedItem);
+        }
+        replanned.put("slots", mergedSlots);
+        reindex(dayNumber, mergedSlots);
+        if (!lockedItems.isEmpty()) {
+            Map<String, Object> planning = replanned.get("planning") instanceof Map<?, ?> rawPlanning
+                    ? new LinkedHashMap<>(castMap(rawPlanning)) : new LinkedHashMap<>();
+            planning.put("status", "PENDING");
+            planning.put("reason", "保留锁定节点后需重新核验日内路线");
+            replanned.put("planning", planning);
+        }
+        current.days().set(current.index(), replanned);
+    }
+
+    private static boolean sameItem(Map<String, Object> left, Map<String, Object> right) {
+        String leftItemId = text(left.get("itemId"));
+        String rightItemId = text(right.get("itemId"));
+        if (StrUtil.isNotBlank(leftItemId) && leftItemId.equals(rightItemId)) {
+            return true;
+        }
+        String leftPoiId = text(left.get("poiId"));
+        return StrUtil.isNotBlank(leftPoiId) && leftPoiId.equals(text(right.get("poiId")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TripMacroSkeleton macroSkeleton(Map<String, Object> itinerary) {
+        if (!(itinerary.get("macro_skeleton") instanceof Map<?, ?> rawMacro)
+                || !(rawMacro.get("days") instanceof List<?> rawDays)) {
+            throw new IllegalArgumentException("当前行程缺少可用于局部重排的宏观骨架");
+        }
+        List<TripMacroSkeleton.Day> macroDays = new ArrayList<>();
+        for (Object rawDay : rawDays) {
+            if (!(rawDay instanceof Map<?, ?> day)) {
+                continue;
+            }
+            Integer dayNumber = MapUtil.getInt(day, "day");
+            if (dayNumber == null) {
+                continue;
+            }
+            List<String> anchors = day.get("anchorPoiNames") instanceof List<?> values
+                    ? values.stream().map(TripPlanEditorService::text).filter(StrUtil::isNotBlank).toList() : List.of();
+            macroDays.add(new TripMacroSkeleton.Day(dayNumber, text(day.get("city")), text(day.get("area")),
+                    text(day.get("theme")), anchors, MapUtil.getBool(day, "transferDay", false)));
+        }
+        if (macroDays.isEmpty()) {
+            throw new IllegalArgumentException("当前行程的宏观骨架为空");
+        }
+        return new TripMacroSkeleton(macroDays);
     }
 
     private static LinkedHashSet<Integer> removeItem(Map<String, Object> itinerary, String itemId) {
@@ -154,7 +247,9 @@ public class TripPlanEditorService {
             throw new IllegalArgumentException("行程缺少 daily_itinerary");
         }
         List<DayLocation> result = new ArrayList<>();
-        for (Object rawDay : rawDays) {
+        List<Map<String, Object>> mutableDays = (List<Map<String, Object>>) rawDays;
+        for (int index = 0; index < mutableDays.size(); index++) {
+            Object rawDay = mutableDays.get(index);
             if (!(rawDay instanceof Map<?, ?> dayMap)) {
                 continue;
             }
@@ -164,10 +259,23 @@ public class TripPlanEditorService {
                 continue;
             }
             List<Map<String, Object>> slots = (List<Map<String, Object>>) rawSlots;
-            result.add(new DayLocation(dayNumber, slots));
+            result.add(new DayLocation(dayNumber, mutableDays, index, slots));
         }
         result.sort(Comparator.comparingInt(DayLocation::day));
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> slots(Map<String, Object> day) {
+        if (!(day.get("slots") instanceof List<?> rawSlots)) {
+            throw new IllegalArgumentException("重排结果缺少 slots");
+        }
+        return (List<Map<String, Object>>) rawSlots;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> value) {
+        return (Map<String, Object>) value;
     }
 
     private static void reindex(int day, List<Map<String, Object>> slots) {
@@ -186,7 +294,7 @@ public class TripPlanEditorService {
                              Map<String, Object> itinerary) {
     }
 
-    private record DayLocation(int day, List<Map<String, Object>> slots) {
+    private record DayLocation(int day, List<Map<String, Object>> days, int index, List<Map<String, Object>> slots) {
     }
 
     private record ItemLocation(int day, List<Map<String, Object>> slots, int index, Map<String, Object> item) {

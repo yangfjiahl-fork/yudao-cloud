@@ -128,35 +128,8 @@ public class TripItineraryAssembler {
             if (macroSkeleton == null || macroSkeleton.days().size() != expectedDays) {
                 throw new IllegalArgumentException("宏观行程数量与旅行天数不一致");
             }
-            List<String> interests = texts(state.get("interests"));
-            List<String> mustVisit = texts(state.get("mustVisit"));
-            int candidateLimit = CANDIDATES_PER_DAY;
-            progressConsumer.accept("正在按每日城市、区域与 anchor 并行准备候选…");
-            List<MacroDayCandidateFutures> candidateFutures = new ArrayList<>();
-            for (TripMacroSkeleton.Day day : macroSkeleton.days()) {
-                List<String> dayInterests = new ArrayList<>(interests);
-                dayInterests.add(day.area());
-                dayInterests.add(day.theme());
-                List<String> dayMustVisit = new ArrayList<>(mustVisit);
-                dayMustVisit.addAll(day.anchorPoiNames());
-                candidateFutures.add(new MacroDayCandidateFutures(day,
-                        CompletableFuture.supplyAsync(() -> measureCandidateQuery("scenic",
-                                () -> collectScenicCandidates(day.city(), dayInterests, dayMustVisit, candidateLimit)),
-                                tripItineraryTaskExecutor),
-                        CompletableFuture.supplyAsync(() -> measureCandidateQuery("restaurant",
-                                () -> queryPlaces(day.city(), day.area(), AmapPoiTypeEnum.FOOD, candidateLimit)),
-                                tripItineraryTaskExecutor),
-                        CompletableFuture.supplyAsync(() -> measureCandidateQuery("hotel",
-                                () -> queryPlaces(day.city(), day.area(), AmapPoiTypeEnum.HOTEL, candidateLimit)),
-                                tripItineraryTaskExecutor)));
-            }
-            List<MacroDayCandidates> candidates = candidateFutures.stream().map(MacroDayCandidateFutures::join).toList();
-            progressConsumer.accept("每日候选已准备完成，正在执行日内约束与路线排程…");
-            LocalDate startDate = parseDate(text(state.get("startDate")));
-            List<CompletableFuture<Map<String, Object>>> dayFutures = candidates.stream()
-                    .map(candidate -> CompletableFuture.supplyAsync(
-                            () -> buildMacroDay(state, startDate, candidate), tripItineraryTaskExecutor)).toList();
-            List<Map<String, Object>> dailyItinerary = dayFutures.stream().map(CompletableFuture::join).toList();
+            List<Map<String, Object>> dailyItinerary = assembleMacroDays(
+                    state, macroSkeleton.days(), progressConsumer);
 
             String destination = text(state.get("destination"));
             Map<String, Object> itinerary = new LinkedHashMap<>();
@@ -178,6 +151,54 @@ public class TripItineraryAssembler {
         } finally {
             sample.stop(itineraryTimer("assemble", "macro", outcome));
         }
+    }
+
+    /** 仅重新查询并排程指定天，供局部编辑使用。 */
+    public List<Map<String, Object>> replanDays(Map<String, Object> state, TripMacroSkeleton macroSkeleton,
+                                                 Set<Integer> affectedDays, Consumer<String> progressConsumer) {
+        if (macroSkeleton == null || affectedDays == null || affectedDays.isEmpty()) {
+            throw new IllegalArgumentException("局部重排缺少宏观行程或目标天");
+        }
+        List<TripMacroSkeleton.Day> selectedDays = macroSkeleton.days().stream()
+                .filter(day -> affectedDays.contains(day.day())).toList();
+        if (selectedDays.size() != affectedDays.size()) {
+            throw new IllegalArgumentException("局部重排目标天不在宏观行程中");
+        }
+        return assembleMacroDays(state, selectedDays, progressConsumer);
+    }
+
+    private List<Map<String, Object>> assembleMacroDays(Map<String, Object> state,
+                                                         List<TripMacroSkeleton.Day> macroDays,
+                                                         Consumer<String> progressConsumer) {
+        List<String> interests = texts(state.get("interests"));
+        List<String> mustVisit = texts(state.get("mustVisit"));
+        int candidateLimit = CANDIDATES_PER_DAY;
+        progressConsumer.accept("正在按每日城市、区域与 anchor 并行准备候选…");
+        List<MacroDayCandidateFutures> candidateFutures = new ArrayList<>();
+        for (TripMacroSkeleton.Day day : macroDays) {
+            List<String> dayInterests = new ArrayList<>(interests);
+            dayInterests.add(day.area());
+            dayInterests.add(day.theme());
+            List<String> dayMustVisit = new ArrayList<>(mustVisit);
+            dayMustVisit.addAll(day.anchorPoiNames());
+            candidateFutures.add(new MacroDayCandidateFutures(day,
+                    CompletableFuture.supplyAsync(() -> measureCandidateQuery("scenic",
+                            () -> collectScenicCandidates(day.city(), dayInterests, dayMustVisit, candidateLimit)),
+                            tripItineraryTaskExecutor),
+                    CompletableFuture.supplyAsync(() -> measureCandidateQuery("restaurant",
+                            () -> queryPlaces(day.city(), day.area(), AmapPoiTypeEnum.FOOD, candidateLimit)),
+                            tripItineraryTaskExecutor),
+                    CompletableFuture.supplyAsync(() -> measureCandidateQuery("hotel",
+                            () -> queryPlaces(day.city(), day.area(), AmapPoiTypeEnum.HOTEL, candidateLimit)),
+                            tripItineraryTaskExecutor)));
+        }
+        List<MacroDayCandidates> candidates = candidateFutures.stream().map(MacroDayCandidateFutures::join).toList();
+        progressConsumer.accept("每日候选已准备完成，正在执行日内约束与路线排程…");
+        LocalDate startDate = parseDate(text(state.get("startDate")));
+        List<CompletableFuture<Map<String, Object>>> dayFutures = candidates.stream()
+                .map(candidate -> CompletableFuture.supplyAsync(
+                        () -> buildMacroDay(state, startDate, candidate), tripItineraryTaskExecutor)).toList();
+        return dayFutures.stream().map(CompletableFuture::join).toList();
     }
 
     @SuppressWarnings("unchecked")
