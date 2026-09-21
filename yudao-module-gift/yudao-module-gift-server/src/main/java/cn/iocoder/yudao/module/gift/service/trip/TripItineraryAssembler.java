@@ -198,7 +198,86 @@ public class TripItineraryAssembler {
         List<CompletableFuture<Map<String, Object>>> dayFutures = candidates.stream()
                 .map(candidate -> CompletableFuture.supplyAsync(
                         () -> buildMacroDay(state, startDate, candidate), tripItineraryTaskExecutor)).toList();
-        return dayFutures.stream().map(CompletableFuture::join).toList();
+        List<Map<String, Object>> result = dayFutures.stream().map(CompletableFuture::join).toList();
+        progressConsumer.accept("日内排程已完成，正在并行核验最终 POI 详情…");
+        verifySelectedPoiSnapshots(result);
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void verifySelectedPoiSnapshots(List<Map<String, Object>> days) {
+        Map<String, CompletableFuture<TripTravelQueryService.Place>> details = new LinkedHashMap<>();
+        for (Map<String, Object> day : days) {
+            if (!(day.get("slots") instanceof List<?> slots)) {
+                continue;
+            }
+            for (Object item : slots) {
+                if (!(item instanceof Map<?, ?> rawSlot)) {
+                    continue;
+                }
+                String poiId = text(rawSlot.get("poiId"));
+                if (StrUtil.isBlank(poiId) || details.containsKey(poiId)) {
+                    continue;
+                }
+                details.put(poiId, CompletableFuture.supplyAsync(
+                        () -> queryPlaceDetail(poiId), tripItineraryTaskExecutor));
+            }
+        }
+        Map<String, TripTravelQueryService.Place> verified = new LinkedHashMap<>();
+        details.forEach((poiId, future) -> verified.put(poiId, future.join()));
+        for (Map<String, Object> day : days) {
+            if (!(day.get("slots") instanceof List<?> slots)) {
+                continue;
+            }
+            for (Object item : slots) {
+                if (!(item instanceof Map<?, ?> rawSlot)) {
+                    continue;
+                }
+                Map<String, Object> slot = (Map<String, Object>) rawSlot;
+                applyPoiSnapshot(slot, verified.get(text(slot.get("poiId"))));
+            }
+        }
+    }
+
+    private TripTravelQueryService.Place queryPlaceDetail(String poiId) {
+        try {
+            return tripTravelQueryService.getPlaceDetail(poiId);
+        } catch (RuntimeException exception) {
+            log.warn("[verifySelectedPoiSnapshots][POI 详情核验失败，poiId({}) exceptionType({})]",
+                    poiId, exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private static void applyPoiSnapshot(Map<String, Object> slot, TripTravelQueryService.Place detail) {
+        if (detail == null || StrUtil.isBlank(detail.poiId()) || StrUtil.isBlank(detail.name())
+                || !hasCoordinate(detail.longitude(), detail.latitude())) {
+            slot.put("poiVerificationStatus", "PENDING");
+            slot.remove("poiSnapshot");
+            return;
+        }
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("provider", detail.provider());
+        snapshot.put("poiId", detail.poiId());
+        snapshot.put("poiName", detail.name());
+        snapshot.put("address", detail.address());
+        snapshot.put("longitude", detail.longitude());
+        snapshot.put("latitude", detail.latitude());
+        snapshot.put("imageUrl", detail.imageUrl());
+        snapshot.put("telephone", detail.telephone());
+        snapshot.put("rating", detail.rating());
+        snapshot.put("cost", detail.cost());
+        snapshot.put("tag", detail.tag());
+        snapshot.put("businessHours", detail.businessHours());
+        slot.putAll(snapshot);
+        slot.remove("provider");
+        slot.put("poiSnapshot", snapshot);
+        slot.put("poiVerificationStatus", "VERIFIED");
+        slot.put("skeleton", switch (text(slot.get("slot"))) {
+            case "LUNCH", "DINNER" -> "在" + detail.name() + "用餐";
+            case "ACCOMMODATION" -> "入住" + detail.name();
+            default -> "游览" + detail.name();
+        });
     }
 
     @SuppressWarnings("unchecked")

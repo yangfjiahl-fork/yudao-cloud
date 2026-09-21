@@ -233,6 +233,16 @@ class TripItineraryAssemblerTest {
                     "昆明".equals(city) ? "102.6620" : "100.1620",
                     "昆明".equals(city) ? "24.9520" : "25.6920", "", "", "4.8", "300", ""));
         });
+        when(queryService.getPlaceDetail(anyString())).thenAnswer(invocation -> {
+            String poiId = invocation.getArgument(0);
+            if (poiId.endsWith("-hotel")) {
+                return null;
+            }
+            boolean kunming = poiId.startsWith("km-") || poiId.startsWith("昆明-");
+            return new TripTravelQueryService.Place("gaode", poiId, "已核验-" + poiId, "高德详情地址",
+                    kunming ? "102.6666" : "100.1666", kunming ? "24.9666" : "25.6966",
+                    "", "", "4.9", "80", "亲子", "09:00-18:00");
+        });
         TripItineraryAssembler assembler = createAssembler(queryService);
         TripMacroSkeleton macro = new TripMacroSkeleton(List.of(
                 new TripMacroSkeleton.Day(1, "昆明", "滇池周边", "轻松亲子", List.of("滇池"), false),
@@ -257,6 +267,19 @@ class TripItineraryAssemblerTest {
                 .allMatch(slot -> "滇池周边".equals(slot.get("area"))));
         assertTrue(((List<?>) secondDay.get("slots")).stream().map(Map.class::cast)
                 .allMatch(slot -> "大理古城".equals(slot.get("area"))));
+        var verifiedSlots = days.stream().map(item -> (Map<?, ?>) item)
+                .flatMap(day -> ((List<?>) day.get("slots")).stream()).map(item -> (Map<?, ?>) item)
+                .filter(slot -> !"ACCOMMODATION".equals(slot.get("slot"))).toList();
+        assertTrue(verifiedSlots.stream().allMatch(slot -> "VERIFIED".equals(slot.get("poiVerificationStatus"))));
+        assertTrue(verifiedSlots.stream().allMatch(slot -> slot.get("poiSnapshot") instanceof Map<?, ?>));
+        assertTrue(verifiedSlots.stream().allMatch(slot -> String.valueOf(slot.get("poiName")).startsWith("已核验-")));
+        var pendingHotels = days.stream().map(item -> (Map<?, ?>) item)
+                .flatMap(day -> ((List<?>) day.get("slots")).stream()).map(item -> (Map<?, ?>) item)
+                .filter(slot -> "ACCOMMODATION".equals(slot.get("slot"))).toList();
+        assertTrue(pendingHotels.stream().allMatch(slot -> "PENDING".equals(slot.get("poiVerificationStatus"))));
+        assertTrue(pendingHotels.stream().noneMatch(slot -> slot.containsKey("poiSnapshot")));
+        assertTrue(days.stream().map(Map.class::cast).flatMap(day -> ((List<?>) day.get("slots")).stream())
+                .map(Map.class::cast).noneMatch(slot -> "RESOLVED".equals(slot.get("status"))));
         verify(queryService).queryRestaurants("昆明", "滇池周边", 1, 25);
         verify(queryService).queryHotels("大理", "大理古城", 1, 25);
     }

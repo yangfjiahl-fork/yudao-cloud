@@ -37,8 +37,8 @@
 ## Phase 5 - POI fact verification
 
 - [x] Add `getPlaceDetail(poiId)` to the travel provider boundary.
-- [ ] Re-verify Managed Agent POIs and persist a consistent POI snapshot.
-- [ ] Keep unavailable facts `PENDING` or `ESTIMATED`; never fabricate `RESOLVED`.
+- [x] Re-verify Managed Agent POIs and persist a consistent POI snapshot.
+- [x] Keep unavailable facts `PENDING` or `ESTIMATED`; never fabricate `RESOLVED`.
 
 ## Fixed regression scenario
 
@@ -65,3 +65,4 @@ Use: `国庆节，2大2小上海出发去云南6天5晚，亲子。`
 - 2026-09-21: Started Phase 4 with the App `POST /ai/chat/message/itinerary/change` endpoint. It verifies conversation ownership, maps the request directly to `TripChangeCommand`, and returns the newly persisted immutable version. No additional Agent run endpoint was added; `/managed/run` remains the only run entry. Compile and 7 focused controller/editor tests passed. Agent natural-language command conversion remains open.
 - 2026-09-21: Completed Phase 4 command convergence. `/managed/run` now supplies a compact editable-item context and converts Intake `change_command` output, or safely degrades legacy one-day `itinerary_patch`, into the same `TripChangeCommand` used by App edits. Server-side current version wins over model output, existing conversation locking is reused without nested lock acquisition, and accepted edits still save immutable versions. Compile and 19 focused tests passed; the live Managed Agent regression remains open.
 - 2026-09-21: Started Phase 5 with `getPlaceDetail(poiId)` across the provider boundary, Gaode v5 detail API, and the unified travel query service. The endpoint uses its own 30-minute success cache and maps detail facts without requiring a POI category. The 31-module `test-compile` and 10 focused tests passed. Managed Agent POI snapshot re-verification remains open.
+- 2026-09-21: Completed Phase 5 POI verification. Managed macro planning and day replanning now deduplicate final POI IDs, fetch details in parallel, atomically replace identity/detail fields, and persist the authoritative `poiSnapshot`. Missing or invalid details remain `PENDING`; no itinerary slot is promoted to `RESOLVED`. The 31-module `test-compile` and 11 focused assembler/editor/query tests passed.
