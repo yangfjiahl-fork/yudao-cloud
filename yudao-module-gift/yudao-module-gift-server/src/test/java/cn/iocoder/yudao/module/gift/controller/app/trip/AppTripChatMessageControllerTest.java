@@ -9,14 +9,19 @@ import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiMessageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryChangeReqVO;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
+import cn.iocoder.yudao.module.gift.service.trip.TripItineraryVersionService;
+import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -27,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
@@ -38,6 +44,39 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     private AiChatApi aiChatApi;
     @Mock
     private TripAgentService tripAgentService;
+    @Mock
+    private TripPlanEditorService tripPlanEditorService;
+
+    @Test
+    void changeItinerary_shouldUseSharedCommandEditor() {
+        Long conversationId = 1L;
+        Long memberId = 2L;
+        when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
+                .thenReturn(new AiChatConversationRespDTO().setId(conversationId));
+        TripItineraryVersionService.SavedItinerary saved =
+                new TripItineraryVersionService.SavedItinerary(11L, 12L, 4, "已更新行程");
+        when(tripPlanEditorService.apply(eq(conversationId), eq(memberId), any()))
+                .thenReturn(new TripPlanEditorService.EditResult(saved, List.of(2), Map.of("version", 4)));
+        AppTripItineraryChangeReqVO reqVO = new AppTripItineraryChangeReqVO();
+        reqVO.setConversationId(conversationId);
+        reqVO.setOperation(TripChangeCommand.Operation.MOVE_ITEM);
+        reqVO.setBaseVersion(3);
+        reqVO.setItemId("item-1");
+        reqVO.setDay(2);
+        reqVO.setTimePeriod("AFTERNOON");
+        reqVO.setSort(1);
+
+        try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock = mockStatic(SecurityFrameworkUtils.class)) {
+            securityFrameworkUtilsMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
+
+            CommonResult<?> response = controller.changeItinerary(reqVO);
+
+            assertEquals(0, response.getCode());
+            verify(tripPlanEditorService).apply(eq(conversationId), eq(memberId),
+                    eq(new TripChangeCommand(TripChangeCommand.Operation.MOVE_ITEM, 3,
+                            "item-1", 2, "AFTERNOON", 1, null)));
+        }
+    }
 
     @Test
     void runManagedAgUi_shouldTranslateTripEventsToAgUiProtocol() {

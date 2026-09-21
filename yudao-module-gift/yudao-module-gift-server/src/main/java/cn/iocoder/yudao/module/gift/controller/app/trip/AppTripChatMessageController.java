@@ -10,6 +10,8 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiMessageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryChangeReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryChangeRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryRouteResolveReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryRouteResolveRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItinerarySlotResolveReqVO;
@@ -18,7 +20,9 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripWeatherRespVO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
+import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import io.opentelemetry.context.Context;
@@ -65,6 +69,8 @@ public class AppTripChatMessageController {
     private AiChatApi aiChatApi;
     @Resource
     private TripAgentService tripAgentService;
+    @Resource
+    private TripPlanEditorService tripPlanEditorService;
 
     @GetMapping("/list-by-conversation-id")
     @Operation(summary = "获得旅行规划消息列表")
@@ -170,6 +176,30 @@ public class AppTripChatMessageController {
         response.setDay(result.getDay());
         response.setStatus(result.getStatus());
         response.setTransportSegments(result.getTransportSegments());
+        return success(response);
+    }
+
+    @PostMapping("/itinerary/change")
+    @Operation(summary = "使用统一命令编辑当前旅行行程")
+    public CommonResult<AppTripItineraryChangeRespVO> changeItinerary(
+            @Valid @RequestBody AppTripItineraryChangeReqVO reqVO) {
+        Long memberId = getLoginUserId();
+        AiChatConversationRespDTO conversation = aiChatApi.getConversation(reqVO.getConversationId(), memberId,
+                UserTypeEnum.MEMBER.getValue());
+        if (conversation == null) {
+            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+        }
+        TripChangeCommand command = new TripChangeCommand(reqVO.getOperation(), reqVO.getBaseVersion(),
+                reqVO.getItemId(), reqVO.getDay(), reqVO.getTimePeriod(), reqVO.getSort(), reqVO.getValues());
+        TripPlanEditorService.EditResult result = tripPlanEditorService.apply(
+                reqVO.getConversationId(), memberId, command);
+        AppTripItineraryChangeRespVO response = new AppTripItineraryChangeRespVO();
+        response.setItineraryId(result.saved().itineraryId());
+        response.setMessageId(result.saved().messageId());
+        response.setVersion(result.saved().version());
+        response.setContent(result.saved().displayText());
+        response.setAffectedDays(result.affectedDays());
+        response.setItinerary(result.itinerary());
         return success(response);
     }
 
