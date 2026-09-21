@@ -55,3 +55,6 @@ Use: `国庆节，2大2小上海出发去云南6天5晚，亲子。`
 ## Milestone log
 
 - 2026-09-21: Phase 1 started from remote `dev1030` at `5c9a1c9e6`.
+- 2026-09-21: Added the shared itinerary version service and migrated both planner implementations.
+- 2026-09-21: Kept only `/managed/run` and moved routing to the backend orchestration action.
+- 2026-09-21: Source and diff checks passed. Focused Maven tests/compile remain blocked because the sandbox cannot resolve the external Maven BOMs; do not start Phase 2 until a real build passes.
