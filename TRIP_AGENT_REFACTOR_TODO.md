@@ -7,9 +7,9 @@
 ## Phase 1 - Consolidate planning paths
 
 - [x] Add `TripItineraryVersionService` as the single owner of itinerary version allocation and persistence.
-- [ ] Move assistant-message association, slot initialization, current-itinerary updates, and conversation-title updates into the version service.
-- [ ] Make `TripAgentServiceImpl` persist generated itineraries through the version service.
-- [ ] Make `ManagedTripAgentServiceImpl` persist generated itineraries through the version service.
+- [x] Move assistant-message association, slot initialization, current-itinerary updates, and conversation-title updates into the version service.
+- [x] Make `TripAgentServiceImpl` persist generated itineraries through the version service.
+- [x] Make `ManagedTripAgentServiceImpl` persist generated itineraries through the version service.
 - [ ] Remove exact user-text routing from `AppTripChatMessageController`.
 - [ ] Add an orchestration decision for `INTAKE`, `UPDATE_STATE`, `GENERATE_PLAN`, `EDIT_PLAN`, and `CHAT` without coupling it to a fixed phrase.
 - [ ] Define and verify the Managed Agent session lifecycle.

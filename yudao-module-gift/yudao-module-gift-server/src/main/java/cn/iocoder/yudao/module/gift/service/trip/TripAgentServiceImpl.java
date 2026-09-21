@@ -13,7 +13,6 @@ import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
-import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationUpdateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageCreateAssistantReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
@@ -70,7 +69,6 @@ import java.util.regex.Pattern;
 public class TripAgentServiceImpl implements TripAgentService {
 
     private static final int STATUS_ACTIVE = 1;
-    private static final int STATUS_GENERATED = 1;
     private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
     private static final String SUMMARY_ROLE_ID_CONFIG_KEY = "trip.agent.sumaryRoleId";
     private static final String QUESTION_COUNT_CONFIG_KEY = "trip.question.cnt";
@@ -110,6 +108,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     private TripTravelQueryService tripTravelQueryService;
     @Resource
     private TripItineraryAssembler tripItineraryAssembler;
+    @Resource
+    private TripItineraryVersionService tripItineraryVersionService;
     @Resource
     private Tracer tracer;
 
@@ -229,29 +229,17 @@ public class TripAgentServiceImpl implements TripAgentService {
         } finally {
             assembleSpan.end();
         }
-        Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
-        int version = (maxVersion == null ? 0 : maxVersion) + 1;
-        itinerary.put("version", version);
-        String displayText = StrUtil.blankToDefault(trimNullable(itinerary.get("summary")), "已为你生成旅行方案。");
-        AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, displayText, true);
-        TripItineraryDO itineraryDO = new TripItineraryDO();
-        itineraryDO.setTripId(trip.getId());
-        itineraryDO.setVersion(version);
-        itineraryDO.setMessageId(assistant.getId());
-        itineraryDO.setContentJson(JsonUtils.toJsonString(itinerary));
-        itineraryDO.setCitationIdsJson(JsonUtils.toJsonString(itinerary.get("citation_ids")));
-        itineraryDO.setStatus(STATUS_GENERATED);
-        tripItineraryMapper.insert(itineraryDO);
-        initializeItinerarySlots(itineraryDO, itinerary);
-        trip.setCurrentItineraryId(itineraryDO.getId());
-        tripPlanMapper.updateById(trip);
-        updateConversationTitle(conversationId, memberId, state);
+        TripItineraryVersionService.SavedItinerary saved = tripItineraryVersionService.saveGeneratedItinerary(
+                trip, memberId, state, itinerary);
 
         log.info("[handleMessage][tripId({}) 行程 itineraryId({}) version({}) messageId({}) 引用数量({}) 已生成]",
-                trip.getId(), itineraryDO.getId(), version, assistant.getId(), ((List<?>) itinerary.get("citation_ids")).size());
-        TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON").setMessageId(assistant.getId()).setContent(displayText)
+                trip.getId(), saved.itineraryId(), saved.version(), saved.messageId(),
+                ((List<?>) itinerary.get("citation_ids")).size());
+        TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON").setMessageId(saved.messageId())
+                .setContent(saved.displayText())
                 .setItinerary(itinerary).setMissingRequired(List.of());
-        eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", displayText).setMessageId(assistant.getId())
+        eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", saved.displayText())
+                .setMessageId(saved.messageId())
                 .setItinerary(itinerary).setMissingRequired(List.of()).setSuggestions(suggestions));
         return result;
     }
@@ -564,20 +552,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         req.setUserType(UserTypeEnum.MEMBER.getValue());
         req.setContent(content);
         return assistant ? aiChatApi.createAssistantMessage(req) : aiChatApi.createUserMessage(req);
-    }
-
-    private void updateConversationTitle(Long conversationId, Long memberId, Map<String, Object> state) {
-        String startDate = trimNullable(state.get("startDate"));
-        String destination = trimNullable(state.get("destination"));
-        if (StrUtil.isBlank(startDate) || StrUtil.isBlank(destination)) {
-            return;
-        }
-        AiChatConversationUpdateReqDTO updateReq = new AiChatConversationUpdateReqDTO();
-        updateReq.setId(conversationId);
-        updateReq.setUserId(memberId);
-        updateReq.setUserType(UserTypeEnum.MEMBER.getValue());
-        updateReq.setTitle(startDate + " " + destination);
-        aiChatApi.updateConversation(updateReq);
     }
 
     private static String buildIntakeContext(Map<String, Object> state, String content) {
@@ -1045,51 +1019,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         String text = StrUtil.trim(String.valueOf(value));
         return "null".equalsIgnoreCase(text) ? "" : text;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void initializeItinerarySlots(TripItineraryDO itinerary, Map<String, Object> itineraryContent) {
-        createOverviewSlotIfPresent(itinerary, 0, itineraryContent.get("overview"));
-        Object dailyItinerary = itineraryContent.get("daily_itinerary");
-        if (dailyItinerary instanceof List<?> days) {
-            for (Object dayItem : days) {
-                if (!(dayItem instanceof Map<?, ?> dayMap)) {
-                    continue;
-                }
-                Integer day = MapUtil.getInt(dayMap, "day");
-                Object slots = dayMap.get("slots");
-                if (day == null || !(slots instanceof List<?> slotList)) {
-                    continue;
-                }
-                createOverviewSlotIfPresent(itinerary, day, dayMap.get("overview"));
-                for (Object slotItem : slotList) {
-                    if (slotItem instanceof Map<?, ?> rawSlot) {
-                        createItinerarySlotIfAbsent(itinerary, day, (Map<String, Object>) rawSlot);
-                    }
-                }
-            }
-        }
-        Object transport = itineraryContent.get("transport");
-        if (transport instanceof Map<?, ?> transportMap) {
-            createTransportSlotIfAbsent(itinerary, "ARRIVAL", transportMap.get("arrival"));
-            createTransportSlotIfAbsent(itinerary, "DEPARTURE", transportMap.get("departure"));
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void createOverviewSlotIfPresent(TripItineraryDO itinerary, Integer day, Object value) {
-        if (value instanceof Map<?, ?> overview) {
-            createItinerarySlotIfAbsent(itinerary, day, (Map<String, Object>) overview);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void createTransportSlotIfAbsent(TripItineraryDO itinerary, String slot, Object value) {
-        if (value instanceof Map<?, ?> transportSlot) {
-            Map<String, Object> slotData = new LinkedHashMap<>((Map<String, Object>) transportSlot);
-            slotData.put("slot", slot);
-            createItinerarySlotIfAbsent(itinerary, 0, slotData);
-        }
     }
 
     private TripItinerarySlotDO getOrCreateItinerarySlot(TripItineraryDO itinerary, Integer day, String slot,
