@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -194,6 +195,68 @@ class TripItineraryAssemblerTest {
 
         Map<?, ?> firstDay = (Map<?, ?>) ((List<?>) itinerary.get("daily_itinerary")).get(0);
         assertEquals("高档酒店", ((Map<?, ?>) ((List<?>) firstDay.get("slots")).get(4)).get("poiName"));
+    }
+
+    @Test
+    void assemble_shouldUseMacroCityAreaAndAnchorsPerDay() {
+        TripTravelQueryService queryService = mock(TripTravelQueryService.class);
+        when(queryService.queryScenicSpots(anyString(), anyString(), anyInt())).thenAnswer(invocation -> {
+            String city = invocation.getArgument(0);
+            if ("昆明".equals(city)) {
+                return List.of(
+                        new TripTravelQueryService.ScenicSpot("gaode", "km-1", "滇池", "昆明",
+                                "102.6600", "24.9500", "", "09:00-18:00", "4.8", "0"),
+                        new TripTravelQueryService.ScenicSpot("gaode", "km-2", "海埂大坝", "昆明",
+                                "102.6500", "24.9400", "", "09:00-18:00", "4.7", "0"));
+            }
+            return List.of(
+                    new TripTravelQueryService.ScenicSpot("gaode", "dl-1", "大理古城", "大理",
+                            "100.1600", "25.6900", "", "09:00-18:00", "4.8", "0"),
+                    new TripTravelQueryService.ScenicSpot("gaode", "dl-2", "崇圣寺三塔", "大理",
+                            "100.1400", "25.7000", "", "09:00-18:00", "4.7", "0"));
+        });
+        when(queryService.queryRestaurants(anyString(), anyString(), eq(1), eq(25))).thenAnswer(invocation -> {
+            String city = invocation.getArgument(0);
+            String longitude = "昆明".equals(city) ? "102.6610" : "100.1610";
+            String latitude = "昆明".equals(city) ? "24.9510" : "25.6910";
+            return List.of(
+                    new TripTravelQueryService.Place("gaode", city + "-food-1", city + "餐厅一", city,
+                            longitude, latitude, "", "", "4.8", "80", ""),
+                    new TripTravelQueryService.Place("gaode", city + "-food-2", city + "餐厅二", city,
+                            longitude, latitude, "", "", "4.7", "90", ""));
+        });
+        when(queryService.queryHotels(anyString(), anyString(), eq(1), eq(25))).thenAnswer(invocation -> {
+            String city = invocation.getArgument(0);
+            return List.of(new TripTravelQueryService.Place("gaode", city + "-hotel", city + "酒店", city,
+                    "昆明".equals(city) ? "102.6620" : "100.1620",
+                    "昆明".equals(city) ? "24.9520" : "25.6920", "", "", "4.8", "300", ""));
+        });
+        TripItineraryAssembler assembler = createAssembler(queryService);
+        TripMacroSkeleton macro = new TripMacroSkeleton(List.of(
+                new TripMacroSkeleton.Day(1, "昆明", "滇池周边", "轻松亲子", List.of("滇池"), false),
+                new TripMacroSkeleton.Day(2, "大理", "大理古城", "换城与人文", List.of("大理古城"), true)));
+
+        Map<String, Object> itinerary = assembler.assemble(Map.of(
+                "destination", "云南", "startDate", "2026-10-01", "days", 2, "travelerCount", 4), macro,
+                ignored -> { });
+
+        List<?> days = (List<?>) itinerary.get("daily_itinerary");
+        Map<?, ?> firstDay = (Map<?, ?>) days.get(0);
+        Map<?, ?> secondDay = (Map<?, ?>) days.get(1);
+        assertEquals("昆明", firstDay.get("city"));
+        assertEquals("滇池周边", firstDay.get("area"));
+        assertEquals("轻松亲子", firstDay.get("theme"));
+        assertEquals("大理", secondDay.get("city"));
+        assertEquals(true, secondDay.get("transferDay"));
+        assertEquals("FEASIBLE", ((Map<?, ?>) firstDay.get("planning")).get("status"));
+        assertEquals("FEASIBLE", ((Map<?, ?>) secondDay.get("planning")).get("status"));
+        assertEquals("MANAGED_MACRO_JAVA", ((Map<?, ?>) itinerary.get("planner")).get("type"));
+        assertTrue(((List<?>) firstDay.get("slots")).stream().map(Map.class::cast)
+                .allMatch(slot -> "滇池周边".equals(slot.get("area"))));
+        assertTrue(((List<?>) secondDay.get("slots")).stream().map(Map.class::cast)
+                .allMatch(slot -> "大理古城".equals(slot.get("area"))));
+        verify(queryService).queryRestaurants("昆明", "滇池周边", 1, 25);
+        verify(queryService).queryHotels("大理", "大理古城", 1, 25);
     }
 
     @Test

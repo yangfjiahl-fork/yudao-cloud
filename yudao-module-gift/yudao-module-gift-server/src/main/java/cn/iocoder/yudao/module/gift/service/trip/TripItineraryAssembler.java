@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.framework.trip.config.TripAsyncConfiguration;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
@@ -114,6 +115,96 @@ public class TripItineraryAssembler {
         } finally {
             sample.stop(itineraryTimer("assemble", "all", outcome));
         }
+    }
+
+    /** 按 Managed Agent 给出的每日宏观范围并行准备候选，再由 Java 完成事实核验与日内排程。 */
+    public Map<String, Object> assemble(Map<String, Object> state, TripMacroSkeleton macroSkeleton,
+                                        Consumer<String> progressConsumer) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String outcome = "success";
+        long start = System.currentTimeMillis();
+        try {
+            int expectedDays = MapUtil.getInt(state, "days", 0);
+            if (macroSkeleton == null || macroSkeleton.days().size() != expectedDays) {
+                throw new IllegalArgumentException("宏观行程数量与旅行天数不一致");
+            }
+            List<String> interests = texts(state.get("interests"));
+            List<String> mustVisit = texts(state.get("mustVisit"));
+            int candidateLimit = CANDIDATES_PER_DAY;
+            progressConsumer.accept("正在按每日城市、区域与 anchor 并行准备候选…");
+            List<MacroDayCandidateFutures> candidateFutures = new ArrayList<>();
+            for (TripMacroSkeleton.Day day : macroSkeleton.days()) {
+                List<String> dayInterests = new ArrayList<>(interests);
+                dayInterests.add(day.area());
+                dayInterests.add(day.theme());
+                List<String> dayMustVisit = new ArrayList<>(mustVisit);
+                dayMustVisit.addAll(day.anchorPoiNames());
+                candidateFutures.add(new MacroDayCandidateFutures(day,
+                        CompletableFuture.supplyAsync(() -> measureCandidateQuery("scenic",
+                                () -> collectScenicCandidates(day.city(), dayInterests, dayMustVisit, candidateLimit)),
+                                tripItineraryTaskExecutor),
+                        CompletableFuture.supplyAsync(() -> measureCandidateQuery("restaurant",
+                                () -> queryPlaces(day.city(), day.area(), AmapPoiTypeEnum.FOOD, candidateLimit)),
+                                tripItineraryTaskExecutor),
+                        CompletableFuture.supplyAsync(() -> measureCandidateQuery("hotel",
+                                () -> queryPlaces(day.city(), day.area(), AmapPoiTypeEnum.HOTEL, candidateLimit)),
+                                tripItineraryTaskExecutor)));
+            }
+            List<MacroDayCandidates> candidates = candidateFutures.stream().map(MacroDayCandidateFutures::join).toList();
+            progressConsumer.accept("每日候选已准备完成，正在执行日内约束与路线排程…");
+            LocalDate startDate = parseDate(text(state.get("startDate")));
+            List<CompletableFuture<Map<String, Object>>> dayFutures = candidates.stream()
+                    .map(candidate -> CompletableFuture.supplyAsync(
+                            () -> buildMacroDay(state, startDate, candidate), tripItineraryTaskExecutor)).toList();
+            List<Map<String, Object>> dailyItinerary = dayFutures.stream().map(CompletableFuture::join).toList();
+
+            String destination = text(state.get("destination"));
+            Map<String, Object> itinerary = new LinkedHashMap<>();
+            itinerary.put("summary", destination + expectedDays + "日旅行方案");
+            itinerary.put("overview", buildOverviewSlot(0, destination));
+            itinerary.put("daily_itinerary", dailyItinerary);
+            itinerary.put("transport", buildTransport(destination));
+            itinerary.put("citation_ids", List.of());
+            itinerary.put("macro_skeleton", macroSkeleton.toMap());
+            itinerary.put("planner", Map.of("type", "MANAGED_MACRO_JAVA", "validation", "SERVER_PLANNED"));
+            applyOverrides(itinerary, state.get("itineraryOverrides"));
+            progressConsumer.accept("行程约束校验通过，正在生成行程卡片…");
+            log.info("[assembleMacro][destination({}) days({}) 耗时({}ms) 宏观行程组装完成]",
+                    destination, expectedDays, System.currentTimeMillis() - start);
+            return itinerary;
+        } catch (RuntimeException | Error ex) {
+            outcome = "error";
+            throw ex;
+        } finally {
+            sample.stop(itineraryTimer("assemble", "macro", outcome));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildMacroDay(Map<String, Object> state, LocalDate startDate,
+                                               MacroDayCandidates candidates) {
+        TripMacroSkeleton.Day macroDay = candidates.day();
+        List<ScenicCandidate> scenicCandidates = candidates.scenicCandidates();
+        if (macroDay.transferDay() && scenicCandidates.size() > 1) {
+            scenicCandidates = scenicCandidates.subList(0, 1);
+        }
+        Map<String, Object> day = buildDay(state, macroDay.city(), startDate, macroDay.day(), scenicCandidates,
+                rankMealCandidates(candidates.restaurants()),
+                rankHotelCandidates(candidates.hotels(), ObjUtil.defaultIfNull(normalizeAmount(state.get("hotelBudget")), 300)));
+        day.put("city", macroDay.city());
+        day.put("area", macroDay.area());
+        day.put("theme", macroDay.theme());
+        day.put("anchorPoiNames", macroDay.anchorPoiNames());
+        day.put("transferDay", macroDay.transferDay());
+        Map<String, Object> overview = (Map<String, Object>) day.get("overview");
+        overview.put("city", macroDay.city());
+        overview.put("area", macroDay.area());
+        overview.put("skeleton", macroDay.theme());
+        ((List<Map<String, Object>>) day.get("slots")).forEach(slot -> slot.put("area", macroDay.area()));
+        Map<String, Object> planning = (Map<String, Object>) day.get("planning");
+        planning.put("macroSource", "MANAGED_AGENT");
+        planning.put("transferDay", macroDay.transferDay());
+        return day;
     }
 
     private List<Map<String, Object>> buildDays(Map<String, Object> state, int days, String destination,
@@ -852,6 +943,19 @@ public class TripItineraryAssembler {
         }
     }
 
+    private List<TripTravelQueryService.Place> queryPlaces(String city, String area, AmapPoiTypeEnum poiType, int limit) {
+        try {
+            List<TripTravelQueryService.Place> result = switch (poiType) {
+                case HOTEL -> tripTravelQueryService.queryHotels(city, area, 1, limit);
+                case FOOD -> tripTravelQueryService.queryRestaurants(city, area, 1, limit);
+                default -> throw new IllegalArgumentException("行程候选地点类型不支持：" + poiType);
+            };
+            return result.isEmpty() ? queryPlaces(city, poiType, limit) : result;
+        } catch (RuntimeException ignored) {
+            return queryPlaces(city, poiType, limit);
+        }
+    }
+
     private List<Map<String, Object>> buildTransportSegments(String city, List<Map<String, Object>> slots,
                                                               Map<String, Object> initialPoint) {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -1147,6 +1251,21 @@ public class TripItineraryAssembler {
 
     private record CandidatePool(List<ScenicCandidate> scenicCandidates, List<TripTravelQueryService.Place> restaurants,
                                  List<TripTravelQueryService.Place> hotels) {
+    }
+
+    private record MacroDayCandidateFutures(TripMacroSkeleton.Day day,
+                                            CompletableFuture<List<ScenicCandidate>> scenicCandidates,
+                                            CompletableFuture<List<TripTravelQueryService.Place>> restaurants,
+                                            CompletableFuture<List<TripTravelQueryService.Place>> hotels) {
+
+        private MacroDayCandidates join() {
+            return new MacroDayCandidates(day, scenicCandidates.join(), restaurants.join(), hotels.join());
+        }
+    }
+
+    private record MacroDayCandidates(TripMacroSkeleton.Day day, List<ScenicCandidate> scenicCandidates,
+                                      List<TripTravelQueryService.Place> restaurants,
+                                      List<TripTravelQueryService.Place> hotels) {
     }
 
     private record LocalityAnchor(String longitude, String latitude, boolean mustVisit, int scenicCount,

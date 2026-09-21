@@ -1,8 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,56 +12,38 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ManagedTripPlanValidatorTest {
 
     @Test
-    void shouldNormalizeValidatedManagedPlan() {
+    void shouldNormalizeValidatedMacroSkeleton() {
         Map<String, Object> state = Map.of(
-                "destination", "杭州", "startDate", "2026-10-01", "days", 1, "travelerCount", 2);
-        Map<String, Object> raw = new LinkedHashMap<>();
-        raw.put("summary", "杭州一日游");
-        raw.put("overview", Map.of("detail", "围绕西湖安排轻松的一日行程"));
-        raw.put("daily_itinerary", List.of(Map.of(
-                "day", 1,
-                "overview", Map.of("detail", "西湖与湖滨主题"),
-                "slots", List.of(
-                        poi("MORNING", "B001", "西湖风景名胜区", "120.148", "30.242", "09:00"),
-                        poi("ACCOMMODATION", "B002", "杭州湖滨酒店", "120.160", "30.255", "18:00")))));
-        raw.put("transport", Map.of());
-        raw.put("citation_ids", List.of("amap:B001", "amap:B001"));
+                "destination", "云南", "startDate", "2026-10-01", "days", 2, "travelerCount", 4);
+        Map<String, Object> raw = Map.of("macro_skeleton", Map.of("days", List.of(
+                macroDay(2, "大理", "大理古城", "换城与人文", List.of("大理古城"), true),
+                macroDay(1, "昆明", "滇池周边", "抵达后轻松亲子", List.of("滇池", "海埂大坝"), false))));
 
-        Map<String, Object> result = ManagedTripPlanValidator.validateAndNormalize(raw, state);
+        TripMacroSkeleton result = ManagedTripPlanValidator.validateMacroSkeleton(raw, state);
 
-        assertEquals("MANAGED_AGENT", ((Map<?, ?>) result.get("planner")).get("type"));
-        assertEquals(List.of("amap:B001"), result.get("citation_ids"));
-        Map<?, ?> day = (Map<?, ?>) ((List<?>) result.get("daily_itinerary")).get(0);
-        assertEquals("2026-10-01", day.get("date"));
-        assertEquals("FEASIBLE", ((Map<?, ?>) day.get("planning")).get("status"));
+        assertEquals(2, result.days().size());
+        assertEquals("昆明", result.days().get(0).city());
+        assertEquals(List.of("滇池", "海埂大坝"), result.days().get(0).anchorPoiNames());
+        assertEquals("大理", result.days().get(1).city());
+        assertEquals(true, result.days().get(1).transferDay());
     }
 
     @Test
-    void shouldRejectPoiWithoutVerifiedCoordinate() {
+    void shouldRejectCityChangeWithoutTransferDay() {
         Map<String, Object> state = Map.of(
-                "destination", "杭州", "startDate", "2026-10-01", "days", 1, "travelerCount", 2);
-        Map<String, Object> raw = new LinkedHashMap<>();
-        raw.put("daily_itinerary", List.of(Map.of(
-                "day", 1,
-                "slots", List.of(
-                        poi("MORNING", "B001", "西湖风景名胜区", "", "30.242", "09:00"),
-                        poi("ACCOMMODATION", "B002", "杭州湖滨酒店", "120.160", "30.255", "18:00")))));
+                "destination", "云南", "startDate", "2026-10-01", "days", 2, "travelerCount", 4);
+        Map<String, Object> raw = Map.of("days", List.of(
+                macroDay(1, "昆明", "滇池周边", "亲子", List.of("滇池"), false),
+                macroDay(2, "大理", "大理古城", "人文", List.of("大理古城"), false)));
 
         assertThrows(IllegalArgumentException.class,
-                () -> ManagedTripPlanValidator.validateAndNormalize(raw, state));
+                () -> ManagedTripPlanValidator.validateMacroSkeleton(raw, state));
     }
 
-    private static Map<String, Object> poi(String slot, String poiId, String poiName,
-                                           String longitude, String latitude, String startTime) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("slot", slot);
-        result.put("poiId", poiId);
-        result.put("poiName", poiName);
-        result.put("longitude", longitude);
-        result.put("latitude", latitude);
-        result.put("plannedStartTime", startTime);
-        result.put("detail", poiName + " 已通过高德核验");
-        return result;
+    private static Map<String, Object> macroDay(int day, String city, String area, String theme,
+                                                 List<String> anchors, boolean transferDay) {
+        return Map.of("day", day, "city", city, "area", area, "theme", theme,
+                "anchorPoiNames", anchors, "transferDay", transferDay);
     }
 
 }

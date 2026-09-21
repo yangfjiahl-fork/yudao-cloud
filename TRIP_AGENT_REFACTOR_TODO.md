@@ -17,10 +17,10 @@
 
 ## Phase 2 - Managed Agent macro skeleton
 
-- [ ] Define the macro-skeleton contract: daily city, area, theme, anchor POIs, and transfer days.
-- [ ] Let Managed Agent generate and validate the macro skeleton before Java performs POI expansion.
-- [ ] Search candidates per day around the selected city, area, and anchors.
-- [ ] Keep external calls progressive: skeleton first, details/routes on demand.
+- [x] Define the macro-skeleton contract: daily city, area, theme, anchor POIs, and transfer days.
+- [x] Let Managed Agent generate and validate the macro skeleton before Java performs POI expansion.
+- [x] Search candidates per day around the selected city, area, and anchors.
+- [x] Keep external calls progressive: skeleton first, details/routes on demand.
 
 ## Phase 3 - Unified editing model
 
@@ -58,3 +58,4 @@ Use: `国庆节，2大2小上海出发去云南6天5晚，亲子。`
 - 2026-09-21: Added the shared itinerary version service and migrated both planner implementations.
 - 2026-09-21: Kept only `/managed/run` and moved routing to the backend orchestration action.
 - 2026-09-21: Restored Maven access with a temporary Aliyun mirror and the sandbox's dynamic HTTPS proxy. The 31-module `test-compile` passed, followed by 10 focused tests for itinerary persistence, orchestration decisions, and `/managed/run` AG-UI behavior.
+- 2026-09-21: Added the Phase 2 macro-skeleton contract and server validation. Managed Agent now selects daily city, area, theme, anchors, and transfer days; Java queries each day's POI candidates in parallel and retains OR-Tools scheduling. Compile and 19 focused regression tests passed. Real Managed Agent + Amap verification remains in the fixed regression scenario.

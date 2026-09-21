@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionClient;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/** 将完整旅行规划委派给百炼 Managed Agent，Java 只负责 Session、契约校验与审计。 */
+/** 百炼 Managed Agent 负责宏观路线，Java 负责 POI 事实查询、日内排程与硬约束。 */
 @Service
 public class ManagedTripPlannerService {
 
@@ -26,6 +27,8 @@ public class ManagedTripPlannerService {
     private ManagedTripSessionService managedTripSessionService;
     @Resource
     private TripRunLogService tripRunLogService;
+    @Resource
+    private TripItineraryAssembler tripItineraryAssembler;
 
     public Map<String, Object> plan(TripPlanDO trip, Map<String, Object> state, String latestUserMessage,
                                     Consumer<String> progressConsumer) {
@@ -37,15 +40,15 @@ public class ManagedTripPlannerService {
             String sessionId = managedTripSessionService.createSession(trip.getId(), trip.getConversationId(), state);
             trip.setManagedAgentSessionId(sessionId);
             String task = buildTask(state, latestUserMessage);
-            progressConsumer.accept("托管旅行 Agent 正在规划跨城路线与每日主题…");
+            progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
             response = managedAgentSessionClient.execute(sessionId, task);
-            progressConsumer.accept("已完成核心高德 POI 核验，正在校验行程结构…");
-            Map<String, Object> itinerary = ManagedTripPlanValidator.validateAndNormalize(
+            TripMacroSkeleton macroSkeleton = ManagedTripPlanValidator.validateMacroSkeleton(
                     TripAgentFormatUtils.parseMap(response), state);
+            progressConsumer.accept("宏观路线已确认，正在按每天的城市与区域查询高德候选…");
+            Map<String, Object> itinerary = tripItineraryAssembler.assemble(state, macroSkeleton, progressConsumer);
             tripRunLogService.complete(runId, "managed-agent", null, null, null,
                     System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
-                            "sessionId", sessionId, "itinerary", itinerary)));
-            progressConsumer.accept("行程约束校验通过，正在生成行程卡片…");
+                            "sessionId", sessionId, "macroSkeleton", macroSkeleton.toMap(), "itinerary", itinerary)));
             return itinerary;
         } catch (RuntimeException e) {
             tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(), response == null ? null
@@ -56,8 +59,8 @@ public class ManagedTripPlannerService {
 
     private static String buildTask(Map<String, Object> state, String latestUserMessage) {
         Map<String, Object> request = new LinkedHashMap<>();
-        request.put("task", "GENERATE_TRAVEL_PLAN");
-        request.put("schemaVersion", "1.0");
+        request.put("task", "GENERATE_TRIP_MACRO_SKELETON");
+        request.put("schemaVersion", "2.0");
         request.put("requestedAt", OffsetDateTime.now(CHINA_ZONE).toString());
         request.put("tripState", state);
         request.put("latestUserMessage", latestUserMessage);
@@ -68,11 +71,11 @@ public class ManagedTripPlannerService {
                 "dailyEndTime", "20:00"));
         request.put("requiredOutput", List.of(
                 "只输出一个 JSON 对象，不要 Markdown",
-                "先规划跨城/跨区域主路线，再为每天选择 1～2 个核心游览 POI 和住宿锚点",
-                "核心游览 POI 与住宿锚点必须经高德 MCP 核验并包含 poiId、poiName、longitude、latitude",
-                "不要在生成阶段查询日内相邻 POI 路线；路线由后端在用户查看时按需批量计算",
-                "daily_itinerary 数量必须与 days 完全一致",
-                "每天至少包含一个游览节点与一个 ACCOMMODATION 节点"));
+                "输出 macro_skeleton.days，数量必须与 tripState.days 完全一致",
+                "每天包含 day、city、area、theme、anchorPoiNames、transferDay",
+                "anchorPoiNames 每天 1～2 个，仅作为后端高德检索锚点，不输出坐标、酒店、餐厅或日内时刻",
+                "城市变化当天必须设置 transferDay=true，并降低当天游览强度",
+                "跨城顺序、每日区域与主题必须符合 tripState 的日期、亲子偏好、预算和节奏约束"));
         return JsonUtils.toJsonString(request);
     }
 
