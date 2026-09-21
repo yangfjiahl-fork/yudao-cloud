@@ -1,12 +1,17 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TripAgentServiceImplTest {
 
@@ -90,5 +95,67 @@ class TripAgentServiceImplTest {
                 TripAgentServiceImpl.determineAction(java.util.List.of(), true, false, true));
         assertEquals(TripAgentServiceImpl.TripOrchestrationAction.CHAT,
                 TripAgentServiceImpl.determineAction(java.util.List.of(), false, false, true));
+    }
+
+    @Test
+    void extractAgentChangeCommand_shouldUseCurrentServerVersion() {
+        Map<String, Object> intake = Map.of("change_command", Map.of(
+                "operation", "MOVE_ITEM",
+                "baseVersion", 99,
+                "itemId", "item-1",
+                "day", 2,
+                "timePeriod", "AFTERNOON",
+                "sort", 1,
+                "values", Map.of("note", "靠近酒店")));
+
+        TripChangeCommand command = TripAgentServiceImpl.extractAgentChangeCommand(intake, 3);
+
+        assertEquals(TripChangeCommand.Operation.MOVE_ITEM, command.operation());
+        assertEquals(3, command.baseVersion());
+        assertEquals("item-1", command.itemId());
+        assertEquals(2, command.day());
+        assertEquals("靠近酒店", command.values().get("note"));
+    }
+
+    @Test
+    void extractAgentChangeCommand_shouldConvertLegacySingleDayPatchToReplan() {
+        Map<String, Object> intake = Map.of("itinerary_patch", Map.of("operations", List.of(
+                Map.of("op", "SET", "day", 2, "slot", "AFTERNOON", "instruction", "换成亲子乐园"))));
+
+        TripChangeCommand command = TripAgentServiceImpl.extractAgentChangeCommand(intake, 4);
+
+        assertEquals(TripChangeCommand.Operation.REPLAN_DAY, command.operation());
+        assertEquals(4, command.baseVersion());
+        assertEquals(2, command.day());
+        assertEquals("换成亲子乐园", command.values().get("instruction"));
+    }
+
+    @Test
+    void extractAgentChangeCommand_shouldRejectMultipleCommandsInOneTurn() {
+        Map<String, Object> intake = Map.of("change_commands", List.of(
+                Map.of("operation", "LOCK_ITEM", "itemId", "item-1"),
+                Map.of("operation", "MOVE_ITEM", "itemId", "item-2", "day", 2)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> TripAgentServiceImpl.extractAgentChangeCommand(intake, 3));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void editableItineraryContext_shouldExposeOnlyFieldsNeededToResolveItemIdentity() {
+        TripItineraryDO itinerary = new TripItineraryDO().setVersion(3).setContentJson(JsonUtils.toJsonString(Map.of(
+                "daily_itinerary", List.of(Map.of("day", 2, "slots", List.of(Map.of(
+                        "itemId", "item-1", "day", 2, "type", "SCENIC", "timePeriod", "AFTERNOON",
+                        "sort", 1, "poiId", "poi-1", "poiName", "滇池", "locked", false,
+                        "longitude", "102.7", "latitude", "25.0")))))));
+
+        Map<String, Object> context = TripAgentServiceImpl.editableItineraryContext(itinerary);
+
+        assertEquals(3, context.get("version"));
+        Map<String, Object> item = ((List<Map<String, Object>>) context.get("items")).get(0);
+        assertEquals("item-1", item.get("itemId"));
+        assertEquals("滇池", item.get("poiName"));
+        assertFalse(item.containsKey("longitude"));
+        assertFalse(item.containsKey("latitude"));
     }
 }

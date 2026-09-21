@@ -46,3 +46,25 @@ Accept: text/event-stream
 - 每次 `GENERATE_PLAN` 或 `EDIT_PLAN` 创建一个新 Session，避免继承上一轮高德工具输出和临时上下文。
 - `gift_trip_plan.managed_agent_session_id` 只保存最近一次规划 Session ID，用于运行审计和问题定位，不作为下次规划的复用依据。
 - 权威业务状态始终是 `TripState` 与当前 itinerary 版本，而不是 Managed Agents Session 上下文。
+
+## Intake 编辑命令协议
+
+已有行程后的自然语言修改由数据库配置的 Intake Role 输出单个 `change_command`，Java 服务端再统一执行：
+
+```json
+{
+  "change_command": {
+    "operation": "REPLAN_DAY",
+    "day": 2,
+    "values": {
+      "instruction": "下午换成更适合儿童的室内地点"
+    }
+  }
+}
+```
+
+- `operation` 使用 `TripChangeCommand.Operation` 枚举值。
+- 单轮只接受一个命令；组合修改应拆成多轮，避免部分成功。
+- `baseVersion` 由服务端从当前 itinerary 读取，模型输出的版本不会被信任。
+- 旧 `itinerary_patch.operations` 暂时兼容：单日修改转换为 `REPLAN_DAY`，多日修改转换为 `REPLAN_TRIP`。
+- Intake Role 只识别意图和目标，不直接写入 POI 编号、坐标或路线事实。

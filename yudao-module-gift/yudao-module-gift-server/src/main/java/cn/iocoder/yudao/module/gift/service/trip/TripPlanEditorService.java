@@ -39,6 +39,15 @@ public class TripPlanEditorService {
     @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 360000, acquireTimeout = 3000)
     public EditResult apply(Long conversationId, Long memberId, TripChangeCommand command) {
+        return applyInternal(conversationId, memberId, command);
+    }
+
+    /** 供已经持有同一 conversation 锁的 Agent 编排事务调用，避免重复获取分布式锁。 */
+    EditResult applyWithinExistingLock(Long conversationId, Long memberId, TripChangeCommand command) {
+        return applyInternal(conversationId, memberId, command);
+    }
+
+    private EditResult applyInternal(Long conversationId, Long memberId, TripChangeCommand command) {
         TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (trip == null || trip.getCurrentItineraryId() == null) {
             throw new IllegalArgumentException("当前旅行尚未生成可编辑行程");
@@ -84,7 +93,7 @@ public class TripPlanEditorService {
 
     private LinkedHashSet<Integer> replan(Map<String, Object> itinerary, Map<String, Object> state,
                                            TripChangeCommand command) {
-        TripMacroSkeleton macroSkeleton = macroSkeleton(itinerary);
+        TripMacroSkeleton macroSkeleton = withReplanInstruction(macroSkeleton(itinerary), command);
         LinkedHashSet<Integer> affectedDays = new LinkedHashSet<>();
         if (command.operation() == TripChangeCommand.Operation.REPLAN_DAY) {
             if (command.day() == null) {
@@ -99,6 +108,26 @@ public class TripPlanEditorService {
                 });
         replannedDays.forEach(replanned -> mergeReplannedDay(itinerary, replanned));
         return affectedDays;
+    }
+
+    private static TripMacroSkeleton withReplanInstruction(TripMacroSkeleton macroSkeleton,
+                                                            TripChangeCommand command) {
+        String instruction = text(command.values().get("instruction"));
+        if (command.operation() != TripChangeCommand.Operation.REPLAN_DAY || command.day() == null
+                || StrUtil.isBlank(instruction)) {
+            return macroSkeleton;
+        }
+        List<TripMacroSkeleton.Day> days = macroSkeleton.days().stream().map(day -> {
+            if (day.day() != command.day()) {
+                return day;
+            }
+            LinkedHashSet<String> anchors = new LinkedHashSet<>();
+            anchors.add(instruction);
+            anchors.addAll(day.anchorPoiNames());
+            return new TripMacroSkeleton.Day(day.day(), day.city(), day.area(), day.theme(),
+                    anchors.stream().limit(2).toList(), day.transferDay());
+        }).toList();
+        return new TripMacroSkeleton(days);
     }
 
     private static void mergeReplannedDay(Map<String, Object> itinerary, Map<String, Object> replanned) {

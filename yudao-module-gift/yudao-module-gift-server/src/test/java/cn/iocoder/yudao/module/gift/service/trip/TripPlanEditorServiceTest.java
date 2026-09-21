@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -92,7 +93,7 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
         when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), anyMap(), anyMap()))
                 .thenReturn(new TripItineraryVersionService.SavedItinerary(11L, 12L, 3, "已更新行程"));
         TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY, 2,
-                null, 1, null, null, Map.of());
+                null, 1, null, null, Map.of("instruction", "换成亲子乐园"));
 
         TripPlanEditorService.EditResult result = editorService.apply(2L, 3L, command);
 
@@ -103,7 +104,9 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
         assertEquals(true, firstDaySlots.get(0).get("locked"));
         assertEquals("PENDING", ((Map<?, ?>) days.get(0).get("planning")).get("status"));
         assertEquals("item-b", ((List<Map<String, Object>>) days.get(1).get("slots")).get(0).get("itemId"));
-        verify(itineraryAssembler).replanDays(anyMap(), any(), eq(Set.of(1)), any(Consumer.class));
+        ArgumentCaptor<TripMacroSkeleton> macroCaptor = ArgumentCaptor.forClass(TripMacroSkeleton.class);
+        verify(itineraryAssembler).replanDays(anyMap(), macroCaptor.capture(), eq(Set.of(1)), any(Consumer.class));
+        assertEquals(List.of("换成亲子乐园", "滇池"), macroCaptor.getValue().days().get(0).anchorPoiNames());
     }
 
     private static TripPlanDO trip() {

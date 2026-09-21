@@ -24,6 +24,7 @@ import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItinerarySlotMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
@@ -113,6 +114,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private TripItineraryVersionService tripItineraryVersionService;
     @Resource
+    private TripPlanEditorService tripPlanEditorService;
+    @Resource
     private Tracer tracer;
 
     @Override
@@ -180,18 +183,27 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> previousState = TripAgentFormatUtils.parseMap(JsonUtils.toJsonString(state));
         sanitizeTravelerProfile(state);
         state.remove("destinationEntityId"); // 兼容已存的旧状态，不再持久化外部实体副本
+        TripItineraryDO currentItinerary = trip.getCurrentItineraryId() == null ? null
+                : tripItineraryMapper.selectById(trip.getCurrentItineraryId());
         AtomicInteger modelDeltaSequence = new AtomicInteger();
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
         AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
-                buildIntakeContext(state, content),
+                buildIntakeContext(state, currentItinerary, content),
                 "INTAKE", trip.getId(), promptVariables,
                 chunk -> emitModelDelta(eventConsumer, "INTAKE", chunk, modelDeltaSequence));
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
         mergeInformationState(state, extractState(intake), content);
-        applyItineraryPatch(state, intake.get("itinerary_patch"));
+        TripChangeCommand changeCommand = currentItinerary == null ? null
+                : extractAgentChangeCommand(intake, currentItinerary.getVersion());
+        if (changeCommand == null) {
+            applyItineraryPatch(state, intake.get("itinerary_patch"));
+        } else {
+            // 当前快照已经承载旧 override 的结果；切换到统一命令后不再让历史文本补丁污染后续事实。
+            state.remove(STATE_ITINERARY_OVERRIDES);
+        }
         List<String> missingRequired = validateState(state);
         boolean stateChanged = !previousState.equals(state);
-        boolean generateRequested = isGenerateRequested(intake)
+        boolean generateRequested = changeCommand != null || isGenerateRequested(intake)
                 || (trip.getCurrentItineraryId() != null && stateChanged);
         TripOrchestrationAction action = determineAction(missingRequired, generateRequested, stateChanged,
                 trip.getCurrentItineraryId() != null);
@@ -219,6 +231,22 @@ public class TripAgentServiceImpl implements TripAgentService {
                     .setMissingRequired(missingRequired);
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
                     .setMissingRequired(missingRequired).setSuggestions(suggestions));
+            return result;
+        }
+
+        if (changeCommand != null) {
+            eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", "正在应用行程修改并校验受影响日期…"));
+            TripPlanEditorService.EditResult edited = tripPlanEditorService.applyWithinExistingLock(
+                    conversationId, memberId, changeCommand);
+            TripItineraryVersionService.SavedItinerary saved = edited.saved();
+            log.info("[handleMessage][tripId({}) command({}) affectedDays({}) version({}) Agent 编辑完成]",
+                    trip.getId(), changeCommand.operation(), edited.affectedDays(), saved.version());
+            TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON")
+                    .setMessageId(saved.messageId()).setContent(saved.displayText())
+                    .setItinerary(edited.itinerary()).setMissingRequired(List.of());
+            eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", saved.displayText())
+                    .setMessageId(saved.messageId()).setItinerary(edited.itinerary())
+                    .setMissingRequired(List.of()).setSuggestions(List.of()));
             return result;
         }
 
@@ -601,10 +629,54 @@ public class TripAgentServiceImpl implements TripAgentService {
         return assistant ? aiChatApi.createAssistantMessage(req) : aiChatApi.createUserMessage(req);
     }
 
-    private static String buildIntakeContext(Map<String, Object> state, String content) {
+    private static String buildIntakeContext(Map<String, Object> state, TripItineraryDO currentItinerary,
+                                             String content) {
         List<Map<String, Object>> fields = informationFields(TripInformationSchema.getFields());
         return "InteractionType: EXTRACTION\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
-                + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\nUser message:\n" + content;
+                + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\n"
+                + "Current Editable Itinerary:\n" + JsonUtils.toJsonString(editableItineraryContext(currentItinerary))
+                + "\n\nUser message:\n" + content;
+    }
+
+    static Map<String, Object> editableItineraryContext(TripItineraryDO itinerary) {
+        if (itinerary == null) {
+            return Map.of();
+        }
+        Map<String, Object> content = TripAgentFormatUtils.parseMap(itinerary.getContentJson());
+        List<Map<String, Object>> items = new ArrayList<>();
+        if (content.get("daily_itinerary") instanceof List<?> days) {
+            for (Object rawDay : days) {
+                if (!(rawDay instanceof Map<?, ?> day)
+                        || !(day.get("slots") instanceof List<?> slots)) {
+                    continue;
+                }
+                Integer dayNumber = MapUtil.getInt(day, "day");
+                for (Object rawSlot : slots) {
+                    if (!(rawSlot instanceof Map<?, ?> slot)) {
+                        continue;
+                    }
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("itemId", slot.get("itemId"));
+                    item.put("day", ObjUtil.defaultIfNull(MapUtil.getInt(slot, "day"), dayNumber));
+                    copyIfPresent(item, slot, "type", "timePeriod", "sort", "poiId", "poiName", "label", "locked");
+                    items.add(item);
+                }
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (itinerary.getVersion() != null) {
+            result.put("version", itinerary.getVersion());
+        }
+        result.put("items", items);
+        return result;
+    }
+
+    private static void copyIfPresent(Map<String, Object> target, Map<?, ?> source, String... fields) {
+        for (String field : fields) {
+            if (source.get(field) != null) {
+                target.put(field, source.get(field));
+            }
+        }
     }
 
     private TripInteraction generateInteraction(Long conversationId, Long memberId, Map<String, Object> state,
@@ -700,6 +772,83 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private static boolean isGenerateRequested(Map<String, Object> intake) {
         return "GENERATE".equalsIgnoreCase(trimNullable(intake.get("action")));
+    }
+
+    /** 将 Agent 输出转换为服务端统一命令；baseVersion 始终取当前快照，不信任模型提供的版本。 */
+    static TripChangeCommand extractAgentChangeCommand(Map<String, Object> intake, int baseVersion) {
+        Object rawCommand = firstNonNull(intake.get("change_command"), intake.get("changeCommand"));
+        Object rawCommands = intake.get("change_commands");
+        if (rawCommand == null && rawCommands instanceof List<?> commands && !commands.isEmpty()) {
+            if (commands.size() != 1) {
+                throw new IllegalArgumentException("Agent 单次只能提交一个行程变更命令");
+            }
+            rawCommand = commands.get(0);
+        }
+        if (rawCommand instanceof Map<?, ?> command) {
+            String operationText = StrUtil.trim(ObjUtil.toString(
+                    firstNonNull(command.get("operation"), command.get("op")))).toUpperCase(Locale.ROOT);
+            TripChangeCommand.Operation operation;
+            try {
+                operation = TripChangeCommand.Operation.valueOf(operationText);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Agent 返回了不支持的行程变更操作：" + operationText, ex);
+            }
+            return new TripChangeCommand(operation, baseVersion, trimNullable(command.get("itemId")),
+                    MapUtil.getInt(command, "day"), trimNullable(command.get("timePeriod")),
+                    MapUtil.getInt(command, "sort"), stringKeyMap(command.get("values")));
+        }
+        return legacyItineraryPatchCommand(intake.get("itinerary_patch"), baseVersion);
+    }
+
+    private static TripChangeCommand legacyItineraryPatchCommand(Object value, int baseVersion) {
+        if (!(value instanceof Map<?, ?> patch) || !(patch.get("operations") instanceof List<?> operations)) {
+            return null;
+        }
+        Set<Integer> affectedDays = new java.util.LinkedHashSet<>();
+        List<String> instructions = new ArrayList<>();
+        for (Object valueItem : operations) {
+            if (!(valueItem instanceof Map<?, ?> operation)) {
+                continue;
+            }
+            Integer day = MapUtil.getInt(operation, "day");
+            String op = StrUtil.trim(ObjUtil.toString(operation.get("op"))).toUpperCase(Locale.ROOT);
+            if (day == null || day <= 0 || !("SET".equals(op) || "REMOVE".equals(op))) {
+                continue;
+            }
+            affectedDays.add(day);
+            String instruction = trimNullable(operation.get("instruction"));
+            if ("SET".equals(op) && StrUtil.isNotBlank(instruction)) {
+                instructions.add(instruction);
+            }
+        }
+        if (affectedDays.isEmpty()) {
+            return null;
+        }
+        if (affectedDays.size() == 1) {
+            Map<String, Object> values = instructions.isEmpty() ? Map.of()
+                    : Map.of("instruction", String.join("；", instructions));
+            return new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY, baseVersion, null,
+                    affectedDays.iterator().next(), null, null, values);
+        }
+        return new TripChangeCommand(TripChangeCommand.Operation.REPLAN_TRIP, baseVersion,
+                null, null, null, null, Map.of());
+    }
+
+    private static Object firstNonNull(Object first, Object second) {
+        return first != null ? first : second;
+    }
+
+    private static Map<String, Object> stringKeyMap(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        map.forEach((key, item) -> {
+            if (key instanceof String text) {
+                result.put(text, item);
+            }
+        });
+        return result;
     }
 
     @SuppressWarnings("unchecked")
