@@ -40,7 +40,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     private TripAgentService tripAgentService;
 
     @Test
-    void runAgUi_shouldTranslateTripEventsToAgUiProtocol() {
+    void runManagedAgUi_shouldTranslateTripEventsToAgUiProtocol() {
         Long conversationId = 1L;
         Long memberId = 2L;
         when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
@@ -54,7 +54,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", "你的预算大约是多少？还需要确认住宿偏好和同行人的年龄。")
                     .setMessageId(9L));
             return null;
-        }).when(tripAgentService).handleMessage(eq(conversationId), eq(memberId), any(), any());
+        }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
         AppTripAgUiRunReqVO reqVO = new AppTripAgUiRunReqVO();
         reqVO.setThreadId("1");
         reqVO.setRunId("run-1");
@@ -65,7 +65,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
         try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock = mockStatic(SecurityFrameworkUtils.class)) {
             securityFrameworkUtilsMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
 
-            List<CommonResult<java.util.Map<String, Object>>> responses = controller.runAgUi(reqVO).collectList().block();
+            List<CommonResult<java.util.Map<String, Object>>> responses = controller.runManagedAgUi(reqVO).collectList().block();
             List<java.util.Map<String, Object>> events = responses.stream().map(CommonResult::getData).toList();
 
             assertTrue(responses.stream().allMatch(response -> response.getCode() == 0));
@@ -91,13 +91,13 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     }
 
     @Test
-    void runAgUi_shouldEndWithRunErrorWhenTripGenerationFails() {
+    void runManagedAgUi_shouldEndWithRunErrorWhenTripGenerationFails() {
         Long conversationId = 1L;
         Long memberId = 2L;
         when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
                 .thenReturn(new AiChatConversationRespDTO().setId(conversationId));
         doThrow(new IllegalStateException("upstream unavailable"))
-                .when(tripAgentService).handleMessage(eq(conversationId), eq(memberId), any(), any());
+                .when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
         AppTripAgUiRunReqVO reqVO = new AppTripAgUiRunReqVO();
         reqVO.setThreadId("1");
         reqVO.setRunId("run-1");
@@ -108,7 +108,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
         try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock = mockStatic(SecurityFrameworkUtils.class)) {
             securityFrameworkUtilsMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
 
-            List<CommonResult<java.util.Map<String, Object>>> responses = controller.runAgUi(reqVO).collectList().block();
+            List<CommonResult<java.util.Map<String, Object>>> responses = controller.runManagedAgUi(reqVO).collectList().block();
             List<java.util.Map<String, Object>> events = responses.stream().map(CommonResult::getData).toList();
 
             assertTrue(responses.stream().allMatch(response -> response.getCode() == 0));
@@ -120,7 +120,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     }
 
     @Test
-    void runAgUi_shouldPublishItineraryCardAfterAssistantText() {
+    void runManagedAgUi_shouldPublishItineraryCardAfterAssistantText() {
         Long conversationId = 1L;
         Long memberId = 2L;
         when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
@@ -131,13 +131,13 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
             eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", "已为你生成三日行程。")
                     .setMessageId(10L).setItinerary(java.util.Map.of("version", 1)));
             return null;
-        }).when(tripAgentService).handleMessage(eq(conversationId), eq(memberId), any(), any());
+        }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
 
         TenantContextHolder.setTenantId(1L);
         try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock = mockStatic(SecurityFrameworkUtils.class)) {
             securityFrameworkUtilsMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
 
-            List<java.util.Map<String, Object>> events = controller.runAgUi(createAgUiRunRequest()).collectList().block().stream()
+            List<java.util.Map<String, Object>> events = controller.runManagedAgUi(createAgUiRunRequest()).collectList().block().stream()
                     .map(CommonResult::getData).toList();
 
             assertEquals("TEXT_MESSAGE_END", events.get(3).get("type"));

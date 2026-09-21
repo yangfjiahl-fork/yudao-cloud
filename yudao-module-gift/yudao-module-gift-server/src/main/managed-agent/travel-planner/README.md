@@ -39,3 +39,10 @@ Accept: text/event-stream
 ```
 
 请求和 AG-UI 响应与统一旅行接口保持一致。新链路复用已保存的 TripState；首次生成需补齐出发地、目的地、出发日期、旅行天数、出行人数和预算。
+
+## Session 生命周期
+
+- `INTAKE`、`UPDATE_STATE` 和 `CHAT` 不创建 Managed Agents Session。
+- 每次 `GENERATE_PLAN` 或 `EDIT_PLAN` 创建一个新 Session，避免继承上一轮高德工具输出和临时上下文。
+- `gift_trip_plan.managed_agent_session_id` 只保存最近一次规划 Session ID，用于运行审计和问题定位，不作为下次规划的复用依据。
+- 权威业务状态始终是 `TripState` 与当前 itinerary 版本，而不是 Managed Agents Session 上下文。

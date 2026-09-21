@@ -22,7 +22,8 @@ public class TripPlanDO extends TenantBaseDO {
      */
     private Long currentItineraryId;
     /**
-     * 百炼 Managed Agents 会话。一个旅行会话只创建一次，后续重规划继续复用其沙箱与上下文。
+     * 最近一次生成或重规划使用的百炼 Managed Agents Session，仅用于审计定位。
+     * 每次 GENERATE_PLAN / EDIT_PLAN 都创建新 Session，避免继承上一次工具输出和临时上下文。
      */
     private String managedAgentSessionId;
     private String stateJson;

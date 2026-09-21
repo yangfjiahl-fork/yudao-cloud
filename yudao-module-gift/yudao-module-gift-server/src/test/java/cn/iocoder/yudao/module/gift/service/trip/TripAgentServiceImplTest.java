@@ -77,4 +77,18 @@ class TripAgentServiceImplTest {
         assertEquals("…", TripAgentServiceImpl.shortenTripOverview(detail, "TRIP_OVERVIEW").substring(59));
         assertEquals(detail, TripAgentServiceImpl.shortenTripOverview(detail, "DAY_OVERVIEW"));
     }
+
+    @Test
+    void determineAction_shouldUseStateAndIntentInsteadOfFixedUserText() {
+        assertEquals(TripAgentServiceImpl.TripOrchestrationAction.INTAKE,
+                TripAgentServiceImpl.determineAction(java.util.List.of("budget"), true, true, false));
+        assertEquals(TripAgentServiceImpl.TripOrchestrationAction.UPDATE_STATE,
+                TripAgentServiceImpl.determineAction(java.util.List.of(), false, true, false));
+        assertEquals(TripAgentServiceImpl.TripOrchestrationAction.GENERATE_PLAN,
+                TripAgentServiceImpl.determineAction(java.util.List.of(), true, false, false));
+        assertEquals(TripAgentServiceImpl.TripOrchestrationAction.EDIT_PLAN,
+                TripAgentServiceImpl.determineAction(java.util.List.of(), true, false, true));
+        assertEquals(TripAgentServiceImpl.TripOrchestrationAction.CHAT,
+                TripAgentServiceImpl.determineAction(java.util.List.of(), false, false, true));
+    }
 }

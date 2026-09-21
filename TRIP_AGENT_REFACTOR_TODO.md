@@ -10,9 +10,9 @@
 - [x] Move assistant-message association, slot initialization, current-itinerary updates, and conversation-title updates into the version service.
 - [x] Make `TripAgentServiceImpl` persist generated itineraries through the version service.
 - [x] Make `ManagedTripAgentServiceImpl` persist generated itineraries through the version service.
-- [ ] Remove exact user-text routing from `AppTripChatMessageController`.
-- [ ] Add an orchestration decision for `INTAKE`, `UPDATE_STATE`, `GENERATE_PLAN`, `EDIT_PLAN`, and `CHAT` without coupling it to a fixed phrase.
-- [ ] Define and verify the Managed Agent session lifecycle.
+- [x] Remove exact user-text routing from `AppTripChatMessageController`.
+- [x] Add an orchestration decision for `INTAKE`, `UPDATE_STATE`, `GENERATE_PLAN`, `EDIT_PLAN`, and `CHAT` without coupling it to a fixed phrase.
+- [x] Define the Managed Agent session lifecycle: create a fresh Session per planning run and retain only the latest ID for audit.
 - [ ] Run focused tests and the gift-server compile check.
 
 ## Phase 2 - Managed Agent macro skeleton

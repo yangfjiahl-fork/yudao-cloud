@@ -109,6 +109,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private TripItineraryAssembler tripItineraryAssembler;
     @Resource
+    private ManagedTripPlannerService managedTripPlannerService;
+    @Resource
     private TripItineraryVersionService tripItineraryVersionService;
     @Resource
     private Tracer tracer;
@@ -148,6 +150,20 @@ public class TripAgentServiceImpl implements TripAgentService {
     @BizTrace(operationName = "trip.agent.handle-message", type = "'ai.chat.conversation'", id = "#conversationId")
     public TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
                                          Consumer<TripAgentEvent> eventConsumer) {
+        return handleMessage(conversationId, memberId, content, eventConsumer, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @Lock4j(keys = {"#conversationId"}, expire = 360000, acquireTimeout = 3000)
+    @BizTrace(operationName = "trip.agent.handle-managed-message", type = "'ai.chat.conversation'", id = "#conversationId")
+    public TripAgentResult handleManagedMessage(Long conversationId, Long memberId, String content,
+                                                Consumer<TripAgentEvent> eventConsumer) {
+        return handleMessage(conversationId, memberId, content, eventConsumer, true);
+    }
+
+    private TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
+                                          Consumer<TripAgentEvent> eventConsumer, boolean managedPlanner) {
         TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (trip == null) {
             log.info("[handleMessage][conversationId({}) memberId({}) 缺少旅行状态，开始兼容初始化]",
@@ -174,15 +190,18 @@ public class TripAgentServiceImpl implements TripAgentService {
         mergeInformationState(state, extractState(intake), content);
         applyItineraryPatch(state, intake.get("itinerary_patch"));
         List<String> missingRequired = validateState(state);
+        boolean stateChanged = !previousState.equals(state);
         boolean generateRequested = isGenerateRequested(intake)
-                || (trip.getCurrentItineraryId() != null && !previousState.equals(state));
+                || (trip.getCurrentItineraryId() != null && stateChanged);
+        TripOrchestrationAction action = determineAction(missingRequired, generateRequested, stateChanged,
+                trip.getCurrentItineraryId() != null);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
         tripPlanMapper.updateById(trip);
-        log.info("[handleMessage][tripId({}) 状态字段({}) 缺失字段({})]",
-                trip.getId(), state.keySet(), missingRequired);
+        log.info("[handleMessage][tripId({}) action({}) 状态字段({}) 缺失字段({})]",
+                trip.getId(), action, state.keySet(), missingRequired);
         int questionCount = getQuestionCount();
-        boolean needFollowUp = CollUtil.isNotEmpty(missingRequired) || !generateRequested;
+        boolean needFollowUp = !action.requiresPlanning();
         if (needFollowUp) {
             eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
         }
@@ -203,7 +222,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             return result;
         }
 
-        if (!generateRequested) {
+        if (!action.requiresPlanning()) {
             String question = interaction.question();
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, question, true);
             log.info("[handleMessage][tripId({}) 等待用户确认生成或继续补充 messageId({})]", trip.getId(), assistant.getId());
@@ -221,8 +240,13 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .startSpan();
         Map<String, Object> itinerary;
         try (Scope ignored = assembleSpan.makeCurrent()) {
-            itinerary = tripItineraryAssembler.assemble(state,
-                    progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
+            if (managedPlanner) {
+                itinerary = managedTripPlannerService.plan(trip, state, content,
+                        progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
+            } else {
+                itinerary = tripItineraryAssembler.assemble(state,
+                        progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
+            }
         } catch (RuntimeException | Error e) {
             TracerFrameworkUtils.onError(e, assembleSpan);
             throw e;
@@ -242,6 +266,29 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .setMessageId(saved.messageId())
                 .setItinerary(itinerary).setMissingRequired(List.of()).setSuggestions(suggestions));
         return result;
+    }
+
+    static TripOrchestrationAction determineAction(List<String> missingRequired, boolean generateRequested,
+                                                    boolean stateChanged, boolean hasItinerary) {
+        if (CollUtil.isNotEmpty(missingRequired)) {
+            return TripOrchestrationAction.INTAKE;
+        }
+        if (generateRequested) {
+            return hasItinerary ? TripOrchestrationAction.EDIT_PLAN : TripOrchestrationAction.GENERATE_PLAN;
+        }
+        return stateChanged ? TripOrchestrationAction.UPDATE_STATE : TripOrchestrationAction.CHAT;
+    }
+
+    enum TripOrchestrationAction {
+        INTAKE,
+        UPDATE_STATE,
+        GENERATE_PLAN,
+        EDIT_PLAN,
+        CHAT;
+
+        boolean requiresPlanning() {
+            return this == GENERATE_PLAN || this == EDIT_PLAN;
+        }
     }
 
     @Override
