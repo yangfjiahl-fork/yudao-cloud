@@ -67,4 +67,14 @@ class TravelPlaceQueryClientFacadeTest {
                 .setType(AmapPoiTypeEnum.HOTEL).setRegion("杭州")));
     }
 
+    @Test
+    void getPlaceDetailUsesGaode() {
+        TravelPlaceQueryClient.Response expected = TravelPlaceQueryClient.Response.failure("expected");
+        when(gaode.getPlaceDetail("poi-1")).thenReturn(expected);
+
+        assertSame(expected, facade.getPlaceDetail("poi-1"));
+        verify(gaode).getPlaceDetail("poi-1");
+        verify(configApi, never()).getConfigValueByKey(org.mockito.ArgumentMatchers.anyString());
+    }
+
 }

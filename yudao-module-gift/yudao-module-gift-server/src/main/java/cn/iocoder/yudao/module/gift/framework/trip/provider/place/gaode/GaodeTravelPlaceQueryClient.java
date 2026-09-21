@@ -23,6 +23,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
 
     private static final String DEFAULT_URL = "https://restapi.amap.com/v5/place/text";
     private static final String DEFAULT_AROUND_URL = "https://restapi.amap.com/v5/place/around";
+    private static final String DEFAULT_DETAIL_URL = "https://restapi.amap.com/v5/place/detail";
     private static final int DEFAULT_LIMIT = 25;
     private static final int MAX_LIMIT = 25;
     private static final int MAX_PAGE = 100;
@@ -93,11 +94,48 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         }
     }
 
+    @Override
+    @Cacheable(cacheNames = "tripPlaceDetailGaode#30m", key = "#poiId",
+            unless = "#result == null || #result.success != true")
+    public Response getPlaceDetail(String poiId) {
+        if (StrUtil.isBlank(poiId)) {
+            return Response.failure("旅行地点详情查询缺少 POI 编号");
+        }
+        if (config == null || StrUtil.isBlank(config.getAmapKey())) {
+            log.warn("[getPlaceDetail][高德旅行地点详情配置缺失，poiId({})]", poiId);
+            return Response.failure("高德旅行地点详情服务未配置 AMAP_WEB_SERVICE_KEY");
+        }
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder
+                .fromUriString(StrUtil.blankToDefault(config.getAmapDetailUrl(), DEFAULT_DETAIL_URL))
+                .queryParam("key", config.getAmapKey()).queryParam("id", poiId)
+                .queryParam("show_fields", "business,photos").queryParam("output", "json");
+        long startTime = System.currentTimeMillis();
+        try {
+            ResponseEntity<String> responseEntity = restTemplate.getForEntity(
+                    uriBuilder.build().encode().toUri(), String.class);
+            if (!responseEntity.getStatusCode().is2xxSuccessful() || StrUtil.isBlank(responseEntity.getBody())) {
+                return Response.failure("高德旅行地点详情服务无有效响应");
+            }
+            JsonNode root = JsonUtils.parseTree(responseEntity.getBody());
+            String code = JsonUtils.getText(root, "infocode");
+            boolean success = "1".equals(JsonUtils.getText(root, "status")) && "10000".equals(code);
+            List<Place> places = success ? parsePlaces(root.path("pois"), null, 1) : List.of();
+            log.info("[getPlaceDetail][高德旅行地点详情查询完成，poiId({}) code({}) success({}) count({}) cost({}ms)]",
+                    poiId, code, success, places.size(), System.currentTimeMillis() - startTime);
+            return new Response(success, code, JsonUtils.getText(root, "info"), places);
+        } catch (RuntimeException ex) {
+            // 高德 Key 位于 URL 查询参数中，避免记录异常详情导致 Key 泄漏
+            log.error("[getPlaceDetail][调用高德旅行地点详情失败，poiId({}) cost({}ms) exceptionType({})]",
+                    poiId, System.currentTimeMillis() - startTime, ex.getClass().getSimpleName());
+            return Response.failure("高德旅行地点详情服务调用失败");
+        }
+    }
+
     private static List<Place> parsePlaces(JsonNode pois, AmapPoiTypeEnum type, int limit) {
         if (!pois.isArray()) {
             return List.of();
         }
-        String expectedTypePrefix = type.getAmapTypePrefix();
+        String expectedTypePrefix = type == null ? "" : type.getAmapTypePrefix();
         List<Place> result = new ArrayList<>();
         for (JsonNode poi : pois) {
             String name = text(poi, "name");
@@ -107,7 +145,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
             // 高德偶尔会在 types 查询结果中混入相邻业态；有 typecode 时严格过滤，
             // 没有 typecode 的兼容测试数据仍按名称和地址返回。
             String typecode = text(poi, "typecode");
-            if (StrUtil.isNotBlank(typecode) && !typecode.startsWith(expectedTypePrefix)) {
+            if (type != null && StrUtil.isNotBlank(typecode) && !typecode.startsWith(expectedTypePrefix)) {
                 continue;
             }
             String[] coordinates = StrUtil.splitToArray(text(poi, "location"), ',');

@@ -40,6 +40,7 @@ public class TripProviderProperties {
     public static class TravelPlace {
         private String amapUrl = "https://restapi.amap.com/v5/place/text";
         private String amapAroundUrl = "https://restapi.amap.com/v5/place/around";
+        private String amapDetailUrl = "https://restapi.amap.com/v5/place/detail";
         private String amapKey;
     }
 

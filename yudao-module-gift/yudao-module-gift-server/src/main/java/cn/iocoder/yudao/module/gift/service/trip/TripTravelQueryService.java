@@ -108,6 +108,22 @@ public class TripTravelQueryService {
                 "旅行地点查询失败");
     }
 
+    /** 按高德 POI 编号重新读取权威详情；查询成功但不存在时返回 null。 */
+    public Place getPlaceDetail(String poiId) {
+        TravelPlaceQueryClient.Response response = travelPlaceQueryClientFacade.getPlaceDetail(poiId);
+        if (!Boolean.TRUE.equals(response.getSuccess())) {
+            throw new IllegalStateException(StrUtil.blankToDefault(response.getMessage(), "旅行地点详情查询失败"));
+        }
+        List<TravelPlaceQueryClient.Place> places = response.getPlaces() == null ? List.of() : response.getPlaces();
+        if (places.isEmpty()) {
+            return null;
+        }
+        TravelPlaceQueryClient.Place place = places.get(0);
+        return new Place("gaode", place.getPoiId(), place.getName(), place.getAddress(), place.getLongitude(),
+                place.getLatitude(), place.getImageUrl(), place.getTelephone(), place.getRating(), place.getCost(),
+                place.getTag(), place.getBusinessHours());
+    }
+
     /** 以已选景点为中心查询 5km 内餐厅；坐标必须是高德 GCJ-02。 */
     public List<Place> queryRestaurantsAround(String city, String longitude, String latitude, int limit) {
         return queryPlacesAround(AmapPoiTypeEnum.FOOD, city, longitude, latitude, 5_000, limit);

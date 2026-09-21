@@ -41,6 +41,16 @@ public class TravelPlaceQueryClientFacade {
         return client.query(request);
     }
 
+    public TravelPlaceQueryClient.Response getPlaceDetail(String poiId) {
+        TravelPlaceQueryClient client = clients.get(DEFAULT_PROVIDER);
+        if (client == null) {
+            log.warn("[getPlaceDetail][旅行地点详情供应商不存在，provider({}) poiId({})]",
+                    DEFAULT_PROVIDER, poiId);
+            return TravelPlaceQueryClient.Response.failure("未配置旅行地点详情供应商：" + DEFAULT_PROVIDER);
+        }
+        return client.getPlaceDetail(poiId);
+    }
+
     public String provider(AmapPoiTypeEnum type) {
         String configKey = type == AmapPoiTypeEnum.HOTEL
                 ? HOTEL_QUERY_FROM_CONFIG_KEY : RESTAURANT_QUERY_FROM_CONFIG_KEY;

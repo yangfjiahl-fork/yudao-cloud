@@ -140,6 +140,7 @@ yudao:
       travel-place:
         amap-url: ${AMAP_TRAVEL_PLACE_URL:https://restapi.amap.com/v5/place/text}
         amap-around-url: ${AMAP_TRAVEL_PLACE_AROUND_URL:https://restapi.amap.com/v5/place/around}
+        amap-detail-url: ${AMAP_TRAVEL_PLACE_DETAIL_URL:https://restapi.amap.com/v5/place/detail}
         amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
       route:
         amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}

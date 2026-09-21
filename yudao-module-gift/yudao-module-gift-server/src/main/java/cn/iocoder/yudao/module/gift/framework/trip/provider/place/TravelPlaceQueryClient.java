@@ -17,6 +17,9 @@ public interface TravelPlaceQueryClient {
 
     Response query(Request request);
 
+    /** 按供应商 POI 编号查询权威详情。 */
+    Response getPlaceDetail(String poiId);
+
     @Data
     class Request {
 

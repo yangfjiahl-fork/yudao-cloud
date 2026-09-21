@@ -25,6 +25,7 @@ class GaodeTravelPlaceQueryClientTest {
 
     private static final String AMAP_URL = "https://example.com/v5/place/text";
     private static final String AMAP_AROUND_URL = "https://example.com/v5/place/around";
+    private static final String AMAP_DETAIL_URL = "https://example.com/v5/place/detail";
 
     private MockRestServiceServer server;
     private GaodeTravelPlaceQueryClient client;
@@ -34,7 +35,8 @@ class GaodeTravelPlaceQueryClientTest {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
         TripProviderProperties.TravelPlace config = new TripProviderProperties.TravelPlace()
-                .setAmapUrl(AMAP_URL).setAmapAroundUrl(AMAP_AROUND_URL).setAmapKey("test-amap-key");
+                .setAmapUrl(AMAP_URL).setAmapAroundUrl(AMAP_AROUND_URL).setAmapDetailUrl(AMAP_DETAIL_URL)
+                .setAmapKey("test-amap-key");
         client = new GaodeTravelPlaceQueryClient(restTemplate, config);
     }
 
@@ -126,6 +128,35 @@ class GaodeTravelPlaceQueryClientTest {
 
         assertTrue(response.getSuccess());
         assertEquals("B0FFSHOP", response.getPlaces().get(0).getPoiId());
+    }
+
+    @Test
+    void getPlaceDetail() {
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith(AMAP_DETAIL_URL)))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(queryParam("key", "test-amap-key"))
+                .andExpect(queryParam("id", "B0FFDETAIL"))
+                .andExpect(queryParam("show_fields", "business,photos"))
+                .andExpect(queryParam("output", "json"))
+                .andRespond(withSuccess("""
+                        {"status":"1","info":"OK","infocode":"10000","pois":[{
+                          "id":"B0FFDETAIL","name":"西湖景区","typecode":"110000",
+                          "location":"120.1001,30.2002","address":"杭州市西湖区",
+                          "photos":[{"url":"https://example.com/scenic.jpg"}],
+                          "business":{"tel":"0571-12345678","rating":"4.8","business_time":"08:00-18:00"}
+                        }]}
+                        """, MediaType.APPLICATION_JSON));
+
+        TravelPlaceQueryClient.Response response = client.getPlaceDetail("B0FFDETAIL");
+
+        assertTrue(response.getSuccess());
+        TravelPlaceQueryClient.Place place = response.getPlaces().get(0);
+        assertEquals("B0FFDETAIL", place.getPoiId());
+        assertEquals("西湖景区", place.getName());
+        assertEquals("120.1001", place.getLongitude());
+        assertEquals("30.2002", place.getLatitude());
+        assertEquals("4.8", place.getRating());
+        assertEquals("08:00-18:00", place.getBusinessHours());
     }
 
 }
