@@ -24,8 +24,8 @@
 
 ## Phase 3 - Unified editing model
 
-- [ ] Give every itinerary item a stable `itemId` plus day, type, time period, sort, time, duration, POI, lock, and source fields.
-- [ ] Define `TripChangeCommand` operations for add, remove, replace, move, update, lock, unlock, and replan.
+- [x] Give every itinerary item a stable `itemId` plus day, type, time period, sort, time, duration, POI, lock, and source fields.
+- [x] Define `TripChangeCommand` operations for add, remove, replace, move, update, lock, unlock, and replan.
 - [ ] Add `TripPlanEditorService` with base-version validation and affected-day detection.
 - [ ] Replan only affected days and preserve locked items.
 
@@ -59,3 +59,4 @@ Use: `国庆节，2大2小上海出发去云南6天5晚，亲子。`
 - 2026-09-21: Kept only `/managed/run` and moved routing to the backend orchestration action.
 - 2026-09-21: Restored Maven access with a temporary Aliyun mirror and the sandbox's dynamic HTTPS proxy. The 31-module `test-compile` passed, followed by 10 focused tests for itinerary persistence, orchestration decisions, and `/managed/run` AG-UI behavior.
 - 2026-09-21: Added the Phase 2 macro-skeleton contract and server validation. Managed Agent now selects daily city, area, theme, anchors, and transfer days; Java queries each day's POI candidates in parallel and retains OR-Tools scheduling. Compile and 19 focused regression tests passed. Real Managed Agent + Amap verification remains in the fixed regression scenario.
+- 2026-09-21: Started Phase 3 with stable itinerary item identities and the shared `TripChangeCommand` contract. Item fields are normalized at the immutable-version boundary for both planner paths; compile and 10 focused tests passed.

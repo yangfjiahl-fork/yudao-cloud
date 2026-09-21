@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
@@ -74,6 +75,16 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
             assertEquals("云南亲子六日行程", saved.displayText());
             assertEquals(10L, trip.getCurrentItineraryId());
             assertEquals(3, itinerary.get("version"));
+            Map<?, ?> normalizedDay = (Map<?, ?>) ((List<?>) itinerary.get("daily_itinerary")).get(0);
+            Map<?, ?> normalizedItem = (Map<?, ?>) ((List<?>) normalizedDay.get("slots")).get(0);
+            assertFalse(String.valueOf(normalizedItem.get("itemId")).isBlank());
+            assertEquals(1, normalizedItem.get("day"));
+            assertEquals("ACTIVITY", normalizedItem.get("type"));
+            assertEquals("MORNING", normalizedItem.get("timePeriod"));
+            assertEquals(0, normalizedItem.get("sort"));
+            assertEquals(150, normalizedItem.get("durationMinutes"));
+            assertEquals(false, normalizedItem.get("locked"));
+            assertEquals("JAVA_PLANNER", normalizedItem.get("source"));
 
             ArgumentCaptor<TripItineraryDO> itineraryCaptor = ArgumentCaptor.forClass(TripItineraryDO.class);
             verify(tripItineraryMapper).insert(itineraryCaptor.capture());

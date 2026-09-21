@@ -19,11 +19,13 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /** 统一保存不可变行程版本，并更新当前行程指针。 */
 @Service
@@ -49,6 +51,7 @@ public class TripItineraryVersionService {
                                                   Map<String, Object> itinerary) {
         Integer maxVersion = tripItineraryMapper.selectMaxVersionByTripId(trip.getId());
         int version = (maxVersion == null ? 0 : maxVersion) + 1;
+        normalizeItineraryItems(itinerary);
         itinerary.put("version", version);
         String displayText = StrUtil.blankToDefault(text(itinerary.get("summary")), "已为你生成旅行方案。");
         AiChatMessageRespDTO assistant = createAssistantMessage(trip.getConversationId(), memberId, displayText);
@@ -90,6 +93,68 @@ public class TripItineraryVersionService {
         req.setUserType(UserTypeEnum.MEMBER.getValue());
         req.setTitle(startDate + " " + destination);
         aiChatApi.updateConversation(req);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void normalizeItineraryItems(Map<String, Object> itinerary) {
+        if (!(itinerary.get("daily_itinerary") instanceof List<?> rawDays)) {
+            return;
+        }
+        String source = "JAVA_PLANNER";
+        if (itinerary.get("planner") instanceof Map<?, ?> planner) {
+            source = StrUtil.blankToDefault(text(planner.get("type")), source);
+        }
+        List<Map<String, Object>> days = new ArrayList<>();
+        for (Object rawDay : rawDays) {
+            if (!(rawDay instanceof Map<?, ?> dayMap)) {
+                continue;
+            }
+            Map<String, Object> day = new LinkedHashMap<>((Map<String, Object>) dayMap);
+            Integer dayNumber = MapUtil.getInt(day, "day");
+            List<Map<String, Object>> slots = new ArrayList<>();
+            if (day.get("slots") instanceof List<?> rawSlots) {
+                for (int index = 0; index < rawSlots.size(); index++) {
+                    Object rawSlot = rawSlots.get(index);
+                    if (!(rawSlot instanceof Map<?, ?> slotMap)) {
+                        continue;
+                    }
+                    Map<String, Object> slot = new LinkedHashMap<>((Map<String, Object>) slotMap);
+                    String timePeriod = text(slot.get("slot")).toUpperCase(Locale.ROOT);
+                    slot.put("itemId", StrUtil.blankToDefault(text(slot.get("itemId")), UUID.randomUUID().toString()));
+                    slot.put("day", dayNumber);
+                    slot.put("type", StrUtil.blankToDefault(text(slot.get("type")), itemType(timePeriod)));
+                    slot.put("timePeriod", StrUtil.blankToDefault(text(slot.get("timePeriod")), timePeriod));
+                    slot.put("sort", MapUtil.getInt(slot, "sort", index));
+                    slot.put("startTime", StrUtil.blankToDefault(text(slot.get("startTime")),
+                            text(slot.get("plannedStartTime"))));
+                    slot.put("durationMinutes", MapUtil.getInt(slot, "durationMinutes",
+                            MapUtil.getInt(slot, "suggestedStayMinutes", defaultDuration(timePeriod))));
+                    slot.put("poiId", text(slot.get("poiId")));
+                    slot.put("locked", MapUtil.getBool(slot, "locked", false));
+                    slot.put("source", StrUtil.blankToDefault(text(slot.get("source")), source));
+                    slots.add(slot);
+                }
+            }
+            day.put("slots", slots);
+            days.add(day);
+        }
+        itinerary.put("daily_itinerary", days);
+    }
+
+    private static String itemType(String timePeriod) {
+        return switch (timePeriod) {
+            case "LUNCH", "DINNER" -> "MEAL";
+            case "ACCOMMODATION" -> "LODGING";
+            default -> "ACTIVITY";
+        };
+    }
+
+    private static int defaultDuration(String timePeriod) {
+        return switch (timePeriod) {
+            case "LUNCH", "DINNER" -> 60;
+            case "ACCOMMODATION" -> 0;
+            default -> 150;
+        };
     }
 
     @SuppressWarnings("unchecked")
