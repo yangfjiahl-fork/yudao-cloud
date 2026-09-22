@@ -3,21 +3,35 @@ package cn.iocoder.yudao.module.gift.framework.trip.managed;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.dashscope.agentstudio.AgentStudioClient;
 import com.alibaba.dashscope.agentstudio.message.ClientEvents;
+import com.alibaba.dashscope.agentstudio.message.ContentBlock;
+import com.alibaba.dashscope.agentstudio.message.Message;
+import com.alibaba.dashscope.agentstudio.model.AgentStudioDeletionStatus;
 import com.alibaba.dashscope.agentstudio.model.Session;
 import com.alibaba.dashscope.agentstudio.param.SessionCreateParam;
 import com.alibaba.dashscope.agentstudio.resource.AgentStudioEventStream;
+import com.alibaba.dashscope.exception.ApiException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Managed Agents Session API 的窄适配层；业务代码不感知 SDK 事件模型。 */
 @RequiredArgsConstructor
+@Slf4j
 public class ManagedAgentSessionClient implements AutoCloseable {
 
     private final ManagedAgentProperties properties;
+    private final ManagedAgentExecutionBudgetDecider budgetDecider;
+    private final ThreadPoolTaskExecutor taskExecutor;
     private volatile AgentStudioClient client;
 
     public String createSession(String title, Long tripId, Long conversationId) {
@@ -37,30 +51,128 @@ public class ManagedAgentSessionClient implements AutoCloseable {
     }
 
     /**
-     * 先建立 SSE，再发送用户事件，避免短任务在订阅建立前完成。返回最后一条包含 JSON 的助手消息。
+     * 建立 SSE 后发送用户事件，并在独立工作线程消费原始事件。调用线程负责绝对超时，
+     * 事件预算由决策器负责；任何预算超限都会中断并删除本次专用云端 Session。
      */
-    public String execute(String sessionId, String task) {
+    public ManagedAgentExecutionResult execute(String sessionId, String task) {
         validateConfig();
-        long timeoutMs = properties.getStreamTimeout().toMillis();
+        ManagedAgentExecutionBudgetDecider.Budget budget = budgetDecider.newBudget();
+        AtomicBoolean remoteStopped = new AtomicBoolean();
+        Future<ManagedAgentExecutionResult> future = taskExecutor.submit(
+                () -> consumeEvents(sessionId, task, budget, remoteStopped));
+        try {
+            return future.get(properties.getMaxRunDuration().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            stopRemoteExecution(sessionId, remoteStopped, "max_run_duration");
+            throw new ManagedAgentBudgetExceededException(
+                    ManagedAgentExecutionBudgetDecider.Reason.MAX_RUN_DURATION, budget.snapshot());
+        } catch (InterruptedException e) {
+            future.cancel(true);
+            stopRemoteExecution(sessionId, remoteStopped, "caller_interrupted");
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Managed Agents 执行被中断", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("Managed Agents 执行失败", cause);
+        }
+    }
+
+    private ManagedAgentExecutionResult consumeEvents(
+            String sessionId, String task, ManagedAgentExecutionBudgetDecider.Budget budget,
+            AtomicBoolean remoteStopped) {
+        long idleTimeoutMs = properties.getStreamTimeout().toMillis();
         List<String> messages = new ArrayList<>();
         AgentStudioClient currentClient = client();
-        try (AgentStudioEventStream stream = currentClient.sessions().events().stream(sessionId, timeoutMs)) {
+        try (AgentStudioEventStream stream = currentClient.sessions().events().stream(sessionId, idleTimeoutMs)) {
             currentClient.sessions().events().send(sessionId,
                     Collections.singletonList(ClientEvents.userMessage(task)));
-            for (String message : stream.textStream()) {
-                if (StrUtil.isNotBlank(message)) {
-                    messages.add(message);
+            for (Message event : stream) {
+                List<String> eventTexts = assistantTexts(event);
+                int addedCharacters = eventTexts.stream().mapToInt(String::length).sum();
+                ManagedAgentExecutionBudgetDecider.Decision decision = budget.decide(event, addedCharacters);
+                if (!decision.allowed()) {
+                    stopRemoteExecution(sessionId, remoteStopped, decision.reason().name().toLowerCase());
+                    throw new ManagedAgentBudgetExceededException(decision.reason(), decision.snapshot());
+                }
+                messages.addAll(eventTexts);
+                if (isTerminal(event)) {
+                    break;
+                }
+                if ("error".equals(event.getType())) {
+                    throw new IllegalStateException("Managed Agents 返回错误事件: " + event.getMessage());
                 }
             }
+        } catch (ApiException e) {
+            if (e.getStatus() != null && "stream_timeout".equals(e.getStatus().getCode())) {
+                stopRemoteExecution(sessionId, remoteStopped, "stream_idle_timeout");
+                throw new ManagedAgentBudgetExceededException(
+                        ManagedAgentExecutionBudgetDecider.Reason.STREAM_IDLE_TIMEOUT, budget.snapshot());
+            }
+            throw e;
         }
         for (int index = messages.size() - 1; index >= 0; index--) {
             String message = messages.get(index);
             if (message.indexOf('{') >= 0 && message.lastIndexOf('}') > message.indexOf('{')) {
-                return message;
+                ManagedAgentExecutionBudgetDecider.Snapshot snapshot = budget.snapshot();
+                log.info("[execute][sessionId({}) 模型请求({}) 工具调用({}) 输入Token({}) 输出Token({}) 耗时({}ms)]",
+                        sessionId, snapshot.modelRequests(), snapshot.toolCalls(), snapshot.inputTokens(),
+                        snapshot.outputTokens(), snapshot.durationMs());
+                return new ManagedAgentExecutionResult(message, snapshot);
             }
         }
         throw new IllegalStateException(messages.isEmpty()
                 ? "Managed Agents 未返回旅行计划" : "Managed Agents 最终消息不是 JSON 旅行计划");
+    }
+
+    private void stopRemoteExecution(String sessionId, AtomicBoolean remoteStopped, String reason) {
+        if (!remoteStopped.compareAndSet(false, true)) {
+            return;
+        }
+        AgentStudioClient currentClient = client();
+        try {
+            currentClient.sessions().events().send(sessionId,
+                    Collections.singletonList(ClientEvents.userInterrupt()));
+        } catch (RuntimeException e) {
+            log.warn("[stopRemoteExecution][sessionId({}) reason({}) 发送 interrupt 失败]", sessionId, reason, e);
+        }
+        try {
+            // 每次规划都创建独立 Session；删除可阻止服务端在本地 SSE 关闭后继续执行。
+            AgentStudioDeletionStatus deletion = currentClient.sessions().delete(sessionId);
+            if (deletion == null || !deletion.isDeleted()) {
+                log.error("[stopRemoteExecution][sessionId({}) reason({}) 云端 Session 未确认删除]",
+                        sessionId, reason);
+            }
+        } catch (RuntimeException e) {
+            log.error("[stopRemoteExecution][sessionId({}) reason({}) 删除云端 Session 失败]", sessionId, reason, e);
+        }
+    }
+
+    private static List<String> assistantTexts(Message event) {
+        if (!"message".equals(event.getType()) || !"assistant".equals(event.getRole())
+                || event.getContent() == null) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (ContentBlock block : event.getContent()) {
+            if (block instanceof ContentBlock.Text textBlock && StrUtil.isNotBlank(textBlock.getText())) {
+                result.add(textBlock.getText());
+            }
+        }
+        return result;
+    }
+
+    private static boolean isTerminal(Message event) {
+        if (!"session_status".equals(event.getType()) || event.getData() == null
+                || !event.getData().has("session_status")) {
+            return false;
+        }
+        String status = event.getData().get("session_status").getAsString();
+        return "idle".equals(status) || "terminated".equals(status)
+                || "rescheduled".equals(status) || "deleted".equals(status);
     }
 
     private void validateConfig() {

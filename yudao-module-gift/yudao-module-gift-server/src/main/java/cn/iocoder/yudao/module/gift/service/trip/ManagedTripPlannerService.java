@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentBudgetExceededException;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionClient;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import jakarta.annotation.Resource;
@@ -41,18 +43,29 @@ public class ManagedTripPlannerService {
             trip.setManagedAgentSessionId(sessionId);
             String task = buildTask(state, latestUserMessage);
             progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
-            response = managedAgentSessionClient.execute(sessionId, task);
+            ManagedAgentExecutionResult execution = managedAgentSessionClient.execute(sessionId, task);
+            response = execution.response();
             TripMacroSkeleton macroSkeleton = ManagedTripPlanValidator.validateMacroSkeleton(
                     TripAgentFormatUtils.parseMap(response), state);
             progressConsumer.accept("宏观路线已确认，正在按每天的城市与区域查询高德候选…");
             Map<String, Object> itinerary = tripItineraryAssembler.assemble(state, macroSkeleton, progressConsumer);
-            tripRunLogService.complete(runId, "managed-agent", null, null, null,
+            tripRunLogService.complete(runId, "managed-agent", execution.budget().inputTokens(),
+                    execution.budget().outputTokens(), execution.budget().totalTokens(),
                     System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
-                            "sessionId", sessionId, "macroSkeleton", macroSkeleton.toMap(), "itinerary", itinerary)));
+                            "sessionId", sessionId, "budget", execution.budget(),
+                            "macroSkeleton", macroSkeleton.toMap(), "itinerary", itinerary)));
             return itinerary;
         } catch (RuntimeException e) {
-            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(), response == null ? null
-                    : JsonUtils.toJsonString(Map.of("response", response)));
+            Map<String, Object> failureOutput = new LinkedHashMap<>();
+            if (response != null) {
+                failureOutput.put("response", response);
+            }
+            if (e instanceof ManagedAgentBudgetExceededException budgetExceeded) {
+                failureOutput.put("budgetReason", budgetExceeded.getReason().name());
+                failureOutput.put("budget", budgetExceeded.getSnapshot());
+            }
+            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(), failureOutput.isEmpty()
+                    ? null : JsonUtils.toJsonString(failureOutput));
             throw e;
         }
     }

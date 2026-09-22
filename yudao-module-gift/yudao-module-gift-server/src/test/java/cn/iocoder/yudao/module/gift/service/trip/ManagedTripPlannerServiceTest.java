@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionBudgetDecider;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionClient;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import org.junit.jupiter.api.Test;
@@ -39,12 +41,16 @@ class ManagedTripPlannerServiceTest {
         ReflectionTestUtils.setField(service, "tripItineraryAssembler", assembler);
         when(runLogService.create(anyLong(), anyString(), anyString())).thenReturn(8L);
         when(sessionService.createSession(anyLong(), anyLong(), anyMap())).thenReturn("session-1");
-        when(sessionClient.execute(eq("session-1"), anyString())).thenReturn("""
+        String managedResponse = """
                 {"macro_skeleton":{"days":[
                   {"day":1,"city":"昆明","area":"滇池周边","theme":"轻松亲子","anchorPoiNames":["滇池"],"transferDay":false},
                   {"day":2,"city":"大理","area":"大理古城","theme":"换城人文","anchorPoiNames":["大理古城"],"transferDay":true}
                 ]}}
-                """);
+                """;
+        ManagedAgentExecutionBudgetDecider.Snapshot budget =
+                new ManagedAgentExecutionBudgetDecider.Snapshot(2, 1, 1_200, 300, 1_500, 500, 800);
+        when(sessionClient.execute(eq("session-1"), anyString()))
+                .thenReturn(new ManagedAgentExecutionResult(managedResponse, budget));
         Map<String, Object> expected = Map.of("daily_itinerary", List.of(), "citation_ids", List.of());
         when(assembler.assemble(anyMap(), any(TripMacroSkeleton.class), any(Consumer.class))).thenReturn(expected);
         TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L);
@@ -62,7 +68,7 @@ class ManagedTripPlannerServiceTest {
         ArgumentCaptor<TripMacroSkeleton> macroCaptor = ArgumentCaptor.forClass(TripMacroSkeleton.class);
         verify(assembler).assemble(eq(state), macroCaptor.capture(), any(Consumer.class));
         assertEquals("大理", macroCaptor.getValue().days().get(1).city());
-        verify(runLogService).complete(eq(8L), eq("managed-agent"), eq(null), eq(null), eq(null),
+        verify(runLogService).complete(eq(8L), eq("managed-agent"), eq(1_200L), eq(300L), eq(1_500L),
                 anyLong(), anyString());
     }
 

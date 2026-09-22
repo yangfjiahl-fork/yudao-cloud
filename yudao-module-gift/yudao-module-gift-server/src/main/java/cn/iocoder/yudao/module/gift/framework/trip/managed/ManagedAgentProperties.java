@@ -22,7 +22,19 @@ public class ManagedAgentProperties {
     private String agentId;
     /** Agent 使用的百炼云端托管环境编号。 */
     private String environmentId;
-    /** 单次规划事件流等待上限。 */
-    private Duration streamTimeout = Duration.ofMinutes(5);
+    /** 相邻事件的最大空闲等待时长。 */
+    private Duration streamTimeout = Duration.ofSeconds(45);
+    /** 单次托管 Agent 运行的绝对时长上限。 */
+    private Duration maxRunDuration = Duration.ofMinutes(3);
+    /** 单次运行允许发起的模型推理次数。 */
+    private int maxModelRequests = 4;
+    /** 单次运行允许执行的工具调用次数。 */
+    private int maxToolCalls = 2;
+    /** 单次运行允许消耗的总 Token。 */
+    private long maxTotalTokens = 30_000;
+    /** 单次运行允许产生的输出 Token。 */
+    private long maxOutputTokens = 4_000;
+    /** 单次运行允许收集的助手文本字符数。 */
+    private int maxOutputCharacters = 32_768;
 
 }

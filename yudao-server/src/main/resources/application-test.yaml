@@ -164,7 +164,13 @@ yudao:
       region: cn-beijing
       agent-id: agent_01M2VYR70XKESBBK3A9TS27FJ1
       environment-id: env_ZDUyZTk1MDU1YzQ1NDFmOG
-      stream-timeout: 5m
+      stream-timeout: 45s
+      max-run-duration: 3m
+      max-model-requests: 4
+      max-tool-calls: 2
+      max-total-tokens: 30000
+      max-output-tokens: 4000
+      max-output-characters: 32768
   pay:
     order-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/order # 支付渠道的【支付】回调地址
     refund-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/refund # 支付渠道的【退款】回调地址

@@ -343,6 +343,14 @@ yudao:
       api-key: ${DASHSCOPE_API_KEY:${yudao.gift.trip-managed-agent.api-key:}}
       model: ${ALIYUN_ASR_MODEL:paraformer-realtime-v2}
       max-file-size: ${ALIYUN_ASR_MAX_FILE_SIZE:10MB}
+    trip-managed-agent:
+      stream-timeout: ${MANAGED_AGENT_STREAM_TIMEOUT:45s}
+      max-run-duration: ${MANAGED_AGENT_MAX_RUN_DURATION:3m}
+      max-model-requests: ${MANAGED_AGENT_MAX_MODEL_REQUESTS:4}
+      max-tool-calls: ${MANAGED_AGENT_MAX_TOOL_CALLS:2}
+      max-total-tokens: ${MANAGED_AGENT_MAX_TOTAL_TOKENS:30000}
+      max-output-tokens: ${MANAGED_AGENT_MAX_OUTPUT_TOKENS:4000}
+      max-output-characters: ${MANAGED_AGENT_MAX_OUTPUT_CHARACTERS:32768}
     amap:
       key: ${AMAP_WEB_SERVICE_KEY:}
       reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}

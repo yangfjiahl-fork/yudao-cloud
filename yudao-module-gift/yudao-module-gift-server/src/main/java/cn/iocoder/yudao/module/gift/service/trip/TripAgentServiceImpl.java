@@ -22,6 +22,8 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItinerarySlotMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentBudgetExceededException;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionBudgetDecider;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -162,7 +164,28 @@ public class TripAgentServiceImpl implements TripAgentService {
     @BizTrace(operationName = "trip.agent.handle-managed-message", type = "'ai.chat.conversation'", id = "#conversationId")
     public TripAgentResult handleManagedMessage(Long conversationId, Long memberId, String content,
                                                 Consumer<TripAgentEvent> eventConsumer) {
-        return handleMessage(conversationId, memberId, content, eventConsumer, true);
+        try {
+            return handleMessage(conversationId, memberId, content, eventConsumer, true);
+        } catch (ManagedAgentBudgetExceededException e) {
+            String fallback = buildManagedBudgetFallback(e.getReason());
+            AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, fallback, true);
+            log.warn("[handleManagedMessage][conversationId({}) memberId({}) 托管 Agent 预算熔断 reason({}) snapshot({})]",
+                    conversationId, memberId, e.getReason(), e.getSnapshot());
+            eventConsumer.accept(TripAgentEvent.of("question", "BUDGET_GUARD", fallback)
+                    .setMessageId(assistant.getId()).setMissingRequired(List.of()).setSuggestions(List.of()));
+            return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(fallback)
+                    .setMissingRequired(List.of());
+        }
+    }
+
+    private static String buildManagedBudgetFallback(ManagedAgentExecutionBudgetDecider.Reason reason) {
+        if (reason == ManagedAgentExecutionBudgetDecider.Reason.MAX_RUN_DURATION
+                || reason == ManagedAgentExecutionBudgetDecider.Reason.STREAM_IDLE_TIMEOUT) {
+            return "这次行程规划耗时较长，我已停止本次生成。你可以减少城市数量或缩短天数后再试，"
+                    + "我会基于已经填写的信息继续规划。";
+        }
+        return "这次行程规划涉及的步骤较多，我已停止本次生成。你可以减少城市数量或缩短天数后再试，"
+                + "我会基于已经填写的信息继续规划。";
     }
 
     private TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
