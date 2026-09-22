@@ -25,6 +25,12 @@ yudao:
       agent-id: agent_01M2VYR70XKESBBK3A9TS27FJ1
       environment-id: env_ZDUyZTk1MDU1YzQ1NDFmOG
       stream-timeout: 5m
+      # INTAKE 的模型请求固定为 1 次，工具/Skill 调用固定为 0 次。
+      intake-stream-timeout: 45s
+      intake-max-run-duration: 3m
+      intake-max-total-tokens: 8000
+      intake-max-output-tokens: 1000
+      intake-max-output-characters: 8192
 ```
 
 若专有网络需要显式地址，可改配 `base-url`，其值为
@@ -44,6 +50,7 @@ Accept: text/event-stream
 
 - 每个旅行会话只创建一个 Managed Agent Session，并记录在 `gift_trip_plan.managed_agent_session_id`。
 - 后续 `INTAKE`、`GENERATE_PLAN`、`EDIT_PLAN` 均复用该 Session，使需求抽取与行程生成共享上下文。
+- `INTAKE` 与 `PLAN` 使用独立预算；`INTAKE` 只允许一次模型推理，禁止工具和 Skill 调用。
 - 预算或超时熔断只向当前运行发送 interrupt，保留 Session 与历史事件，后续请求继续复用。
 - 权威业务状态始终是 `TripState` 与当前 itinerary 版本，而不是 Managed Agents Session 上下文。
 

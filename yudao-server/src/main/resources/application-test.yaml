@@ -166,11 +166,16 @@ yudao:
       environment-id: env_ZDUyZTk1MDU1YzQ1NDFmOG
       stream-timeout: 45s
       max-run-duration: 3m
+      intake-stream-timeout: 45s
+      intake-max-run-duration: 3m
       max-model-requests: 4
       max-tool-calls: 2
       max-total-tokens: 30000
       max-output-tokens: 4000
       max-output-characters: 32768
+      intake-max-total-tokens: 8000
+      intake-max-output-tokens: 1000
+      intake-max-output-characters: 8192
   pay:
     order-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/order # 支付渠道的【支付】回调地址
     refund-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/refund # 支付渠道的【退款】回调地址

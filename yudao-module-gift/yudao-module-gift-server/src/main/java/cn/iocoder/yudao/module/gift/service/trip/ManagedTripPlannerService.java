@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentBudgetExceededException;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionStage;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -37,7 +38,8 @@ public class ManagedTripPlannerService {
         try {
             String task = buildTask(state, latestUserMessage);
             progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
-            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(trip, state, task);
+            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
+                    trip, state, task, ManagedAgentExecutionStage.PLAN);
             String sessionId = execution.sessionId();
             response = execution.result().response();
             TripMacroSkeleton macroSkeleton = ManagedTripPlanValidator.validateMacroSkeleton(

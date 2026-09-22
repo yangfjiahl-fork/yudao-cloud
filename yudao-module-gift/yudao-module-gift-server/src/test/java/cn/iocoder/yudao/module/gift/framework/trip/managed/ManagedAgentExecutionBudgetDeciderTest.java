@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ManagedAgentExecutionBudgetDeciderTest {
 
+    private ManagedAgentExecutionBudgetDecider decider;
     private ManagedAgentExecutionBudgetDecider.Budget budget;
 
     @BeforeEach
@@ -26,7 +27,8 @@ class ManagedAgentExecutionBudgetDeciderTest {
                 .setMaxTotalTokens(30_000)
                 .setMaxOutputTokens(4_000)
                 .setMaxOutputCharacters(32_768);
-        budget = new ManagedAgentExecutionBudgetDecider(properties).newBudget();
+        decider = new ManagedAgentExecutionBudgetDecider(properties);
+        budget = decider.newBudget(ManagedAgentExecutionStage.PLAN);
     }
 
     @Test
@@ -58,6 +60,48 @@ class ManagedAgentExecutionBudgetDeciderTest {
         assertFalse(decision.allowed());
         assertEquals(ManagedAgentExecutionBudgetDecider.Reason.MAX_TOOL_CALLS, decision.reason());
         assertEquals(3, decision.snapshot().toolCalls());
+    }
+
+    @Test
+    void intakeAllowsExactlyOneModelRequest() {
+        ManagedAgentExecutionBudgetDecider.Budget intake = decider.newBudget(ManagedAgentExecutionStage.INTAKE);
+        assertTrue(intake.decide(event("model_request_start", "model-1"), 0).allowed());
+
+        ManagedAgentExecutionBudgetDecider.Decision decision =
+                intake.decide(event("model_request_start", "model-2"), 0);
+
+        assertFalse(decision.allowed());
+        assertEquals(ManagedAgentExecutionBudgetDecider.Reason.MAX_MODEL_REQUESTS, decision.reason());
+        assertEquals(2, decision.snapshot().modelRequests());
+    }
+
+    @Test
+    void intakeRejectsFirstToolOrSkillCall() {
+        ManagedAgentExecutionBudgetDecider.Budget toolBudget = decider.newBudget(ManagedAgentExecutionStage.INTAKE);
+        ManagedAgentExecutionBudgetDecider.Decision toolDecision =
+                toolBudget.decide(event("mcp_call", "tool-1"), 0);
+        ManagedAgentExecutionBudgetDecider.Budget skillBudget = decider.newBudget(ManagedAgentExecutionStage.INTAKE);
+        ManagedAgentExecutionBudgetDecider.Decision skillDecision =
+                skillBudget.decide(event("span.skill_call", "skill-1"), 0);
+
+        assertFalse(toolDecision.allowed());
+        assertEquals(ManagedAgentExecutionBudgetDecider.Reason.MAX_TOOL_CALLS, toolDecision.reason());
+        assertFalse(skillDecision.allowed());
+        assertEquals(ManagedAgentExecutionBudgetDecider.Reason.MAX_TOOL_CALLS, skillDecision.reason());
+    }
+
+    @Test
+    void intakeUsesIndependentLowerOutputTokenBudget() {
+        ManagedAgentExecutionBudgetDecider.Decision intakeDecision = decider
+                .newBudget(ManagedAgentExecutionStage.INTAKE)
+                .decide(usageEvent("intake-usage", 500, 1_001), 0);
+        ManagedAgentExecutionBudgetDecider.Decision planDecision = decider
+                .newBudget(ManagedAgentExecutionStage.PLAN)
+                .decide(usageEvent("plan-usage", 500, 1_001), 0);
+
+        assertFalse(intakeDecision.allowed());
+        assertEquals(ManagedAgentExecutionBudgetDecider.Reason.MAX_OUTPUT_TOKENS, intakeDecision.reason());
+        assertTrue(planDecision.allowed());
     }
 
     @Test

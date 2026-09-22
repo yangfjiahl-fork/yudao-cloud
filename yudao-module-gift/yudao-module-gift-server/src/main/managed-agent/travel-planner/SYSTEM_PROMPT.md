@@ -9,7 +9,7 @@
 
 ## EXTRACT_TRIP_REQUIREMENTS
 
-只判断本轮消息并输出以下 JSON，不得调用任何工具：
+只判断本轮消息并输出以下 JSON，不得调用任何工具或 Skill，不得发起第二次模型推理：
 
 - `topic`：只能是 `TRAVEL`、`OFF_TOPIC` 或 `UNCERTAIN`。
 - `action`：只能是 `UPDATE`、`GENERATE`、`EDIT` 或 `CHAT`。只有用户明确要求开始生成时才使用 `GENERATE`。

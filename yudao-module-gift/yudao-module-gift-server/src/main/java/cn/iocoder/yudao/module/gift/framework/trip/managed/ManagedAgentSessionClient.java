@@ -55,14 +55,14 @@ public class ManagedAgentSessionClient implements AutoCloseable {
      * 建立 SSE 后发送用户事件，并在独立工作线程消费原始事件。调用线程负责绝对超时，
      * 事件预算由决策器负责；任何预算超限都会中断本次运行，但保留云端 Session 与历史事件。
      */
-    public ManagedAgentExecutionResult execute(String sessionId, String task) {
+    public ManagedAgentExecutionResult execute(String sessionId, String task, ManagedAgentExecutionStage stage) {
         validateConfig();
-        ManagedAgentExecutionBudgetDecider.Budget budget = budgetDecider.newBudget();
+        ManagedAgentExecutionBudgetDecider.Budget budget = budgetDecider.newBudget(stage);
         AtomicBoolean remoteStopped = new AtomicBoolean();
         Future<ManagedAgentExecutionResult> future = taskExecutor.submit(
-                () -> consumeEvents(sessionId, task, budget, remoteStopped));
+                () -> consumeEvents(sessionId, task, stage, budget, remoteStopped));
         try {
-            return future.get(properties.getMaxRunDuration().toMillis(), TimeUnit.MILLISECONDS);
+            return future.get(maxRunDuration(stage), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
             stopRemoteExecution(sessionId, remoteStopped, "max_run_duration");
@@ -83,9 +83,10 @@ public class ManagedAgentSessionClient implements AutoCloseable {
     }
 
     private ManagedAgentExecutionResult consumeEvents(
-            String sessionId, String task, ManagedAgentExecutionBudgetDecider.Budget budget,
+            String sessionId, String task, ManagedAgentExecutionStage stage,
+            ManagedAgentExecutionBudgetDecider.Budget budget,
             AtomicBoolean remoteStopped) {
-        long idleTimeoutMs = properties.getStreamTimeout().toMillis();
+        long idleTimeoutMs = streamTimeout(stage);
         List<String> messages = new ArrayList<>();
         AgentStudioClient currentClient = client();
         try (AgentStudioEventStream stream = currentClient.sessions().events().stream(sessionId, idleTimeoutMs)) {
@@ -119,8 +120,9 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             String message = messages.get(index);
             if (message.indexOf('{') >= 0 && message.lastIndexOf('}') > message.indexOf('{')) {
                 ManagedAgentExecutionBudgetDecider.Snapshot snapshot = budget.snapshot();
-                log.info("[execute][sessionId({}) 模型请求({}) 工具调用({}) 输入Token({}) 输出Token({}) 耗时({}ms)]",
-                        sessionId, snapshot.modelRequests(), snapshot.toolCalls(), snapshot.inputTokens(),
+                log.info("[execute][sessionId({}) stage({}) 模型请求({}) 工具调用({}) 输入Token({}) "
+                                + "输出Token({}) 耗时({}ms)]",
+                        sessionId, stage, snapshot.modelRequests(), snapshot.toolCalls(), snapshot.inputTokens(),
                         snapshot.outputTokens(), snapshot.durationMs());
                 return new ManagedAgentExecutionResult(message, snapshot);
             }
@@ -151,6 +153,16 @@ public class ManagedAgentSessionClient implements AutoCloseable {
         remoteStopped.set(false);
         log.error("[stopRemoteExecution][sessionId({}) reason({}) interrupt 重试后仍失败]",
                 sessionId, reason, lastException);
+    }
+
+    private long maxRunDuration(ManagedAgentExecutionStage stage) {
+        return (stage == ManagedAgentExecutionStage.INTAKE
+                ? properties.getIntakeMaxRunDuration() : properties.getMaxRunDuration()).toMillis();
+    }
+
+    private long streamTimeout(ManagedAgentExecutionStage stage) {
+        return (stage == ManagedAgentExecutionStage.INTAKE
+                ? properties.getIntakeStreamTimeout() : properties.getStreamTimeout()).toMillis();
     }
 
     private static List<String> assistantTexts(Message event) {

@@ -4,7 +4,9 @@ import com.alibaba.dashscope.agentstudio.message.Message;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.time.Duration;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -13,7 +15,10 @@ import java.util.Set;
  */
 public class ManagedAgentExecutionBudgetDecider {
 
-    private static final Set<String> TOOL_CALL_EVENT_TYPES = Set.of("tool_call", "function_call", "mcp_call");
+    private static final int INTAKE_MAX_MODEL_REQUESTS = 1;
+    private static final int INTAKE_MAX_TOOL_CALLS = 0;
+    private static final Set<String> TOOL_CALL_EVENT_TYPES = Set.of(
+            "tool_call", "function_call", "mcp_call", "skill_call", "skill_activation");
 
     private final ManagedAgentProperties properties;
 
@@ -21,8 +26,24 @@ public class ManagedAgentExecutionBudgetDecider {
         this.properties = properties;
     }
 
-    public Budget newBudget() {
-        return new Budget(properties);
+    public Budget newBudget(ManagedAgentExecutionStage stage) {
+        Objects.requireNonNull(stage, "Managed Agent 执行阶段不能为空");
+        if (stage == ManagedAgentExecutionStage.INTAKE) {
+            return newIntakeBudget();
+        }
+        return newPlanBudget();
+    }
+
+    private Budget newIntakeBudget() {
+        return new Budget(properties.getIntakeMaxRunDuration(), INTAKE_MAX_MODEL_REQUESTS, INTAKE_MAX_TOOL_CALLS,
+                properties.getIntakeMaxTotalTokens(), properties.getIntakeMaxOutputTokens(),
+                properties.getIntakeMaxOutputCharacters());
+    }
+
+    private Budget newPlanBudget() {
+        return new Budget(properties.getMaxRunDuration(), properties.getMaxModelRequests(),
+                properties.getMaxToolCalls(), properties.getMaxTotalTokens(), properties.getMaxOutputTokens(),
+                properties.getMaxOutputCharacters());
     }
 
     public enum Reason {
@@ -70,13 +91,14 @@ public class ManagedAgentExecutionBudgetDecider {
         private long totalTokens;
         private int outputCharacters;
 
-        private Budget(ManagedAgentProperties properties) {
-            this.maxRunDurationNanos = properties.getMaxRunDuration().toNanos();
-            this.maxModelRequests = properties.getMaxModelRequests();
-            this.maxToolCalls = properties.getMaxToolCalls();
-            this.maxTotalTokens = properties.getMaxTotalTokens();
-            this.maxOutputTokens = properties.getMaxOutputTokens();
-            this.maxOutputCharacters = properties.getMaxOutputCharacters();
+        private Budget(Duration maxRunDuration, int maxModelRequests, int maxToolCalls,
+                       long maxTotalTokens, long maxOutputTokens, int maxOutputCharacters) {
+            this.maxRunDurationNanos = maxRunDuration.toNanos();
+            this.maxModelRequests = maxModelRequests;
+            this.maxToolCalls = maxToolCalls;
+            this.maxTotalTokens = maxTotalTokens;
+            this.maxOutputTokens = maxOutputTokens;
+            this.maxOutputCharacters = maxOutputCharacters;
         }
 
         public synchronized Decision decide(Message event, int addedOutputCharacters) {

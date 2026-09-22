@@ -24,6 +24,7 @@ import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItinerarySlotMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentBudgetExceededException;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionBudgetDecider;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionStage;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -672,7 +673,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         String task = buildManagedIntakeTask(state, currentItinerary, content);
         Long runId = tripRunLogService.create(trip.getId(), "INTAKE", task);
         try {
-            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(trip, state, task);
+            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
+                    trip, state, task, ManagedAgentExecutionStage.INTAKE);
             tripRunLogService.complete(runId, "managed-agent", execution.result().budget().inputTokens(),
                     execution.result().budget().outputTokens(), execution.result().budget().totalTokens(),
                     System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(

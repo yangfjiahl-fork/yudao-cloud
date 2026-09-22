@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionBudgetDecider;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionStage;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -28,14 +29,16 @@ class ManagedTripAgentExecutorTest {
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"topic\":\"TRAVEL\"}",
                 new ManagedAgentExecutionBudgetDecider.Snapshot(1, 0, 200, 50, 250, 100, 300));
         when(sessionService.getOrCreateSession(1L, 2L, state)).thenReturn("session-trip");
-        when(sessionClient.execute("session-trip", "task-json")).thenReturn(agentResult);
+        when(sessionClient.execute("session-trip", "task-json", ManagedAgentExecutionStage.INTAKE))
+                .thenReturn(agentResult);
 
-        ManagedTripAgentExecutor.Execution result = executor.execute(trip, state, "task-json");
+        ManagedTripAgentExecutor.Execution result = executor.execute(
+                trip, state, "task-json", ManagedAgentExecutionStage.INTAKE);
 
         assertEquals("session-trip", result.sessionId());
         assertEquals(agentResult, result.result());
         assertEquals("session-trip", trip.getManagedAgentSessionId());
-        verify(sessionClient).execute("session-trip", "task-json");
+        verify(sessionClient).execute("session-trip", "task-json", ManagedAgentExecutionStage.INTAKE);
     }
 
 }

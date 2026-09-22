@@ -26,15 +26,25 @@ public class ManagedAgentProperties {
     private Duration streamTimeout = Duration.ofSeconds(45);
     /** 单次托管 Agent 运行的绝对时长上限。 */
     private Duration maxRunDuration = Duration.ofMinutes(3);
-    /** 单次运行允许发起的模型推理次数。 */
+    /** INTAKE 相邻事件的最大空闲等待时长。 */
+    private Duration intakeStreamTimeout = Duration.ofSeconds(45);
+    /** INTAKE 单次运行的绝对时长上限。 */
+    private Duration intakeMaxRunDuration = Duration.ofMinutes(3);
+    /** PLAN 单次运行允许发起的模型推理次数。 */
     private int maxModelRequests = 4;
-    /** 单次运行允许执行的工具调用次数。 */
+    /** PLAN 单次运行允许执行的工具调用次数。 */
     private int maxToolCalls = 2;
-    /** 单次运行允许消耗的总 Token。 */
+    /** PLAN 单次运行允许消耗的总 Token。 */
     private long maxTotalTokens = 30_000;
-    /** 单次运行允许产生的输出 Token。 */
+    /** PLAN 单次运行允许产生的输出 Token。 */
     private long maxOutputTokens = 4_000;
-    /** 单次运行允许收集的助手文本字符数。 */
+    /** PLAN 单次运行允许收集的助手文本字符数。 */
     private int maxOutputCharacters = 32_768;
+    /** INTAKE 单次运行允许消耗的总 Token；模型请求固定为 1 次，工具/Skill 调用固定为 0 次。 */
+    private long intakeMaxTotalTokens = 8_000;
+    /** INTAKE 单次运行允许产生的输出 Token。 */
+    private long intakeMaxOutputTokens = 1_000;
+    /** INTAKE 单次运行允许收集的助手文本字符数。 */
+    private int intakeMaxOutputCharacters = 8_192;
 
 }
