@@ -5,7 +5,6 @@ import com.alibaba.dashscope.agentstudio.AgentStudioClient;
 import com.alibaba.dashscope.agentstudio.message.ClientEvents;
 import com.alibaba.dashscope.agentstudio.message.ContentBlock;
 import com.alibaba.dashscope.agentstudio.message.Message;
-import com.alibaba.dashscope.agentstudio.model.AgentStudioDeletionStatus;
 import com.alibaba.dashscope.agentstudio.model.Session;
 import com.alibaba.dashscope.agentstudio.param.SessionCreateParam;
 import com.alibaba.dashscope.agentstudio.resource.AgentStudioEventStream;
@@ -28,6 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 @Slf4j
 public class ManagedAgentSessionClient implements AutoCloseable {
+
+    private static final int INTERRUPT_MAX_ATTEMPTS = 3;
 
     private final ManagedAgentProperties properties;
     private final ManagedAgentExecutionBudgetDecider budgetDecider;
@@ -52,7 +53,7 @@ public class ManagedAgentSessionClient implements AutoCloseable {
 
     /**
      * 建立 SSE 后发送用户事件，并在独立工作线程消费原始事件。调用线程负责绝对超时，
-     * 事件预算由决策器负责；任何预算超限都会中断并删除本次专用云端 Session。
+     * 事件预算由决策器负责；任何预算超限都会中断本次运行，但保留云端 Session 与历史事件。
      */
     public ManagedAgentExecutionResult execute(String sessionId, String task) {
         validateConfig();
@@ -133,22 +134,23 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             return;
         }
         AgentStudioClient currentClient = client();
-        try {
-            currentClient.sessions().events().send(sessionId,
-                    Collections.singletonList(ClientEvents.userInterrupt()));
-        } catch (RuntimeException e) {
-            log.warn("[stopRemoteExecution][sessionId({}) reason({}) 发送 interrupt 失败]", sessionId, reason, e);
-        }
-        try {
-            // 每次规划都创建独立 Session；删除可阻止服务端在本地 SSE 关闭后继续执行。
-            AgentStudioDeletionStatus deletion = currentClient.sessions().delete(sessionId);
-            if (deletion == null || !deletion.isDeleted()) {
-                log.error("[stopRemoteExecution][sessionId({}) reason({}) 云端 Session 未确认删除]",
-                        sessionId, reason);
+        RuntimeException lastException = null;
+        for (int attempt = 1; attempt <= INTERRUPT_MAX_ATTEMPTS; attempt++) {
+            try {
+                currentClient.sessions().events().send(sessionId,
+                        Collections.singletonList(ClientEvents.userInterrupt()));
+                log.info("[stopRemoteExecution][sessionId({}) reason({}) interrupt 已发送 attempt({})]",
+                        sessionId, reason, attempt);
+                return;
+            } catch (RuntimeException e) {
+                lastException = e;
+                log.warn("[stopRemoteExecution][sessionId({}) reason({}) 发送 interrupt 失败 attempt({})]",
+                        sessionId, reason, attempt, e);
             }
-        } catch (RuntimeException e) {
-            log.error("[stopRemoteExecution][sessionId({}) reason({}) 删除云端 Session 失败]", sessionId, reason, e);
         }
+        remoteStopped.set(false);
+        log.error("[stopRemoteExecution][sessionId({}) reason({}) interrupt 重试后仍失败]",
+                sessionId, reason, lastException);
     }
 
     private static List<String> assistantTexts(Message event) {
