@@ -22,9 +22,8 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItinerarySlotMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentBudgetExceededException;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionBudgetDecider;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionStage;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionTerminatedException;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentTerminationReason;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -162,11 +161,11 @@ public class TripAgentServiceImpl implements TripAgentService {
                                                 Consumer<TripAgentEvent> eventConsumer) {
         try {
             return doHandleManagedMessage(conversationId, memberId, content, eventConsumer);
-        } catch (ManagedAgentBudgetExceededException e) {
+        } catch (ManagedAgentExecutionTerminatedException e) {
             String fallback = buildManagedBudgetFallback(e.getReason());
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, fallback, true);
             log.warn("[handleManagedMessage][conversationId({}) memberId({}) 托管 Agent 预算熔断 reason({}) snapshot({})]",
-                    conversationId, memberId, e.getReason(), e.getSnapshot());
+                    conversationId, memberId, e.getReason(), e.getMetrics());
             eventConsumer.accept(TripAgentEvent.of("question", "BUDGET_GUARD", fallback)
                     .setMessageId(assistant.getId()).setMissingRequired(List.of()).setSuggestions(List.of()));
             return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(fallback)
@@ -174,9 +173,9 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private static String buildManagedBudgetFallback(ManagedAgentExecutionBudgetDecider.Reason reason) {
-        if (reason == ManagedAgentExecutionBudgetDecider.Reason.MAX_RUN_DURATION
-                || reason == ManagedAgentExecutionBudgetDecider.Reason.STREAM_IDLE_TIMEOUT) {
+    private static String buildManagedBudgetFallback(ManagedAgentTerminationReason reason) {
+        if (reason == ManagedAgentTerminationReason.MAX_RUN_DURATION
+                || reason == ManagedAgentTerminationReason.STREAM_IDLE_TIMEOUT) {
             return "这次旅行请求处理耗时较长，我已停止本次执行。你可以减少城市数量或缩短天数后再试，"
                     + "我会基于已经填写的信息继续规划。";
         }
@@ -674,18 +673,18 @@ public class TripAgentServiceImpl implements TripAgentService {
         Long runId = tripRunLogService.create(trip.getId(), "INTAKE", task);
         try {
             ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
-                    trip, state, task, ManagedAgentExecutionStage.INTAKE);
-            tripRunLogService.complete(runId, "managed-agent", execution.result().budget().inputTokens(),
-                    execution.result().budget().outputTokens(), execution.result().budget().totalTokens(),
+                    trip, state, task, ManagedTripAgentStage.INTAKE);
+            tripRunLogService.complete(runId, "managed-agent", execution.result().metrics().inputTokens(),
+                    execution.result().metrics().outputTokens(), execution.result().metrics().totalTokens(),
                     System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
-                            "sessionId", execution.sessionId(), "budget", execution.result().budget(),
+                            "sessionId", execution.sessionId(), "metrics", execution.result().metrics(),
                             "response", execution.result().response())));
             return execution.result().response();
         } catch (RuntimeException e) {
             Map<String, Object> failureOutput = new LinkedHashMap<>();
-            if (e instanceof ManagedAgentBudgetExceededException budgetExceeded) {
-                failureOutput.put("budgetReason", budgetExceeded.getReason().name());
-                failureOutput.put("budget", budgetExceeded.getSnapshot());
+            if (e instanceof ManagedAgentExecutionTerminatedException terminated) {
+                failureOutput.put("terminationReason", terminated.getReason().name());
+                failureOutput.put("metrics", terminated.getMetrics());
             }
             tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(),
                     failureOutput.isEmpty() ? null : JsonUtils.toJsonString(failureOutput));

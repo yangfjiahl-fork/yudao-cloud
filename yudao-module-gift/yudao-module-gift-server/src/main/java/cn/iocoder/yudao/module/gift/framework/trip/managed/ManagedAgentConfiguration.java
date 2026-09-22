@@ -12,14 +12,14 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(ManagedAgentProperties.class)
+@EnableConfigurationProperties({ManagedAgentClientProperties.class, ManagedTripAgentProperties.class})
 public class ManagedAgentConfiguration {
 
     public static final String MANAGED_AGENT_TASK_EXECUTOR = "managedAgentTaskExecutor";
 
     @Bean
-    public ManagedAgentExecutionBudgetDecider managedAgentExecutionBudgetDecider(ManagedAgentProperties properties) {
-        return new ManagedAgentExecutionBudgetDecider(properties);
+    public ManagedAgentExecutionBudgetDecider managedAgentExecutionBudgetDecider() {
+        return new ManagedAgentExecutionBudgetDecider();
     }
 
     @Bean(MANAGED_AGENT_TASK_EXECUTOR)
@@ -44,8 +44,8 @@ public class ManagedAgentConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    public ManagedAgentSessionClient managedAgentSessionClient(
-            ManagedAgentProperties properties,
+    public ManagedAgentClient managedAgentClient(
+            ManagedAgentClientProperties properties,
             ManagedAgentExecutionBudgetDecider budgetDecider,
             @Qualifier(MANAGED_AGENT_TASK_EXECUTOR) ThreadPoolTaskExecutor taskExecutor) {
         // 延迟创建 SDK Client，未启用旅行功能的服务启动时不强制要求 Managed Agents 配置。

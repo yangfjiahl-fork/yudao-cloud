@@ -9,6 +9,8 @@ import com.alibaba.dashscope.agentstudio.model.Session;
 import com.alibaba.dashscope.agentstudio.param.SessionCreateParam;
 import com.alibaba.dashscope.agentstudio.resource.AgentStudioEventStream;
 import com.alibaba.dashscope.exception.ApiException;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -16,34 +18,36 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Managed Agents Session API 的窄适配层；业务代码不感知 SDK 事件模型。 */
+/** 阿里云 Managed Agents Session API 适配器；仅通过 {@link ManagedAgentClient} 对外暴露。 */
 @RequiredArgsConstructor
 @Slf4j
-public class ManagedAgentSessionClient implements AutoCloseable {
+final class ManagedAgentSessionClient implements ManagedAgentClient {
 
     private static final int INTERRUPT_MAX_ATTEMPTS = 3;
+    private static final List<String> TOOL_CALL_EVENT_TYPES = List.of(
+            "tool_call", "function_call", "mcp_call", "skill_call", "skill_activation");
 
-    private final ManagedAgentProperties properties;
+    private final ManagedAgentClientProperties properties;
     private final ManagedAgentExecutionBudgetDecider budgetDecider;
     private final ThreadPoolTaskExecutor taskExecutor;
     private volatile AgentStudioClient client;
 
-    public String createSession(String title, Long tripId, Long conversationId) {
+    @Override
+    public String createSession(ManagedAgentSessionCreateRequest request) {
         validateConfig();
+        validateSessionRequest(request);
         // SDK 2.23.1 的 builder 字段名为 agent，对应 HTTP 请求体中的 agent（官方文档部分示例写作 agentId）。
         Session session = client().sessions().create(SessionCreateParam.builder()
-                .agent(properties.getAgentId())
-                .environmentId(properties.getEnvironmentId())
-                .title(title)
-                .metadata(Map.of("trip_id", String.valueOf(tripId),
-                        "conversation_id", String.valueOf(conversationId)))
+                .agent(request.agentId())
+                .environmentId(request.environmentId())
+                .title(request.title())
+                .metadata(request.metadata())
                 .build());
         if (session == null || StrUtil.isBlank(session.getId())) {
             throw new IllegalStateException("Managed Agents 创建 Session 未返回 sessionId");
@@ -55,19 +59,24 @@ public class ManagedAgentSessionClient implements AutoCloseable {
      * 建立 SSE 后发送用户事件，并在独立工作线程消费原始事件。调用线程负责绝对超时，
      * 事件预算由决策器负责；任何预算超限都会中断本次运行，但保留云端 Session 与历史事件。
      */
-    public ManagedAgentExecutionResult execute(String sessionId, String task, ManagedAgentExecutionStage stage) {
+    @Override
+    public ManagedAgentExecutionResult execute(String sessionId, String task, ManagedAgentExecutionOptions options) {
         validateConfig();
-        ManagedAgentExecutionBudgetDecider.Budget budget = budgetDecider.newBudget(stage);
+        ManagedAgentExecutionBudgetDecider.Budget budget = budgetDecider.newBudget(options);
         AtomicBoolean remoteStopped = new AtomicBoolean();
+        log.info("[execute][sessionId({}) operation({}) 开始执行 maxDuration({}) maxModelRequests({}) "
+                        + "maxToolCalls({}) maxTotalTokens({}) maxOutputTokens({})]",
+                sessionId, options.operation(), options.maxRunDuration(), options.maxModelRequests(),
+                options.maxToolCalls(), options.maxTotalTokens(), options.maxOutputTokens());
         Future<ManagedAgentExecutionResult> future = taskExecutor.submit(
-                () -> consumeEvents(sessionId, task, stage, budget, remoteStopped));
+                () -> consumeEvents(sessionId, task, options, budget, remoteStopped));
         try {
-            return future.get(maxRunDuration(stage), TimeUnit.MILLISECONDS);
+            return future.get(options.maxRunDuration().toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
             stopRemoteExecution(sessionId, remoteStopped, "max_run_duration");
-            throw new ManagedAgentBudgetExceededException(
-                    ManagedAgentExecutionBudgetDecider.Reason.MAX_RUN_DURATION, budget.snapshot());
+            throw new ManagedAgentExecutionTerminatedException(
+                    ManagedAgentTerminationReason.MAX_RUN_DURATION, budget.snapshot());
         } catch (InterruptedException e) {
             future.cancel(true);
             stopRemoteExecution(sessionId, remoteStopped, "caller_interrupted");
@@ -83,10 +92,10 @@ public class ManagedAgentSessionClient implements AutoCloseable {
     }
 
     private ManagedAgentExecutionResult consumeEvents(
-            String sessionId, String task, ManagedAgentExecutionStage stage,
+            String sessionId, String task, ManagedAgentExecutionOptions options,
             ManagedAgentExecutionBudgetDecider.Budget budget,
             AtomicBoolean remoteStopped) {
-        long idleTimeoutMs = streamTimeout(stage);
+        long idleTimeoutMs = options.streamTimeout().toMillis();
         List<String> messages = new ArrayList<>();
         AgentStudioClient currentClient = client();
         try (AgentStudioEventStream stream = currentClient.sessions().events().stream(sessionId, idleTimeoutMs)) {
@@ -95,22 +104,25 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             for (Message event : stream) {
                 List<String> eventTexts = assistantTexts(event);
                 int addedCharacters = eventTexts.stream().mapToInt(String::length).sum();
-                long previousTotalTokens = isModelRequestEnd(event) ? budget.snapshot().totalTokens() : -1;
-                ManagedAgentExecutionBudgetDecider.Decision decision = budget.decide(event, addedCharacters);
-                ManagedAgentExecutionBudgetDecider.Snapshot snapshot = decision.snapshot();
-                if (previousTotalTokens >= 0 && snapshot.totalTokens() != previousTotalTokens) {
-                    log.info("[consumeEvents][sessionId({}) stage({}) 本次模型请求Token({}) "
+                ManagedAgentExecutionBudgetDecider.Event budgetEvent = toBudgetEvent(event);
+                long previousTotalTokens = budgetEvent != null
+                        && budgetEvent.type() == ManagedAgentExecutionBudgetDecider.EventType.USAGE
+                        ? budget.snapshot().totalTokens() : -1;
+                ManagedAgentExecutionBudgetDecider.Decision decision = budget.decide(budgetEvent, addedCharacters);
+                ManagedAgentExecutionMetrics metrics = decision.metrics();
+                if (previousTotalTokens >= 0 && metrics.totalTokens() != previousTotalTokens) {
+                    log.info("[consumeEvents][sessionId({}) operation({}) 本次模型请求Token({}) "
                                     + "累计输入Token({}) 累计输出Token({}) 累计总Token({})]",
-                            sessionId, stage, snapshot.totalTokens() - previousTotalTokens,
-                            snapshot.inputTokens(), snapshot.outputTokens(), snapshot.totalTokens());
+                            sessionId, options.operation(), metrics.totalTokens() - previousTotalTokens,
+                            metrics.inputTokens(), metrics.outputTokens(), metrics.totalTokens());
                 }
                 if (!decision.allowed()) {
-                    log.warn("[consumeEvents][sessionId({}) stage({}) 预算熔断 reason({}) "
+                    log.warn("[consumeEvents][sessionId({}) operation({}) 预算熔断 reason({}) "
                                     + "模型请求({}) 工具调用({}) 输入Token({}) 输出Token({}) 总Token({})]",
-                            sessionId, stage, decision.reason(), snapshot.modelRequests(), snapshot.toolCalls(),
-                            snapshot.inputTokens(), snapshot.outputTokens(), snapshot.totalTokens());
+                            sessionId, options.operation(), decision.reason(), metrics.modelRequests(),
+                            metrics.toolCalls(), metrics.inputTokens(), metrics.outputTokens(), metrics.totalTokens());
                     stopRemoteExecution(sessionId, remoteStopped, decision.reason().name().toLowerCase());
-                    throw new ManagedAgentBudgetExceededException(decision.reason(), snapshot);
+                    throw new ManagedAgentExecutionTerminatedException(decision.reason(), metrics);
                 }
                 messages.addAll(eventTexts);
                 if (isTerminal(event)) {
@@ -123,20 +135,20 @@ public class ManagedAgentSessionClient implements AutoCloseable {
         } catch (ApiException e) {
             if (e.getStatus() != null && "stream_timeout".equals(e.getStatus().getCode())) {
                 stopRemoteExecution(sessionId, remoteStopped, "stream_idle_timeout");
-                throw new ManagedAgentBudgetExceededException(
-                        ManagedAgentExecutionBudgetDecider.Reason.STREAM_IDLE_TIMEOUT, budget.snapshot());
+                throw new ManagedAgentExecutionTerminatedException(
+                        ManagedAgentTerminationReason.STREAM_IDLE_TIMEOUT, budget.snapshot());
             }
             throw e;
         }
         for (int index = messages.size() - 1; index >= 0; index--) {
             String message = messages.get(index);
             if (message.indexOf('{') >= 0 && message.lastIndexOf('}') > message.indexOf('{')) {
-                ManagedAgentExecutionBudgetDecider.Snapshot snapshot = budget.snapshot();
-                log.info("[execute][sessionId({}) stage({}) 模型请求({}) 工具调用({}) 输入Token({}) "
+                ManagedAgentExecutionMetrics metrics = budget.snapshot();
+                log.info("[execute][sessionId({}) operation({}) 模型请求({}) 工具调用({}) 输入Token({}) "
                                 + "输出Token({}) 总Token({}) 耗时({}ms)]",
-                        sessionId, stage, snapshot.modelRequests(), snapshot.toolCalls(), snapshot.inputTokens(),
-                        snapshot.outputTokens(), snapshot.totalTokens(), snapshot.durationMs());
-                return new ManagedAgentExecutionResult(message, snapshot);
+                        sessionId, options.operation(), metrics.modelRequests(), metrics.toolCalls(),
+                        metrics.inputTokens(), metrics.outputTokens(), metrics.totalTokens(), metrics.durationMs());
+                return new ManagedAgentExecutionResult(message, metrics);
             }
         }
         throw new IllegalStateException(messages.isEmpty()
@@ -167,16 +179,6 @@ public class ManagedAgentSessionClient implements AutoCloseable {
                 sessionId, reason, lastException);
     }
 
-    private long maxRunDuration(ManagedAgentExecutionStage stage) {
-        return (stage == ManagedAgentExecutionStage.INTAKE
-                ? properties.getIntakeMaxRunDuration() : properties.getMaxRunDuration()).toMillis();
-    }
-
-    private long streamTimeout(ManagedAgentExecutionStage stage) {
-        return (stage == ManagedAgentExecutionStage.INTAKE
-                ? properties.getIntakeStreamTimeout() : properties.getStreamTimeout()).toMillis();
-    }
-
     private static List<String> assistantTexts(Message event) {
         if (!"message".equals(event.getType()) || !"assistant".equals(event.getRole())
                 || event.getContent() == null) {
@@ -201,24 +203,78 @@ public class ManagedAgentSessionClient implements AutoCloseable {
                 || "rescheduled".equals(status) || "deleted".equals(status);
     }
 
-    private static boolean isModelRequestEnd(Message event) {
+    private static ManagedAgentExecutionBudgetDecider.Event toBudgetEvent(Message event) {
         String eventType = event.getType();
-        return "model_request_end".equals(eventType)
-                || eventType != null && eventType.endsWith(".model_request_end");
+        if (matchesEventType(eventType, "model_request_start")) {
+            return ManagedAgentExecutionBudgetDecider.Event.modelRequestStart(eventKey(event, "model-start"));
+        }
+        if (TOOL_CALL_EVENT_TYPES.stream().anyMatch(expected -> matchesEventType(eventType, expected))) {
+            return ManagedAgentExecutionBudgetDecider.Event.toolCall(eventKey(event, "tool"));
+        }
+        if (!matchesEventType(eventType, "model_request_end")) {
+            return null;
+        }
+        JsonObject data = event.getData();
+        JsonObject usage = getObject(data, "usage");
+        if (usage == null) {
+            usage = data;
+        }
+        return ManagedAgentExecutionBudgetDecider.Event.usage(eventKey(event, "usage"),
+                firstLong(usage, "input_tokens", "prompt_tokens"),
+                firstLong(usage, "output_tokens", "completion_tokens"),
+                firstLong(usage, "total_tokens"));
+    }
+
+    private static boolean matchesEventType(String actual, String expected) {
+        return expected.equals(actual) || actual != null && actual.endsWith("." + expected);
+    }
+
+    private static String eventKey(Message event, String prefix) {
+        if (event.getId() != null && !event.getId().isBlank()) {
+            return prefix + ":id:" + event.getId();
+        }
+        if (event.getSequenceNumber() != null) {
+            return prefix + ":sequence:" + event.getSequenceNumber();
+        }
+        return prefix + ":identity:" + System.identityHashCode(event);
+    }
+
+    private static JsonObject getObject(JsonObject object, String name) {
+        if (object == null) {
+            return null;
+        }
+        JsonElement value = object.get(name);
+        return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
+    }
+
+    private static long firstLong(JsonObject object, String... names) {
+        if (object == null) {
+            return 0;
+        }
+        for (String name : names) {
+            JsonElement value = object.get(name);
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
+                return value.getAsLong();
+            }
+        }
+        return 0;
     }
 
     private void validateConfig() {
         if (StrUtil.isBlank(properties.getApiKey())) {
             throw new IllegalStateException("未配置 yudao.gift.trip-managed-agent.api-key");
         }
-        if (StrUtil.isBlank(properties.getAgentId())) {
-            throw new IllegalStateException("未配置 yudao.gift.trip-managed-agent.agent-id");
-        }
-        if (StrUtil.isBlank(properties.getEnvironmentId())) {
-            throw new IllegalStateException("未配置 yudao.gift.trip-managed-agent.environment-id");
-        }
         if (StrUtil.isBlank(properties.getBaseUrl()) && StrUtil.isBlank(properties.getWorkspace())) {
             throw new IllegalStateException("未配置 yudao.gift.trip-managed-agent.workspace 或 base-url");
+        }
+    }
+
+    private static void validateSessionRequest(ManagedAgentSessionCreateRequest request) {
+        if (request == null || StrUtil.isBlank(request.agentId())) {
+            throw new IllegalArgumentException("Managed Agent agentId 不能为空");
+        }
+        if (StrUtil.isBlank(request.environmentId())) {
+            throw new IllegalArgumentException("Managed Agent environmentId 不能为空");
         }
     }
 

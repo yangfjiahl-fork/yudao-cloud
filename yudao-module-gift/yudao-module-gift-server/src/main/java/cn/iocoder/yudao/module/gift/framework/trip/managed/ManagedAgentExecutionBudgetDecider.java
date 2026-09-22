@@ -1,12 +1,6 @@
 package cn.iocoder.yudao.module.gift.framework.trip.managed;
 
-import com.alibaba.dashscope.agentstudio.message.Message;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-
-import java.time.Duration;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -15,59 +9,40 @@ import java.util.Set;
  */
 public class ManagedAgentExecutionBudgetDecider {
 
-    private static final int INTAKE_MAX_MODEL_REQUESTS = 1;
-    private static final int INTAKE_MAX_TOOL_CALLS = 0;
-    private static final Set<String> TOOL_CALL_EVENT_TYPES = Set.of(
-            "tool_call", "function_call", "mcp_call", "skill_call", "skill_activation");
-
-    private final ManagedAgentProperties properties;
-
-    public ManagedAgentExecutionBudgetDecider(ManagedAgentProperties properties) {
-        this.properties = properties;
+    public Budget newBudget(ManagedAgentExecutionOptions options) {
+        return new Budget(options);
     }
 
-    public Budget newBudget(ManagedAgentExecutionStage stage) {
-        Objects.requireNonNull(stage, "Managed Agent 执行阶段不能为空");
-        if (stage == ManagedAgentExecutionStage.INTAKE) {
-            return newIntakeBudget();
-        }
-        return newPlanBudget();
+    enum EventType {
+        MODEL_REQUEST_START,
+        TOOL_CALL,
+        USAGE
     }
 
-    private Budget newIntakeBudget() {
-        return new Budget(properties.getIntakeMaxRunDuration(), INTAKE_MAX_MODEL_REQUESTS, INTAKE_MAX_TOOL_CALLS,
-                properties.getIntakeMaxTotalTokens(), properties.getIntakeMaxOutputTokens(),
-                properties.getIntakeMaxOutputCharacters());
-    }
+    record Event(EventType type, String key, long inputTokens, long outputTokens, long totalTokens) {
 
-    private Budget newPlanBudget() {
-        return new Budget(properties.getMaxRunDuration(), properties.getMaxModelRequests(),
-                properties.getMaxToolCalls(), properties.getMaxTotalTokens(), properties.getMaxOutputTokens(),
-                properties.getMaxOutputCharacters());
-    }
-
-    public enum Reason {
-        MAX_RUN_DURATION,
-        STREAM_IDLE_TIMEOUT,
-        MAX_MODEL_REQUESTS,
-        MAX_TOOL_CALLS,
-        MAX_TOTAL_TOKENS,
-        MAX_OUTPUT_TOKENS,
-        MAX_OUTPUT_CHARACTERS
-    }
-
-    public record Snapshot(int modelRequests, int toolCalls, long inputTokens, long outputTokens,
-                           long totalTokens, int outputCharacters, long durationMs) {
-    }
-
-    public record Decision(boolean allowed, Reason reason, Snapshot snapshot) {
-
-        static Decision allow(Snapshot snapshot) {
-            return new Decision(true, null, snapshot);
+        static Event modelRequestStart(String key) {
+            return new Event(EventType.MODEL_REQUEST_START, key, 0, 0, 0);
         }
 
-        static Decision reject(Reason reason, Snapshot snapshot) {
-            return new Decision(false, reason, snapshot);
+        static Event toolCall(String key) {
+            return new Event(EventType.TOOL_CALL, key, 0, 0, 0);
+        }
+
+        static Event usage(String key, long inputTokens, long outputTokens, long totalTokens) {
+            return new Event(EventType.USAGE, key, inputTokens, outputTokens, totalTokens);
+        }
+    }
+
+    public record Decision(boolean allowed, ManagedAgentTerminationReason reason,
+                           ManagedAgentExecutionMetrics metrics) {
+
+        static Decision allow(ManagedAgentExecutionMetrics metrics) {
+            return new Decision(true, null, metrics);
+        }
+
+        static Decision reject(ManagedAgentTerminationReason reason, ManagedAgentExecutionMetrics metrics) {
+            return new Decision(false, reason, metrics);
         }
     }
 
@@ -91,19 +66,18 @@ public class ManagedAgentExecutionBudgetDecider {
         private long totalTokens;
         private int outputCharacters;
 
-        private Budget(Duration maxRunDuration, int maxModelRequests, int maxToolCalls,
-                       long maxTotalTokens, long maxOutputTokens, int maxOutputCharacters) {
-            this.maxRunDurationNanos = maxRunDuration.toNanos();
-            this.maxModelRequests = maxModelRequests;
-            this.maxToolCalls = maxToolCalls;
-            this.maxTotalTokens = maxTotalTokens;
-            this.maxOutputTokens = maxOutputTokens;
-            this.maxOutputCharacters = maxOutputCharacters;
+        private Budget(ManagedAgentExecutionOptions options) {
+            this.maxRunDurationNanos = options.maxRunDuration().toNanos();
+            this.maxModelRequests = options.maxModelRequests();
+            this.maxToolCalls = options.maxToolCalls();
+            this.maxTotalTokens = options.maxTotalTokens();
+            this.maxOutputTokens = options.maxOutputTokens();
+            this.maxOutputCharacters = options.maxOutputCharacters();
         }
 
-        public synchronized Decision decide(Message event, int addedOutputCharacters) {
+        public synchronized Decision decide(Event event, int addedOutputCharacters) {
             if (isDurationExceeded()) {
-                return Decision.reject(Reason.MAX_RUN_DURATION, snapshot());
+                return Decision.reject(ManagedAgentTerminationReason.MAX_RUN_DURATION, snapshot());
             }
             if (event != null) {
                 updateEventCounters(event);
@@ -112,65 +86,41 @@ public class ManagedAgentExecutionBudgetDecider {
                 outputCharacters += addedOutputCharacters;
             }
             if (modelRequests > maxModelRequests) {
-                return Decision.reject(Reason.MAX_MODEL_REQUESTS, snapshot());
+                return Decision.reject(ManagedAgentTerminationReason.MAX_MODEL_REQUESTS, snapshot());
             }
             if (toolCalls > maxToolCalls) {
-                return Decision.reject(Reason.MAX_TOOL_CALLS, snapshot());
+                return Decision.reject(ManagedAgentTerminationReason.MAX_TOOL_CALLS, snapshot());
             }
             if (totalTokens > maxTotalTokens) {
-                return Decision.reject(Reason.MAX_TOTAL_TOKENS, snapshot());
+                return Decision.reject(ManagedAgentTerminationReason.MAX_TOTAL_TOKENS, snapshot());
             }
             if (outputTokens > maxOutputTokens) {
-                return Decision.reject(Reason.MAX_OUTPUT_TOKENS, snapshot());
+                return Decision.reject(ManagedAgentTerminationReason.MAX_OUTPUT_TOKENS, snapshot());
             }
             if (outputCharacters > maxOutputCharacters) {
-                return Decision.reject(Reason.MAX_OUTPUT_CHARACTERS, snapshot());
+                return Decision.reject(ManagedAgentTerminationReason.MAX_OUTPUT_CHARACTERS, snapshot());
             }
             return Decision.allow(snapshot());
         }
 
-        public synchronized Snapshot snapshot() {
-            return new Snapshot(modelRequests, toolCalls, inputTokens, outputTokens, totalTokens,
+        public synchronized ManagedAgentExecutionMetrics snapshot() {
+            return new ManagedAgentExecutionMetrics(modelRequests, toolCalls, inputTokens, outputTokens, totalTokens,
                     outputCharacters, elapsedMs());
         }
 
-        private void updateEventCounters(Message event) {
-            String eventType = event.getType();
-            if (matchesEventType(eventType, "model_request_start")
-                    && modelRequestKeys.add(eventKey(event, "model-start"))) {
+        private void updateEventCounters(Event event) {
+            if (event.type() == EventType.MODEL_REQUEST_START && modelRequestKeys.add(event.key())) {
                 modelRequests++;
             }
-            if (isToolCallEvent(eventType)
-                    && toolCallKeys.add(eventKey(event, "tool"))) {
+            if (event.type() == EventType.TOOL_CALL && toolCallKeys.add(event.key())) {
                 toolCalls++;
             }
-            if (matchesEventType(eventType, "model_request_end") && usageKeys.add(eventKey(event, "usage"))) {
-                addUsage(event.getData());
+            if (event.type() == EventType.USAGE && usageKeys.add(event.key())) {
+                inputTokens += event.inputTokens();
+                outputTokens += event.outputTokens();
+                totalTokens += event.totalTokens() > 0
+                        ? event.totalTokens() : event.inputTokens() + event.outputTokens();
             }
-        }
-
-        private static boolean isToolCallEvent(String eventType) {
-            return TOOL_CALL_EVENT_TYPES.stream().anyMatch(expected -> matchesEventType(eventType, expected));
-        }
-
-        private static boolean matchesEventType(String actual, String expected) {
-            return expected.equals(actual) || actual != null && actual.endsWith("." + expected);
-        }
-
-        private void addUsage(JsonObject data) {
-            if (data == null) {
-                return;
-            }
-            JsonObject usage = getObject(data, "usage");
-            if (usage == null) {
-                usage = data;
-            }
-            long currentInput = firstLong(usage, "input_tokens", "prompt_tokens");
-            long currentOutput = firstLong(usage, "output_tokens", "completion_tokens");
-            long currentTotal = firstLong(usage, "total_tokens");
-            inputTokens += currentInput;
-            outputTokens += currentOutput;
-            totalTokens += currentTotal > 0 ? currentTotal : currentInput + currentOutput;
         }
 
         private boolean isDurationExceeded() {
@@ -181,30 +131,6 @@ public class ManagedAgentExecutionBudgetDecider {
             return (System.nanoTime() - startedNanos) / 1_000_000;
         }
 
-        private static String eventKey(Message event, String prefix) {
-            if (event.getId() != null && !event.getId().isBlank()) {
-                return prefix + ":id:" + event.getId();
-            }
-            if (event.getSequenceNumber() != null) {
-                return prefix + ":sequence:" + event.getSequenceNumber();
-            }
-            return prefix + ":identity:" + System.identityHashCode(event);
-        }
-
-        private static JsonObject getObject(JsonObject object, String name) {
-            JsonElement value = object.get(name);
-            return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
-        }
-
-        private static long firstLong(JsonObject object, String... names) {
-            for (String name : names) {
-                JsonElement value = object.get(name);
-                if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
-                    return value.getAsLong();
-                }
-            }
-            return 0;
-        }
     }
 
 }

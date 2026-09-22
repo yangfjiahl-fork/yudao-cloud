@@ -3,7 +3,9 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionClient;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentClient;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionCreateRequest;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedTripAgentProperties;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,7 +20,9 @@ import java.util.Map;
 public class ManagedTripSessionService {
 
     @Resource
-    private ManagedAgentSessionClient managedAgentSessionClient;
+    private ManagedAgentClient managedAgentClient;
+    @Resource
+    private ManagedTripAgentProperties properties;
     @Resource
     private TripPlanMapper tripPlanMapper;
 
@@ -33,7 +37,9 @@ public class ManagedTripSessionService {
                     tripId, current.getManagedAgentSessionId());
             return current.getManagedAgentSessionId();
         }
-        String sessionId = managedAgentSessionClient.createSession(buildSessionTitle(state), tripId, conversationId);
+        String sessionId = managedAgentClient.createSession(new ManagedAgentSessionCreateRequest(
+                properties.getAgentId(), properties.getEnvironmentId(), buildSessionTitle(state),
+                Map.of("trip_id", String.valueOf(tripId), "conversation_id", String.valueOf(conversationId))));
         tripPlanMapper.updateById(new TripPlanDO().setId(tripId).setManagedAgentSessionId(sessionId));
         log.info("[getOrCreateSession][tripId({}) Managed Agents sessionId({}) 创建成功]", tripId, sessionId);
         return sessionId;

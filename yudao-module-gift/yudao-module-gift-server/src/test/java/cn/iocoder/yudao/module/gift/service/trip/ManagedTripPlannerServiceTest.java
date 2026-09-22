@@ -1,9 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionBudgetDecider;
+import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionMetrics;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionStage;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,14 +43,14 @@ class ManagedTripPlannerServiceTest {
                   {"day":2,"city":"大理","area":"大理古城","theme":"换城人文","anchorPoiNames":["大理古城"],"transferDay":true}
                 ]}}
                 """;
-        ManagedAgentExecutionBudgetDecider.Snapshot budget =
-                new ManagedAgentExecutionBudgetDecider.Snapshot(2, 1, 1_200, 300, 1_500, 500, 800);
-        when(executor.execute(any(TripPlanDO.class), anyMap(), anyString(), eq(ManagedAgentExecutionStage.PLAN)))
+        ManagedAgentExecutionMetrics metrics =
+                new ManagedAgentExecutionMetrics(2, 1, 1_200, 300, 1_500, 500, 800);
+        when(executor.execute(any(TripPlanDO.class), anyMap(), anyString(), eq(ManagedTripAgentStage.PLAN)))
                 .thenAnswer(invocation -> {
                     TripPlanDO executionTrip = invocation.getArgument(0);
                     executionTrip.setManagedAgentSessionId("session-1");
                     return new ManagedTripAgentExecutor.Execution("session-1",
-                            new ManagedAgentExecutionResult(managedResponse, budget));
+                            new ManagedAgentExecutionResult(managedResponse, metrics));
                 });
         Map<String, Object> expected = Map.of("daily_itinerary", List.of(), "citation_ids", List.of());
         when(assembler.assemble(anyMap(), any(TripMacroSkeleton.class), any(Consumer.class))).thenReturn(expected);
@@ -63,7 +62,7 @@ class ManagedTripPlannerServiceTest {
         assertEquals(expected, result);
         assertEquals("session-1", trip.getManagedAgentSessionId());
         ArgumentCaptor<String> taskCaptor = ArgumentCaptor.forClass(String.class);
-        verify(executor).execute(eq(trip), eq(state), taskCaptor.capture(), eq(ManagedAgentExecutionStage.PLAN));
+        verify(executor).execute(eq(trip), eq(state), taskCaptor.capture(), eq(ManagedTripAgentStage.PLAN));
         assertTrue(taskCaptor.getValue().contains("GENERATE_TRIP_MACRO_SKELETON"));
         assertTrue(taskCaptor.getValue().contains("anchorPoiNames"));
         assertFalse(taskCaptor.getValue().contains("daily_itinerary"));
