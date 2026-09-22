@@ -114,6 +114,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private ManagedTripPlannerService managedTripPlannerService;
     @Resource
+    private ManagedTripAgentExecutor managedTripAgentExecutor;
+    @Resource
     private TripItineraryVersionService tripItineraryVersionService;
     @Resource
     private TripPlanEditorService tripPlanEditorService;
@@ -183,10 +185,10 @@ public class TripAgentServiceImpl implements TripAgentService {
     private static String buildManagedBudgetFallback(ManagedAgentExecutionBudgetDecider.Reason reason) {
         if (reason == ManagedAgentExecutionBudgetDecider.Reason.MAX_RUN_DURATION
                 || reason == ManagedAgentExecutionBudgetDecider.Reason.STREAM_IDLE_TIMEOUT) {
-            return "这次行程规划耗时较长，我已停止本次生成。你可以减少城市数量或缩短天数后再试，"
+            return "这次旅行请求处理耗时较长，我已停止本次执行。你可以减少城市数量或缩短天数后再试，"
                     + "我会基于已经填写的信息继续规划。";
         }
-        return "这次行程规划涉及的步骤较多，我已停止本次生成。你可以减少城市数量或缩短天数后再试，"
+        return "这次旅行请求处理涉及的步骤较多，我已停止本次执行。你可以减少城市数量或缩短天数后再试，"
                 + "我会基于已经填写的信息继续规划。";
     }
 
@@ -218,11 +220,17 @@ public class TripAgentServiceImpl implements TripAgentService {
                 : tripItineraryMapper.selectById(trip.getCurrentItineraryId());
         AtomicInteger modelDeltaSequence = new AtomicInteger();
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
-        AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
-                buildIntakeContext(state, currentItinerary, content),
-                "INTAKE", trip.getId(), promptVariables,
-                chunk -> emitModelDelta(eventConsumer, "INTAKE", chunk, modelDeltaSequence));
-        Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
+        String intakeContent;
+        if (managedPlanner) {
+            intakeContent = executeManagedIntake(trip, state, currentItinerary, content);
+        } else {
+            AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
+                    buildIntakeContext(state, currentItinerary, content),
+                    "INTAKE", trip.getId(), promptVariables,
+                    chunk -> emitModelDelta(eventConsumer, "INTAKE", chunk, modelDeltaSequence));
+            intakeContent = intakeResponse.getContent();
+        }
+        Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeContent);
         TripTopicGuard.Decision topicDecision = tripTopicGuard.decide(
                 content, state, currentMissingRequired, intake);
         if (!topicDecision.allowed()) {
@@ -688,6 +696,43 @@ public class TripAgentServiceImpl implements TripAgentService {
                 + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\n"
                 + "Current Editable Itinerary:\n" + JsonUtils.toJsonString(editableItineraryContext(currentItinerary))
                 + "\n\nUser message:\n" + content;
+    }
+
+    private String executeManagedIntake(TripPlanDO trip, Map<String, Object> state,
+                                        TripItineraryDO currentItinerary, String content) {
+        long start = System.currentTimeMillis();
+        String task = buildManagedIntakeTask(state, currentItinerary, content);
+        Long runId = tripRunLogService.create(trip.getId(), "INTAKE", task);
+        try {
+            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(trip, state, task);
+            tripRunLogService.complete(runId, "managed-agent", execution.result().budget().inputTokens(),
+                    execution.result().budget().outputTokens(), execution.result().budget().totalTokens(),
+                    System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
+                            "sessionId", execution.sessionId(), "budget", execution.result().budget(),
+                            "response", execution.result().response())));
+            return execution.result().response();
+        } catch (RuntimeException e) {
+            Map<String, Object> failureOutput = new LinkedHashMap<>();
+            if (e instanceof ManagedAgentBudgetExceededException budgetExceeded) {
+                failureOutput.put("budgetReason", budgetExceeded.getReason().name());
+                failureOutput.put("budget", budgetExceeded.getSnapshot());
+            }
+            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(),
+                    failureOutput.isEmpty() ? null : JsonUtils.toJsonString(failureOutput));
+            throw e;
+        }
+    }
+
+    static String buildManagedIntakeTask(Map<String, Object> state, TripItineraryDO currentItinerary,
+                                         String content) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("task", "EXTRACT_TRIP_REQUIREMENTS");
+        request.put("schemaVersion", "1.0");
+        request.put("currentTripState", state);
+        request.put("informationFields", informationFields(TripInformationSchema.getFields()));
+        request.put("currentEditableItinerary", editableItineraryContext(currentItinerary));
+        request.put("userMessage", content);
+        return JsonUtils.toJsonString(request);
     }
 
     static Map<String, Object> editableItineraryContext(TripItineraryDO itinerary) {

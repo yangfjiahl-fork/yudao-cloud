@@ -42,14 +42,15 @@ Accept: text/event-stream
 
 ## Session 生命周期
 
-- `INTAKE`、`UPDATE_STATE` 和 `CHAT` 不创建 Managed Agents Session。
-- 每次 `GENERATE_PLAN` 或 `EDIT_PLAN` 创建一个新 Session，避免继承上一轮高德工具输出和临时上下文。
-- `gift_trip_plan.managed_agent_session_id` 只保存最近一次规划 Session ID，用于运行审计和问题定位，不作为下次规划的复用依据。
+- 每次 `INTAKE` 创建一个新 Session，只做主题判断、需求抽取或编辑意图识别，禁止调用工具。
+- 每次 `GENERATE_PLAN` 或 `EDIT_PLAN` 另建一个新 Session，避免继承需求抽取上下文和上一轮高德工具输出。
+- `gift_trip_plan.managed_agent_session_id` 只保存最近一次 Managed Agent Session ID，用于运行审计和问题定位，不作为下次调用的复用依据。
 - 权威业务状态始终是 `TripState` 与当前 itinerary 版本，而不是 Managed Agents Session 上下文。
 
 ## Intake 编辑命令协议
 
-已有行程后的自然语言修改由数据库配置的 Intake Role 输出单个 `change_command`，Java 服务端再统一执行：
+已有行程后的自然语言修改由 Managed Agent 的 `EXTRACT_TRIP_REQUIREMENTS` 任务输出单个
+`change_command`，Java 服务端再统一执行：
 
 ```json
 {

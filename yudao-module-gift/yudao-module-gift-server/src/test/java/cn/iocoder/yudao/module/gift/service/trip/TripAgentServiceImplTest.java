@@ -158,4 +158,20 @@ class TripAgentServiceImplTest {
         assertFalse(item.containsKey("longitude"));
         assertFalse(item.containsKey("latitude"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildManagedIntakeTask_shouldProvideExtractionContextWithoutPoiFacts() {
+        String task = TripAgentServiceImpl.buildManagedIntakeTask(
+                Map.of("departure", "上海"), null, "国庆去云南玩6天");
+
+        Map<String, Object> payload = JsonUtils.parseMap(task);
+        assertEquals("EXTRACT_TRIP_REQUIREMENTS", payload.get("task"));
+        assertEquals(Map.of("departure", "上海"), payload.get("currentTripState"));
+        assertEquals("国庆去云南玩6天", payload.get("userMessage"));
+        assertFalse(((List<Map<String, Object>>) payload.get("informationFields")).isEmpty());
+        assertEquals(Map.of(), payload.get("currentEditableItinerary"));
+        assertFalse(task.contains("longitude"));
+        assertFalse(task.contains("latitude"));
+    }
 }

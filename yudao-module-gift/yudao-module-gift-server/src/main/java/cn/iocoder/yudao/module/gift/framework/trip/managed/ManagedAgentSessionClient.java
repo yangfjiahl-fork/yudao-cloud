@@ -126,7 +126,7 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             }
         }
         throw new IllegalStateException(messages.isEmpty()
-                ? "Managed Agents 未返回旅行计划" : "Managed Agents 最终消息不是 JSON 旅行计划");
+                ? "Managed Agents 未返回结果" : "Managed Agents 最终消息不是有效 JSON");
     }
 
     private void stopRemoteExecution(String sessionId, AtomicBoolean remoteStopped, String reason) {

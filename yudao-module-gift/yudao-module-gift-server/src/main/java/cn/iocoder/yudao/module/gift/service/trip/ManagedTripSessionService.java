@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
-/** 独立事务创建云端 Session，避免上一轮工具输出被带入下一次旅行规划。 */
+/** 独立事务创建云端 Session，避免不同任务之间继承模型和工具上下文。 */
 @Service
 @Slf4j
 public class ManagedTripSessionService {

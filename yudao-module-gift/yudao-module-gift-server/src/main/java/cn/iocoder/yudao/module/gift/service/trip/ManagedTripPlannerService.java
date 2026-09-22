@@ -3,8 +3,6 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentBudgetExceededException;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionClient;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -24,9 +22,7 @@ public class ManagedTripPlannerService {
     private static final ZoneId CHINA_ZONE = ZoneId.of("Asia/Shanghai");
 
     @Resource
-    private ManagedAgentSessionClient managedAgentSessionClient;
-    @Resource
-    private ManagedTripSessionService managedTripSessionService;
+    private ManagedTripAgentExecutor managedTripAgentExecutor;
     @Resource
     private TripRunLogService tripRunLogService;
     @Resource
@@ -39,20 +35,19 @@ public class ManagedTripPlannerService {
                 "tripState", state)));
         String response = null;
         try {
-            String sessionId = managedTripSessionService.createSession(trip.getId(), trip.getConversationId(), state);
-            trip.setManagedAgentSessionId(sessionId);
             String task = buildTask(state, latestUserMessage);
             progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
-            ManagedAgentExecutionResult execution = managedAgentSessionClient.execute(sessionId, task);
-            response = execution.response();
+            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(trip, state, task);
+            String sessionId = execution.sessionId();
+            response = execution.result().response();
             TripMacroSkeleton macroSkeleton = ManagedTripPlanValidator.validateMacroSkeleton(
                     TripAgentFormatUtils.parseMap(response), state);
             progressConsumer.accept("宏观路线已确认，正在按每天的城市与区域查询高德候选…");
             Map<String, Object> itinerary = tripItineraryAssembler.assemble(state, macroSkeleton, progressConsumer);
-            tripRunLogService.complete(runId, "managed-agent", execution.budget().inputTokens(),
-                    execution.budget().outputTokens(), execution.budget().totalTokens(),
+            tripRunLogService.complete(runId, "managed-agent", execution.result().budget().inputTokens(),
+                    execution.result().budget().outputTokens(), execution.result().budget().totalTokens(),
                     System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
-                            "sessionId", sessionId, "budget", execution.budget(),
+                            "sessionId", sessionId, "budget", execution.result().budget(),
                             "macroSkeleton", macroSkeleton.toMap(), "itinerary", itinerary)));
             return itinerary;
         } catch (RuntimeException e) {
