@@ -131,6 +131,19 @@ class ManagedAgentExecutionBudgetDeciderTest {
     }
 
     @Test
+    void calculatesTotalTokensWhenProviderOmitsTotal() {
+        Message usageEvent = usageEvent("usage-without-total", 20_000, 1_000);
+        usageEvent.getData().getAsJsonObject("usage").remove("total_tokens");
+
+        ManagedAgentExecutionBudgetDecider.Decision decision = budget.decide(usageEvent, 0);
+
+        assertTrue(decision.allowed());
+        assertEquals(20_000, decision.snapshot().inputTokens());
+        assertEquals(1_000, decision.snapshot().outputTokens());
+        assertEquals(21_000, decision.snapshot().totalTokens());
+    }
+
+    @Test
     void rejectsExcessAssistantCharacters() {
         ManagedAgentExecutionBudgetDecider.Decision decision = budget.decide(null, 32_769);
 

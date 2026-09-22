@@ -95,10 +95,22 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             for (Message event : stream) {
                 List<String> eventTexts = assistantTexts(event);
                 int addedCharacters = eventTexts.stream().mapToInt(String::length).sum();
+                long previousTotalTokens = isModelRequestEnd(event) ? budget.snapshot().totalTokens() : -1;
                 ManagedAgentExecutionBudgetDecider.Decision decision = budget.decide(event, addedCharacters);
+                ManagedAgentExecutionBudgetDecider.Snapshot snapshot = decision.snapshot();
+                if (previousTotalTokens >= 0 && snapshot.totalTokens() != previousTotalTokens) {
+                    log.info("[consumeEvents][sessionId({}) stage({}) 本次模型请求Token({}) "
+                                    + "累计输入Token({}) 累计输出Token({}) 累计总Token({})]",
+                            sessionId, stage, snapshot.totalTokens() - previousTotalTokens,
+                            snapshot.inputTokens(), snapshot.outputTokens(), snapshot.totalTokens());
+                }
                 if (!decision.allowed()) {
+                    log.warn("[consumeEvents][sessionId({}) stage({}) 预算熔断 reason({}) "
+                                    + "模型请求({}) 工具调用({}) 输入Token({}) 输出Token({}) 总Token({})]",
+                            sessionId, stage, decision.reason(), snapshot.modelRequests(), snapshot.toolCalls(),
+                            snapshot.inputTokens(), snapshot.outputTokens(), snapshot.totalTokens());
                     stopRemoteExecution(sessionId, remoteStopped, decision.reason().name().toLowerCase());
-                    throw new ManagedAgentBudgetExceededException(decision.reason(), decision.snapshot());
+                    throw new ManagedAgentBudgetExceededException(decision.reason(), snapshot);
                 }
                 messages.addAll(eventTexts);
                 if (isTerminal(event)) {
@@ -121,9 +133,9 @@ public class ManagedAgentSessionClient implements AutoCloseable {
             if (message.indexOf('{') >= 0 && message.lastIndexOf('}') > message.indexOf('{')) {
                 ManagedAgentExecutionBudgetDecider.Snapshot snapshot = budget.snapshot();
                 log.info("[execute][sessionId({}) stage({}) 模型请求({}) 工具调用({}) 输入Token({}) "
-                                + "输出Token({}) 耗时({}ms)]",
+                                + "输出Token({}) 总Token({}) 耗时({}ms)]",
                         sessionId, stage, snapshot.modelRequests(), snapshot.toolCalls(), snapshot.inputTokens(),
-                        snapshot.outputTokens(), snapshot.durationMs());
+                        snapshot.outputTokens(), snapshot.totalTokens(), snapshot.durationMs());
                 return new ManagedAgentExecutionResult(message, snapshot);
             }
         }
@@ -187,6 +199,12 @@ public class ManagedAgentSessionClient implements AutoCloseable {
         String status = event.getData().get("session_status").getAsString();
         return "idle".equals(status) || "terminated".equals(status)
                 || "rescheduled".equals(status) || "deleted".equals(status);
+    }
+
+    private static boolean isModelRequestEnd(Message event) {
+        String eventType = event.getType();
+        return "model_request_end".equals(eventType)
+                || eventType != null && eventType.endsWith(".model_request_end");
     }
 
     private void validateConfig() {
