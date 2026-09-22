@@ -339,6 +339,10 @@ yudao:
     license: MIT
     license-url: https://gitee.com/zhijiantianya/ruoyi-vue-pro/blob/master/LICENSE
   gift:
+    asr:
+      api-key: ${DASHSCOPE_API_KEY:${yudao.gift.trip-managed-agent.api-key:}}
+      model: ${ALIYUN_ASR_MODEL:paraformer-realtime-v2}
+      max-file-size: ${ALIYUN_ASR_MAX_FILE_SIZE:10MB}
     amap:
       key: ${AMAP_WEB_SERVICE_KEY:}
       reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}

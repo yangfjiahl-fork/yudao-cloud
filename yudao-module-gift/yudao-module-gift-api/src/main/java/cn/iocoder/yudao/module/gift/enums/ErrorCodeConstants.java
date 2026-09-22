@@ -44,4 +44,13 @@ public interface ErrorCodeConstants {
 
     ErrorCode TRIP_ITINERARY_NOT_EXISTS = new ErrorCode(1_045_000_001, "旅行行程不存在");
 
+    // ========== 语音识别相关 1-046-000-000 ==========
+    ErrorCode ASR_AUDIO_EMPTY = new ErrorCode(1_046_000_000, "语音文件不能为空");
+    ErrorCode ASR_AUDIO_TOO_LARGE = new ErrorCode(1_046_000_001, "语音文件不能超过 {} MB");
+    ErrorCode ASR_AUDIO_FORMAT_UNSUPPORTED = new ErrorCode(1_046_000_002, "不支持的语音格式");
+    ErrorCode ASR_SAMPLE_RATE_UNSUPPORTED = new ErrorCode(1_046_000_003, "仅支持 8000 或 16000 Hz 采样率");
+    ErrorCode ASR_NOT_CONFIGURED = new ErrorCode(1_046_000_004, "语音识别服务未配置");
+    ErrorCode ASR_SERVICE_ERROR = new ErrorCode(1_046_000_005, "语音识别失败，请稍后重试");
+    ErrorCode ASR_RESULT_EMPTY = new ErrorCode(1_046_000_006, "未识别到有效语音");
+
 }
