@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip.vo;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -15,8 +16,8 @@ public class AppTripAgUiMessageReqVO {
     @NotEmpty(message = "消息角色不能为空")
     private String role;
 
-    @NotEmpty(message = "聊天内容不能为空")
-    @Size(max = 10_000, message = "聊天内容长度不能超过 10000")
+    @NotBlank(message = "聊天内容不能为空")
+    @Size(max = 4_000, message = "聊天内容长度不能超过 4000")
     private String content;
 
 }

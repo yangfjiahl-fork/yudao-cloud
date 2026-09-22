@@ -118,6 +118,8 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private TripPlanEditorService tripPlanEditorService;
     @Resource
+    private TripTopicGuard tripTopicGuard;
+    @Resource
     private Tracer tracer;
 
     @Override
@@ -206,6 +208,12 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> previousState = TripAgentFormatUtils.parseMap(JsonUtils.toJsonString(state));
         sanitizeTravelerProfile(state);
         state.remove("destinationEntityId"); // 兼容已存的旧状态，不再持久化外部实体副本
+        List<String> currentMissingRequired = validateState(new LinkedHashMap<>(state));
+        TripTopicGuard.Decision precheckDecision = tripTopicGuard.precheck(content, state, currentMissingRequired);
+        if (!precheckDecision.allowed()) {
+            return handleOutOfTopicMessage(conversationId, memberId, trip.getId(), state,
+                    currentMissingRequired, precheckDecision, eventConsumer);
+        }
         TripItineraryDO currentItinerary = trip.getCurrentItineraryId() == null ? null
                 : tripItineraryMapper.selectById(trip.getCurrentItineraryId());
         AtomicInteger modelDeltaSequence = new AtomicInteger();
@@ -215,6 +223,12 @@ public class TripAgentServiceImpl implements TripAgentService {
                 "INTAKE", trip.getId(), promptVariables,
                 chunk -> emitModelDelta(eventConsumer, "INTAKE", chunk, modelDeltaSequence));
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeResponse.getContent());
+        TripTopicGuard.Decision topicDecision = tripTopicGuard.decide(
+                content, state, currentMissingRequired, intake);
+        if (!topicDecision.allowed()) {
+            return handleOutOfTopicMessage(conversationId, memberId, trip.getId(), state,
+                    currentMissingRequired, topicDecision, eventConsumer);
+        }
         mergeInformationState(state, extractState(intake), content);
         TripChangeCommand changeCommand = currentItinerary == null ? null
                 : extractAgentChangeCommand(intake, currentItinerary.getVersion());
@@ -317,6 +331,21 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .setMessageId(saved.messageId())
                 .setItinerary(itinerary).setMissingRequired(List.of()).setSuggestions(suggestions));
         return result;
+    }
+
+    private TripAgentResult handleOutOfTopicMessage(Long conversationId, Long memberId, Long tripId,
+                                                     Map<String, Object> state, List<String> missingRequired,
+                                                     TripTopicGuard.Decision decision,
+                                                     Consumer<TripAgentEvent> eventConsumer) {
+        String reply = decision.reply();
+        List<Map<String, String>> suggestions = buildInformationSuggestions(state, missingRequired);
+        AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, reply, true);
+        log.info("[handleOutOfTopicMessage][tripId({}) action({}) reason({}) messageId({})]",
+                tripId, decision.action(), decision.reason(), assistant.getId());
+        eventConsumer.accept(TripAgentEvent.of("question", "TOPIC_GUARD", reply)
+                .setMessageId(assistant.getId()).setMissingRequired(missingRequired).setSuggestions(suggestions));
+        return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(reply)
+                .setMissingRequired(missingRequired);
     }
 
     static TripOrchestrationAction determineAction(List<String> missingRequired, boolean generateRequested,
