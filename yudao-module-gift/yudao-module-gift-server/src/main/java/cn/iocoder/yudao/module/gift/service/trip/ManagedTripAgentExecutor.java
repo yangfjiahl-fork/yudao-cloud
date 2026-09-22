@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
-/** Managed Agent 单次运行入口，统一创建独立 Session 并执行任务。 */
+/** Managed Agent 运行入口，统一复用旅行会话 Session 并执行任务。 */
 @Service
 public class ManagedTripAgentExecutor {
 
@@ -18,7 +18,7 @@ public class ManagedTripAgentExecutor {
     private ManagedAgentSessionClient managedAgentSessionClient;
 
     public Execution execute(TripPlanDO trip, Map<String, Object> state, String task) {
-        String sessionId = managedTripSessionService.createSession(trip.getId(), trip.getConversationId(), state);
+        String sessionId = managedTripSessionService.getOrCreateSession(trip.getId(), trip.getConversationId(), state);
         trip.setManagedAgentSessionId(sessionId);
         return new Execution(sessionId, managedAgentSessionClient.execute(sessionId, task));
     }

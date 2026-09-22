@@ -42,9 +42,9 @@ Accept: text/event-stream
 
 ## Session 生命周期
 
-- 每次 `INTAKE` 创建一个新 Session，只做主题判断、需求抽取或编辑意图识别，禁止调用工具。
-- 每次 `GENERATE_PLAN` 或 `EDIT_PLAN` 另建一个新 Session，避免继承需求抽取上下文和上一轮高德工具输出。
-- `gift_trip_plan.managed_agent_session_id` 只保存最近一次 Managed Agent Session ID，用于运行审计和问题定位，不作为下次调用的复用依据。
+- 每个旅行会话只创建一个 Managed Agent Session，并记录在 `gift_trip_plan.managed_agent_session_id`。
+- 后续 `INTAKE`、`GENERATE_PLAN`、`EDIT_PLAN` 均复用该 Session，使需求抽取与行程生成共享上下文。
+- 预算或超时熔断只向当前运行发送 interrupt，保留 Session 与历史事件，后续请求继续复用。
 - 权威业务状态始终是 `TripState` 与当前 itinerary 版本，而不是 Managed Agents Session 上下文。
 
 ## Intake 编辑命令协议

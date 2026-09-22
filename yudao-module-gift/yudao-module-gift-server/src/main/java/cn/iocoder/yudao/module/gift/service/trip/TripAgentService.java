@@ -15,10 +15,7 @@ public interface TripAgentService {
 
     String createTrip(Long conversationId, Long memberId, Long provinceId, Long cityId, Long districtId);
 
-    TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
-                                  Consumer<TripAgentEvent> eventConsumer);
-
-    /** 使用统一 Intake 编排，并在需要生成或编辑时调用 Managed Planner。 */
+    /** 使用 Managed Agent 完成 Intake，并在需要生成时继续复用同一 Session。 */
     TripAgentResult handleManagedMessage(Long conversationId, Long memberId, String content,
                                          Consumer<TripAgentEvent> eventConsumer);
 

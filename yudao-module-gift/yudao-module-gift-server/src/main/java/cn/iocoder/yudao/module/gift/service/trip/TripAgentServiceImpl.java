@@ -155,21 +155,12 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @Lock4j(keys = {"#conversationId"}, expire = 30000, acquireTimeout = 3000)
-    @BizTrace(operationName = "trip.agent.handle-message", type = "'ai.chat.conversation'", id = "#conversationId")
-    public TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
-                                         Consumer<TripAgentEvent> eventConsumer) {
-        return handleMessage(conversationId, memberId, content, eventConsumer, false);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 360000, acquireTimeout = 3000)
     @BizTrace(operationName = "trip.agent.handle-managed-message", type = "'ai.chat.conversation'", id = "#conversationId")
     public TripAgentResult handleManagedMessage(Long conversationId, Long memberId, String content,
                                                 Consumer<TripAgentEvent> eventConsumer) {
         try {
-            return handleMessage(conversationId, memberId, content, eventConsumer, true);
+            return doHandleManagedMessage(conversationId, memberId, content, eventConsumer);
         } catch (ManagedAgentBudgetExceededException e) {
             String fallback = buildManagedBudgetFallback(e.getReason());
             AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, fallback, true);
@@ -192,8 +183,8 @@ public class TripAgentServiceImpl implements TripAgentService {
                 + "我会基于已经填写的信息继续规划。";
     }
 
-    private TripAgentResult handleMessage(Long conversationId, Long memberId, String content,
-                                          Consumer<TripAgentEvent> eventConsumer, boolean managedPlanner) {
+    private TripAgentResult doHandleManagedMessage(Long conversationId, Long memberId, String content,
+                                                   Consumer<TripAgentEvent> eventConsumer) {
         TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
         if (trip == null) {
             log.info("[handleMessage][conversationId({}) memberId({}) 缺少旅行状态，开始兼容初始化]",
@@ -220,16 +211,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 : tripItineraryMapper.selectById(trip.getCurrentItineraryId());
         AtomicInteger modelDeltaSequence = new AtomicInteger();
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
-        String intakeContent;
-        if (managedPlanner) {
-            intakeContent = executeManagedIntake(trip, state, currentItinerary, content);
-        } else {
-            AiChatGenerateRespDTO intakeResponse = generateStream(conversationId, memberId,
-                    buildIntakeContext(state, currentItinerary, content),
-                    "INTAKE", trip.getId(), promptVariables,
-                    chunk -> emitModelDelta(eventConsumer, "INTAKE", chunk, modelDeltaSequence));
-            intakeContent = intakeResponse.getContent();
-        }
+        String intakeContent = executeManagedIntake(trip, state, currentItinerary, content);
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeContent);
         TripTopicGuard.Decision topicDecision = tripTopicGuard.decide(
                 content, state, currentMissingRequired, intake);
@@ -313,13 +295,8 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .startSpan();
         Map<String, Object> itinerary;
         try (Scope ignored = assembleSpan.makeCurrent()) {
-            if (managedPlanner) {
-                itinerary = managedTripPlannerService.plan(trip, state, content,
-                        progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
-            } else {
-                itinerary = tripItineraryAssembler.assemble(state,
-                        progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
-            }
+            itinerary = managedTripPlannerService.plan(trip, state, content,
+                    progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
         } catch (RuntimeException | Error e) {
             TracerFrameworkUtils.onError(e, assembleSpan);
             throw e;
@@ -623,7 +600,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private Long getRoleId(String stage) {
-        if (!"INTAKE".equals(stage) && !"FOLLOW_UP".equals(stage) && !"OVERVIEW".equals(stage)) {
+        if (!"FOLLOW_UP".equals(stage) && !"OVERVIEW".equals(stage)) {
             throw new IllegalArgumentException("不支持的旅行模型调用阶段：" + stage);
         }
         String configKey = "OVERVIEW".equals(stage) ? SUMMARY_ROLE_ID_CONFIG_KEY : INTAKE_ROLE_ID_CONFIG_KEY;
@@ -687,15 +664,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         req.setUserType(UserTypeEnum.MEMBER.getValue());
         req.setContent(content);
         return assistant ? aiChatApi.createAssistantMessage(req) : aiChatApi.createUserMessage(req);
-    }
-
-    private static String buildIntakeContext(Map<String, Object> state, TripItineraryDO currentItinerary,
-                                             String content) {
-        List<Map<String, Object>> fields = informationFields(TripInformationSchema.getFields());
-        return "InteractionType: EXTRACTION\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
-                + "InformationFields:\n" + JsonUtils.toJsonString(fields) + "\n\n"
-                + "Current Editable Itinerary:\n" + JsonUtils.toJsonString(editableItineraryContext(currentItinerary))
-                + "\n\nUser message:\n" + content;
     }
 
     private String executeManagedIntake(TripPlanDO trip, Map<String, Object> state,

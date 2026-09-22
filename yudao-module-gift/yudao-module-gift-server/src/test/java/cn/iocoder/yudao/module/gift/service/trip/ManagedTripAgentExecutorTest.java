@@ -17,7 +17,7 @@ import static org.mockito.Mockito.when;
 class ManagedTripAgentExecutorTest {
 
     @Test
-    void execute_shouldCreateIndependentSessionAndRunTask() {
+    void execute_shouldReuseTripSessionAndRunTask() {
         ManagedTripSessionService sessionService = mock(ManagedTripSessionService.class);
         ManagedAgentSessionClient sessionClient = mock(ManagedAgentSessionClient.class);
         ManagedTripAgentExecutor executor = new ManagedTripAgentExecutor();
@@ -27,15 +27,15 @@ class ManagedTripAgentExecutorTest {
         Map<String, Object> state = Map.of("destination", "云南");
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"topic\":\"TRAVEL\"}",
                 new ManagedAgentExecutionBudgetDecider.Snapshot(1, 0, 200, 50, 250, 100, 300));
-        when(sessionService.createSession(1L, 2L, state)).thenReturn("session-intake");
-        when(sessionClient.execute("session-intake", "task-json")).thenReturn(agentResult);
+        when(sessionService.getOrCreateSession(1L, 2L, state)).thenReturn("session-trip");
+        when(sessionClient.execute("session-trip", "task-json")).thenReturn(agentResult);
 
         ManagedTripAgentExecutor.Execution result = executor.execute(trip, state, "task-json");
 
-        assertEquals("session-intake", result.sessionId());
+        assertEquals("session-trip", result.sessionId());
         assertEquals(agentResult, result.result());
-        assertEquals("session-intake", trip.getManagedAgentSessionId());
-        verify(sessionClient).execute("session-intake", "task-json");
+        assertEquals("session-trip", trip.getManagedAgentSessionId());
+        verify(sessionClient).execute("session-trip", "task-json");
     }
 
 }

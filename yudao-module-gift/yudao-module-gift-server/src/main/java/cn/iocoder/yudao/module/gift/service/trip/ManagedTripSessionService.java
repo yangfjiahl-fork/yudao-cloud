@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
-/** 独立事务创建云端 Session，避免不同任务之间继承模型和工具上下文。 */
+/** 在独立事务中获取或创建旅行会话对应的云端 Session。 */
 @Service
 @Slf4j
 public class ManagedTripSessionService {
@@ -23,14 +23,19 @@ public class ManagedTripSessionService {
     private TripPlanMapper tripPlanMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public String createSession(Long tripId, Long conversationId, Map<String, Object> state) {
+    public String getOrCreateSession(Long tripId, Long conversationId, Map<String, Object> state) {
         TripPlanDO current = tripPlanMapper.selectById(tripId);
         if (current == null) {
             throw new IllegalStateException("旅行计划不存在");
         }
+        if (StrUtil.isNotBlank(current.getManagedAgentSessionId())) {
+            log.info("[getOrCreateSession][tripId({}) 复用 Managed Agents sessionId({})]",
+                    tripId, current.getManagedAgentSessionId());
+            return current.getManagedAgentSessionId();
+        }
         String sessionId = managedAgentSessionClient.createSession(buildSessionTitle(state), tripId, conversationId);
         tripPlanMapper.updateById(new TripPlanDO().setId(tripId).setManagedAgentSessionId(sessionId));
-        log.info("[createSession][tripId({}) Managed Agents sessionId({}) 创建成功]", tripId, sessionId);
+        log.info("[getOrCreateSession][tripId({}) Managed Agents sessionId({}) 创建成功]", tripId, sessionId);
         return sessionId;
     }
 
