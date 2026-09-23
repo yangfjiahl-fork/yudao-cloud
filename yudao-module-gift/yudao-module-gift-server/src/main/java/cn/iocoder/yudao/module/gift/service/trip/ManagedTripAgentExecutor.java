@@ -26,8 +26,8 @@ public class ManagedTripAgentExecutor {
 
     public Execution execute(TripPlanDO trip, Map<String, Object> state, String task,
                              ManagedTripAgentStage stage) {
-        String sessionId = managedTripSessionService.getOrCreateSession(trip.getId(), trip.getConversationId(), state);
-        trip.setManagedAgentSessionId(sessionId);
+        String sessionId = managedTripSessionService.getOrCreateSession(
+                trip.getId(), trip.getConversationId(), state, stage);
         return new Execution(sessionId, managedAgentClient.execute(sessionId, task, executionOptions(stage)));
     }
 

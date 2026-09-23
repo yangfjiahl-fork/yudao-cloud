@@ -344,6 +344,10 @@ yudao:
       model: ${ALIYUN_ASR_MODEL:paraformer-realtime-v2}
       max-file-size: ${ALIYUN_ASR_MAX_FILE_SIZE:10MB}
     trip-managed-agent:
+      intake-agent-id: ${YUDAO_GIFT_TRIP_INTAKE_AGENT_ID:}
+      intake-environment-id: ${YUDAO_GIFT_TRIP_INTAKE_ENVIRONMENT_ID:}
+      plan-agent-id: ${YUDAO_GIFT_TRIP_PLAN_AGENT_ID:}
+      plan-environment-id: ${YUDAO_GIFT_TRIP_PLAN_ENVIRONMENT_ID:}
       stream-timeout: ${MANAGED_AGENT_STREAM_TIMEOUT:45s}
       max-run-duration: ${MANAGED_AGENT_MAX_RUN_DURATION:3m}
       intake-stream-timeout: ${MANAGED_AGENT_INTAKE_STREAM_TIMEOUT:45s}

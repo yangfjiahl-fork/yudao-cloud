@@ -60,7 +60,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,7 +72,6 @@ import java.util.regex.Pattern;
 public class TripAgentServiceImpl implements TripAgentService {
 
     private static final int STATUS_ACTIVE = 1;
-    private static final String INTAKE_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
     private static final String SUMMARY_ROLE_ID_CONFIG_KEY = "trip.agent.sumaryRoleId";
     private static final String QUESTION_COUNT_CONFIG_KEY = "trip.question.cnt";
     private static final int MAX_SUGGESTION_COUNT = 5;
@@ -210,7 +208,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         TripItineraryDO currentItinerary = trip.getCurrentItineraryId() == null ? null
                 : tripItineraryMapper.selectById(trip.getCurrentItineraryId());
-        AtomicInteger modelDeltaSequence = new AtomicInteger();
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
         String intakeContent = executeManagedIntake(trip, state, currentItinerary, content);
         Map<String, Object> intake = TripAgentFormatUtils.parseMap(intakeContent);
@@ -245,8 +242,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (needFollowUp) {
             eventConsumer.accept(TripAgentEvent.of("stage", "FOLLOW_UP", "正在整理下一步建议…"));
         }
-        TripInteraction interaction = needFollowUp ? generateInteraction(conversationId, memberId, state, missingRequired,
-                trip.getId(), promptVariables, questionCount, eventConsumer, modelDeltaSequence) : null;
+        TripInteraction interaction = needFollowUp
+                ? generateInteraction(trip, state, missingRequired, questionCount) : null;
         List<Map<String, Object>> inputCards = needFollowUp ? interaction.inputCards() : List.of();
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
                 .setMissingRequired(missingRequired).setInputCards(inputCards));
@@ -296,7 +293,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .startSpan();
         Map<String, Object> itinerary;
         try (Scope ignored = assembleSpan.makeCurrent()) {
-            itinerary = managedTripPlannerService.plan(trip, state, content,
+            itinerary = managedTripPlannerService.plan(trip, state,
                     progress -> eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", progress)));
         } catch (RuntimeException | Error e) {
             TracerFrameworkUtils.onError(e, assembleSpan);
@@ -522,24 +519,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
-                                                 String stage, Long tripId) {
-        return generateStream(conversationId, memberId, content, stage, tripId, Map.of(), ignored -> { });
-    }
-
-    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
-                                                 String stage, Long tripId,
-                                                 Consumer<String> contentConsumer) {
-        return generateStream(conversationId, memberId, content, stage, tripId, Map.of(), contentConsumer);
-    }
-
-    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
                                                  String stage, Long tripId, Map<String, Object> promptVariables) {
-        return generateStream(conversationId, memberId, content, stage, tripId, promptVariables, ignored -> { });
-    }
-
-    private AiChatGenerateRespDTO generateStream(Long conversationId, Long memberId, String content,
-                                                 String stage, Long tripId, Map<String, Object> promptVariables,
-                                                 Consumer<String> contentConsumer) {
         long start = System.currentTimeMillis();
         Long roleId = getRoleId(stage);
         Long runId = tripRunLogService.create(tripId, stage, JsonUtils.toJsonString(Map.of("content", content)));
@@ -549,10 +529,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         try (invocation) {
             AiChatGenerateRespDTO response = aiChatApi.generateStream(new AiChatGenerateReqDTO()
                     .setConversationId(conversationId).setUserId(memberId).setUserType(UserTypeEnum.MEMBER.getValue())
-                    .setRoleId(roleId).setContent(content).setPromptVariables(promptVariables), chunk -> {
-                        output.append(chunk.getContent());
-                        contentConsumer.accept(chunk.getContent());
-                    });
+                    .setRoleId(roleId).setContent(content).setPromptVariables(promptVariables),
+                    chunk -> output.append(chunk.getContent()));
             setModelResponseAttributes(invocation, response, output.toString());
             tripRunLogService.complete(runId, response.getModel(), response.getPromptTokens(), response.getCompletionTokens(),
                     response.getTotalTokens(), System.currentTimeMillis() - start,
@@ -602,18 +580,17 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private Long getRoleId(String stage) {
-        if (!"FOLLOW_UP".equals(stage) && !"OVERVIEW".equals(stage)) {
+        if (!"OVERVIEW".equals(stage)) {
             throw new IllegalArgumentException("不支持的旅行模型调用阶段：" + stage);
         }
-        String configKey = "OVERVIEW".equals(stage) ? SUMMARY_ROLE_ID_CONFIG_KEY : INTAKE_ROLE_ID_CONFIG_KEY;
-        String configValue = configApi.getConfigValueByKey(configKey).getCheckedData();
+        String configValue = configApi.getConfigValueByKey(SUMMARY_ROLE_ID_CONFIG_KEY).getCheckedData();
         if (StrUtil.isBlank(configValue)) {
-            throw new IllegalStateException("系统配置 " + configKey + " 未配置");
+            throw new IllegalStateException("系统配置 " + SUMMARY_ROLE_ID_CONFIG_KEY + " 未配置");
         }
         try {
             return Long.parseLong(configValue.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("系统配置 " + configKey + " 必须是角色编号", e);
+            throw new IllegalStateException("系统配置 " + SUMMARY_ROLE_ID_CONFIG_KEY + " 必须是角色编号", e);
         }
     }
 
@@ -670,9 +647,19 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private String executeManagedIntake(TripPlanDO trip, Map<String, Object> state,
                                         TripItineraryDO currentItinerary, String content) {
-        long start = System.currentTimeMillis();
         String task = buildManagedIntakeTask(state, currentItinerary, content);
-        Long runId = tripRunLogService.create(trip.getId(), "INTAKE", task);
+        return executeIntakeAgentTask(trip, state, task, "INTAKE");
+    }
+
+    private String executeManagedFollowUp(TripPlanDO trip, Map<String, Object> state,
+                                          List<String> missingRequired, int questionCount) {
+        String task = buildManagedFollowUpTask(state, missingRequired, questionCount);
+        return executeIntakeAgentTask(trip, state, task, "FOLLOW_UP");
+    }
+
+    private String executeIntakeAgentTask(TripPlanDO trip, Map<String, Object> state, String task, String runStage) {
+        long start = System.currentTimeMillis();
+        Long runId = tripRunLogService.create(trip.getId(), runStage, task);
         try {
             ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
                     trip, state, task, ManagedTripAgentStage.INTAKE);
@@ -703,6 +690,24 @@ public class TripAgentServiceImpl implements TripAgentService {
         request.put("informationFields", informationFields(TripInformationSchema.getFields()));
         request.put("currentEditableItinerary", editableItineraryContext(currentItinerary));
         request.put("userMessage", content);
+        return JsonUtils.toJsonString(request);
+    }
+
+    static String buildManagedFollowUpTask(Map<String, Object> state, List<String> missingRequired,
+                                           int questionCount) {
+        List<TripInformationSchema.Field> candidates = new ArrayList<>();
+        missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
+                .forEach(candidates::add);
+        TripInformationSchema.getFields().stream().filter(field -> !hasValue(state.get(field.stateKey())))
+                .filter(field -> !candidates.contains(field)).forEach(candidates::add);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("task", "GENERATE_TRIP_FOLLOW_UP");
+        request.put("schemaVersion", "1.0");
+        request.put("currentTripState", state);
+        request.put("missingRequiredFields", missingRequired);
+        request.put("questionCount", questionCount);
+        request.put("maximumSuggestionCount", getModelSuggestionCount(missingRequired));
+        request.put("candidateFields", informationFields(candidates));
         return JsonUtils.toJsonString(request);
     }
 
@@ -747,17 +752,13 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private TripInteraction generateInteraction(Long conversationId, Long memberId, Map<String, Object> state,
-                                                List<String> missingRequired, Long tripId,
-                                                Map<String, Object> promptVariables, int questionCount,
-                                                Consumer<TripAgentEvent> eventConsumer, AtomicInteger modelDeltaSequence) {
+    private TripInteraction generateInteraction(TripPlanDO trip, Map<String, Object> state,
+                                                List<String> missingRequired, int questionCount) {
         List<Map<String, String>> fallbackSuggestions = buildInformationSuggestions(state, missingRequired);
         String fallbackQuestion = composeQuestions(buildFallbackQuestions(state, missingRequired, questionCount));
         try {
-            AiChatGenerateRespDTO response = generateStream(conversationId, memberId,
-                    buildInteractionContext(state, missingRequired, questionCount), "FOLLOW_UP", tripId, promptVariables,
-                    chunk -> emitModelDelta(eventConsumer, "FOLLOW_UP", chunk, modelDeltaSequence));
-            Map<String, Object> interaction = TripAgentFormatUtils.parseMap(response.getContent());
+            String followUpContent = executeManagedFollowUp(trip, state, missingRequired, questionCount);
+            Map<String, Object> interaction = TripAgentFormatUtils.parseMap(followUpContent);
             List<String> questions = parseQuestions(interaction.get("questions"), questionCount);
             if (CollUtil.isEmpty(questions)) {
                 questions = parseQuestions(interaction.get("question"), questionCount);
@@ -768,36 +769,12 @@ public class TripAgentServiceImpl implements TripAgentService {
                     CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions, missingRequired);
             return new TripInteraction(question, TripInputCardFactory.build(missingRequired, question, suggestions));
         } catch (RuntimeException e) {
-            log.warn("[generateInteraction][tripId({}) 追问文案生成失败，使用字段默认文案]", tripId, e);
+            log.warn("[generateInteraction][tripId({}) Managed Agent 追问生成失败，使用字段默认文案]",
+                    trip.getId(), e);
             List<Map<String, String>> suggestions = ensureGenerateSuggestion(fallbackSuggestions, missingRequired);
             return new TripInteraction(fallbackQuestion,
                     TripInputCardFactory.build(missingRequired, fallbackQuestion, suggestions));
         }
-    }
-
-    /**
-     * 流式模型内容只供前端渐进展示，旅行状态仍以 intake_completed、question 等已校验事件为准。
-     */
-    private static void emitModelDelta(Consumer<TripAgentEvent> eventConsumer, String stage, String chunk,
-                                       AtomicInteger sequence) {
-        if (chunk == null || chunk.isEmpty()) {
-            return;
-        }
-        eventConsumer.accept(TripAgentEvent.of("model_delta", stage, chunk)
-                .setSequence(sequence.incrementAndGet()));
-    }
-
-    private static String buildInteractionContext(Map<String, Object> state, List<String> missingRequired, int questionCount) {
-        List<TripInformationSchema.Field> candidates = new ArrayList<>();
-        missingRequired.stream().map(TripInformationSchema::getByMissingKey).filter(java.util.Objects::nonNull)
-                .forEach(candidates::add);
-        TripInformationSchema.getFields().stream().filter(field -> !hasValue(state.get(field.stateKey())))
-                .filter(field -> !candidates.contains(field)).forEach(candidates::add);
-        return "InteractionType: FOLLOW_UP\n\nCurrent TripState:\n" + JsonUtils.toJsonString(state) + "\n\n"
-                + "MissingRequiredFields:\n" + JsonUtils.toJsonString(missingRequired) + "\n\n"
-                + "QuestionCount:\n" + questionCount + "\n\n"
-                + "MaximumSuggestionCount:\n" + getModelSuggestionCount(missingRequired) + "\n\n"
-                + "CandidateFields:\n" + JsonUtils.toJsonString(informationFields(candidates));
     }
 
     @SuppressWarnings("unchecked")

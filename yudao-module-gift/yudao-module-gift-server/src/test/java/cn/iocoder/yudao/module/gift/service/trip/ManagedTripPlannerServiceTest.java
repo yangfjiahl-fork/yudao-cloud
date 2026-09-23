@@ -46,21 +46,16 @@ class ManagedTripPlannerServiceTest {
         ManagedAgentExecutionMetrics metrics =
                 new ManagedAgentExecutionMetrics(2, 1, 1_200, 300, 1_500, 500, 800);
         when(executor.execute(any(TripPlanDO.class), anyMap(), anyString(), eq(ManagedTripAgentStage.PLAN)))
-                .thenAnswer(invocation -> {
-                    TripPlanDO executionTrip = invocation.getArgument(0);
-                    executionTrip.setManagedAgentSessionId("session-1");
-                    return new ManagedTripAgentExecutor.Execution("session-1",
-                            new ManagedAgentExecutionResult(managedResponse, metrics));
-                });
+                .thenReturn(new ManagedTripAgentExecutor.Execution("session-1",
+                        new ManagedAgentExecutionResult(managedResponse, metrics)));
         Map<String, Object> expected = Map.of("daily_itinerary", List.of(), "citation_ids", List.of());
         when(assembler.assemble(anyMap(), any(TripMacroSkeleton.class), any(Consumer.class))).thenReturn(expected);
         TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L);
         Map<String, Object> state = Map.of("destination", "云南", "days", 2);
 
-        Map<String, Object> result = service.plan(trip, state, "请生成行程", ignored -> { });
+        Map<String, Object> result = service.plan(trip, state, ignored -> { });
 
         assertEquals(expected, result);
-        assertEquals("session-1", trip.getManagedAgentSessionId());
         ArgumentCaptor<String> taskCaptor = ArgumentCaptor.forClass(String.class);
         verify(executor).execute(eq(trip), eq(state), taskCaptor.capture(), eq(ManagedTripAgentStage.PLAN));
         assertTrue(taskCaptor.getValue().contains("GENERATE_TRIP_MACRO_SKELETON"));
@@ -69,6 +64,7 @@ class ManagedTripPlannerServiceTest {
         assertTrue(taskCaptor.getValue().contains("transportMode\":\"TAXI"));
         assertFalse(taskCaptor.getValue().contains("transferDay"));
         assertFalse(taskCaptor.getValue().contains("daily_itinerary"));
+        assertFalse(taskCaptor.getValue().contains("latestUserMessage"));
         ArgumentCaptor<TripMacroSkeleton> macroCaptor = ArgumentCaptor.forClass(TripMacroSkeleton.class);
         verify(assembler).assemble(eq(state), macroCaptor.capture(), any(Consumer.class));
         assertEquals("大理", macroCaptor.getValue().days().get(1).city());

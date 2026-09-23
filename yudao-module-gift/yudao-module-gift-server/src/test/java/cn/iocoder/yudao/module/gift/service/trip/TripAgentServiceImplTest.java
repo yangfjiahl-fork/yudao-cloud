@@ -238,4 +238,22 @@ class TripAgentServiceImplTest {
         assertFalse(task.contains("longitude"));
         assertFalse(task.contains("latitude"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildManagedFollowUpTask_shouldUseValidatedStateAndPrioritizeMissingFields() {
+        String task = TripAgentServiceImpl.buildManagedFollowUpTask(
+                Map.of("departure", "上海", "destination", "云南"),
+                List.of("days", "traveler_count"), 2);
+
+        Map<String, Object> payload = JsonUtils.parseMap(task);
+        assertEquals("GENERATE_TRIP_FOLLOW_UP", payload.get("task"));
+        assertEquals(Map.of("departure", "上海", "destination", "云南"), payload.get("currentTripState"));
+        assertEquals(List.of("days", "traveler_count"), payload.get("missingRequiredFields"));
+        assertEquals(2, payload.get("questionCount"));
+        List<Map<String, Object>> candidateFields =
+                (List<Map<String, Object>>) payload.get("candidateFields");
+        assertEquals("days", candidateFields.get(0).get("stateKey"));
+        assertEquals("travelerCount", candidateFields.get(1).get("stateKey"));
+    }
 }

@@ -28,14 +28,13 @@ public class ManagedTripPlannerService {
     @Resource
     private TripItineraryAssembler tripItineraryAssembler;
 
-    public Map<String, Object> plan(TripPlanDO trip, Map<String, Object> state, String latestUserMessage,
-                                    Consumer<String> progressConsumer) {
+    public Map<String, Object> plan(TripPlanDO trip, Map<String, Object> state, Consumer<String> progressConsumer) {
         long start = System.currentTimeMillis();
         Long runId = tripRunLogService.create(trip.getId(), STAGE, JsonUtils.toJsonString(Map.of(
                 "tripState", state)));
         String response = null;
         try {
-            String task = buildTask(state, latestUserMessage);
+            String task = buildTask(state);
             progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
             ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
                     trip, state, task, ManagedTripAgentStage.PLAN);
@@ -66,13 +65,12 @@ public class ManagedTripPlannerService {
         }
     }
 
-    private static String buildTask(Map<String, Object> state, String latestUserMessage) {
+    private static String buildTask(Map<String, Object> state) {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("task", "GENERATE_TRIP_MACRO_SKELETON");
         request.put("schemaVersion", "2.0");
         request.put("requestedAt", OffsetDateTime.now(CHINA_ZONE).toString());
         request.put("tripState", state);
-        request.put("latestUserMessage", latestUserMessage);
         request.put("defaults", Map.of(
                 "dailyBudgetPerPerson", 500,
                 "budgetExcludesRoundTrip", true,

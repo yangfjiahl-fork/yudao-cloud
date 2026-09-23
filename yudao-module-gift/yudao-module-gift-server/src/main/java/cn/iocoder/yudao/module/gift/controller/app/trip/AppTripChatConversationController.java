@@ -13,7 +13,6 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversati
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationUpdateReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatCreateStreamRespVO;
-import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,13 +44,10 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @Slf4j
 public class AppTripChatConversationController {
 
-    private static final String ENTRY_ROLE_ID_CONFIG_KEY = "trip.agent.intakeRoleId";
     private static final String TRAVEL_GUIDE_MESSAGE = "请告诉我出发地、目的地、出发日期、旅行天数、同行人数和预算，我来帮你规划旅程。";
 
     @Resource
     private AiChatApi aiChatApi;
-    @Resource
-    private ConfigApi configApi;
     @Resource
     private TripAgentService tripAgentService;
 
@@ -64,8 +60,6 @@ public class AppTripChatConversationController {
         AiChatConversationCreateReqDTO createReqDTO = new AiChatConversationCreateReqDTO();
         createReqDTO.setUserId(userId);
         createReqDTO.setUserType(userType);
-        Long roleId = getEntryRoleId();
-        createReqDTO.setRoleId(roleId);
         if (reqVO != null) {
             createReqDTO.setProvinceId(reqVO.getProvinceId());
             createReqDTO.setCityId(reqVO.getCityId());
@@ -84,8 +78,8 @@ public class AppTripChatConversationController {
         messageReqDTO.setUserType(userType);
         messageReqDTO.setContent(content);
         AiChatMessageRespDTO message = aiChatApi.createAssistantMessage(messageReqDTO);
-        log.info("[createConversation][conversationId({}) memberId({}) roleId({}) guideMessageId({}) 创建成功]",
-                conversationId, userId, roleId, message.getId());
+        log.info("[createConversation][conversationId({}) memberId({}) guideMessageId({}) 创建成功]",
+                conversationId, userId, message.getId());
         return Flux.just(success(new AppTripChatCreateStreamRespVO().setEvent("created").setConversationId(conversationId)
                 .setMessageId(message.getId()).setContent(content)));
     }
@@ -113,18 +107,6 @@ public class AppTripChatConversationController {
     public CommonResult<Boolean> deleteConversation(@RequestParam("id") Long id) {
         aiChatApi.deleteConversation(id, getLoginUserId(), UserTypeEnum.MEMBER.getValue());
         return success(true);
-    }
-
-    private Long getEntryRoleId() {
-        String configValue = configApi.getConfigValueByKey(ENTRY_ROLE_ID_CONFIG_KEY).getCheckedData();
-        if (StrUtil.isBlank(configValue)) {
-            throw new IllegalStateException("系统配置 trip.agent.intakeRoleId 未配置");
-        }
-        try {
-            return Long.parseLong(configValue.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalStateException("系统配置 trip.agent.intakeRoleId 必须是角色编号", e);
-        }
     }
 
 }

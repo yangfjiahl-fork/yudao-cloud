@@ -33,22 +33,44 @@ class ManagedTripAgentExecutorTest {
         Map<String, Object> state = Map.of("destination", "云南");
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"topic\":\"TRAVEL\"}",
                 new ManagedAgentExecutionMetrics(1, 0, 200, 50, 250, 100, 300));
-        when(sessionService.getOrCreateSession(1L, 2L, state)).thenReturn("session-trip");
-        when(agentClient.execute(eq("session-trip"), eq("task-json"), any()))
+        when(sessionService.getOrCreateSession(1L, 2L, state, ManagedTripAgentStage.INTAKE))
+                .thenReturn("session-intake");
+        when(agentClient.execute(eq("session-intake"), eq("task-json"), any()))
                 .thenReturn(agentResult);
 
         ManagedTripAgentExecutor.Execution result = executor.execute(
                 trip, state, "task-json", ManagedTripAgentStage.INTAKE);
 
-        assertEquals("session-trip", result.sessionId());
+        assertEquals("session-intake", result.sessionId());
         assertEquals(agentResult, result.result());
-        assertEquals("session-trip", trip.getManagedAgentSessionId());
         ArgumentCaptor<ManagedAgentExecutionOptions> optionsCaptor =
                 ArgumentCaptor.forClass(ManagedAgentExecutionOptions.class);
-        verify(agentClient).execute(eq("session-trip"), eq("task-json"), optionsCaptor.capture());
+        verify(agentClient).execute(eq("session-intake"), eq("task-json"), optionsCaptor.capture());
         assertEquals("INTAKE", optionsCaptor.getValue().operation());
         assertEquals(1, optionsCaptor.getValue().maxModelRequests());
         assertEquals(0, optionsCaptor.getValue().maxToolCalls());
+    }
+
+    @Test
+    void execute_shouldUseIndependentPlanSession() {
+        ManagedTripSessionService sessionService = mock(ManagedTripSessionService.class);
+        ManagedAgentClient agentClient = mock(ManagedAgentClient.class);
+        ManagedTripAgentExecutor executor = new ManagedTripAgentExecutor();
+        ReflectionTestUtils.setField(executor, "managedTripSessionService", sessionService);
+        ReflectionTestUtils.setField(executor, "managedAgentClient", agentClient);
+        ReflectionTestUtils.setField(executor, "properties", new ManagedTripAgentProperties());
+        TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L);
+        Map<String, Object> state = Map.of("destination", "云南");
+        ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"macro_skeleton\":{}}",
+                new ManagedAgentExecutionMetrics(1, 0, 200, 50, 250, 100, 300));
+        when(sessionService.getOrCreateSession(1L, 2L, state, ManagedTripAgentStage.PLAN))
+                .thenReturn("session-plan");
+        when(agentClient.execute(eq("session-plan"), eq("task-json"), any())).thenReturn(agentResult);
+
+        ManagedTripAgentExecutor.Execution result = executor.execute(
+                trip, state, "task-json", ManagedTripAgentStage.PLAN);
+
+        assertEquals("session-plan", result.sessionId());
     }
 
 }

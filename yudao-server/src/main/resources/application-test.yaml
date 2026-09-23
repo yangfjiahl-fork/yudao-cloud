@@ -162,8 +162,10 @@ yudao:
       api-key: ${YUDAO_GIFT_TRIP_MANAGED_AGENT_API_KEY:}
       workspace: ws-nryr94at12b2jm8d
       region: cn-beijing
-      agent-id: agent_01M2VYR70XKESBBK3A9TS27FJ1
-      environment-id: env_ZDUyZTk1MDU1YzQ1NDFmOG
+      intake-agent-id: ${YUDAO_GIFT_TRIP_INTAKE_AGENT_ID:}
+      intake-environment-id: ${YUDAO_GIFT_TRIP_INTAKE_ENVIRONMENT_ID:}
+      plan-agent-id: ${YUDAO_GIFT_TRIP_PLAN_AGENT_ID:}
+      plan-environment-id: ${YUDAO_GIFT_TRIP_PLAN_ENVIRONMENT_ID:}
       stream-timeout: 45s
       max-run-duration: 3m
       intake-stream-timeout: 45s

@@ -5,15 +5,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
-/** 旅行 Managed Agent 的入口标识与分阶段执行策略。 */
+/** 旅行需求收集与行程规划 Managed Agent 的入口标识和执行策略。 */
 @ConfigurationProperties(prefix = "yudao.gift.trip-managed-agent")
 @Data
 public class ManagedTripAgentProperties {
 
-    /** 控制台预先创建并配置好高德 MCP、旅行 Skill 的 Agent 编号。 */
-    private String agentId;
-    /** Agent 使用的百炼云端托管环境编号。 */
-    private String environmentId;
+    /** 只负责需求抽取的 Managed Agent 编号。 */
+    private String intakeAgentId;
+    /** 需求抽取 Agent 使用的百炼云端托管环境编号。 */
+    private String intakeEnvironmentId;
+    /** 只负责宏观行程生成的 Managed Agent 编号。 */
+    private String planAgentId;
+    /** 行程生成 Agent 使用的百炼云端托管环境编号。 */
+    private String planEnvironmentId;
     /** PLAN 相邻事件的最大空闲等待时长。 */
     private Duration streamTimeout = Duration.ofSeconds(45);
     /** PLAN 单次运行的绝对时长上限。 */

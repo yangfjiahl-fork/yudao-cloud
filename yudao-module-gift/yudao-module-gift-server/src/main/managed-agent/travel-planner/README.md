@@ -1,6 +1,7 @@
-# Managed Agents 旅行规划部署包
+# Managed Agents 行程生成部署包
 
-本目录只属于 gift 模块，用于在阿里云百炼 Managed Agents 中部署旅行规划 Agent；Java 运行时通过 Sessions API 调用已部署的 Agent 与 Environment。
+本目录只属于 gift 模块，用于部署根据已校验 `TripState` 生成宏观路线的 Agent。
+需求收集 Agent 的部署包位于相邻的 `trip-intake` 目录。
 
 ## 控制台配置
 
@@ -22,8 +23,10 @@ yudao:
       workspace: ws-nryr94at12b2jm8d
       region: cn-beijing
       # 使用 Sessions API 返回的 ID，而不是控制台中显示的名称。
-      agent-id: agent_01M2VYR70XKESBBK3A9TS27FJ1
-      environment-id: env_ZDUyZTk1MDU1YzQ1NDFmOG
+      intake-agent-id: ${YUDAO_GIFT_TRIP_INTAKE_AGENT_ID:}
+      intake-environment-id: ${YUDAO_GIFT_TRIP_INTAKE_ENVIRONMENT_ID:}
+      plan-agent-id: ${YUDAO_GIFT_TRIP_PLAN_AGENT_ID:}
+      plan-environment-id: ${YUDAO_GIFT_TRIP_PLAN_ENVIRONMENT_ID:}
       stream-timeout: 5m
       # INTAKE 的模型请求固定为 1 次，工具/Skill 调用固定为 0 次。
       intake-stream-timeout: 45s
@@ -36,7 +39,8 @@ yudao:
 若专有网络需要显式地址，可改配 `base-url`，其值为
 `https://ws-nryr94at12b2jm8d.cn-beijing.maas.aliyuncs.com/api/v1/agentstudio`。
 
-应用数据库先执行 `sql/mysql/gift_trip.sql` 中的 `managed_agent_session_id` 增量语句。新入口为：
+应用数据库先执行 `sql/mysql/gift_trip.sql` 中的 Session 列增量语句：它会删除旧的
+`managed_agent_session_id`，并新增 `intake_agent_session_id` 和 `plan_agent_session_id`。新入口为：
 
 ```text
 POST /app-api/ai/chat/message/managed/run
@@ -48,31 +52,10 @@ Accept: text/event-stream
 
 ## Session 生命周期
 
-- 每个旅行会话只创建一个 Managed Agent Session，并记录在 `gift_trip_plan.managed_agent_session_id`。
-- 后续 `INTAKE`、`GENERATE_PLAN`、`EDIT_PLAN` 均复用该 Session，使需求抽取与行程生成共享上下文。
-- `INTAKE` 与 `PLAN` 使用独立预算；`INTAKE` 只允许一次模型推理，禁止工具和 Skill 调用。
+- 每个旅行会话分别创建需求收集和行程生成 Session，记录在
+  `gift_trip_plan.intake_agent_session_id` 和 `gift_trip_plan.plan_agent_session_id`。
+- `INTAKE` 只能使用需求收集 Agent，`PLAN` 只能使用行程生成 Agent，两者不共享 Session 历史。
+- 两个 Agent 通过服务端已校验的 `TripState` 交接，不依赖对方的上下文。
+- `INTAKE` 只允许一次模型推理，禁止工具和 Skill 调用。
 - 预算或超时熔断只向当前运行发送 interrupt，保留 Session 与历史事件，后续请求继续复用。
 - 权威业务状态始终是 `TripState` 与当前 itinerary 版本，而不是 Managed Agents Session 上下文。
-
-## Intake 编辑命令协议
-
-已有行程后的自然语言修改由 Managed Agent 的 `EXTRACT_TRIP_REQUIREMENTS` 任务输出单个
-`change_command`，Java 服务端再统一执行：
-
-```json
-{
-  "change_command": {
-    "operation": "REPLAN_DAY",
-    "day": 2,
-    "values": {
-      "instruction": "下午换成更适合儿童的室内地点"
-    }
-  }
-}
-```
-
-- `operation` 使用 `TripChangeCommand.Operation` 枚举值。
-- 单轮只接受一个命令；组合修改应拆成多轮，避免部分成功。
-- `baseVersion` 由服务端从当前 itinerary 读取，模型输出的版本不会被信任。
-- 旧 `itinerary_patch.operations` 暂时兼容：单日修改转换为 `REPLAN_DAY`，多日修改转换为 `REPLAN_TRIP`。
-- Intake Role 只识别意图和目标，不直接写入 POI 编号、坐标或路线事实。
