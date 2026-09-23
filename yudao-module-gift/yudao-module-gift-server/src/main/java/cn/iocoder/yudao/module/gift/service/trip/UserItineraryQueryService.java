@@ -20,27 +20,27 @@ import java.util.Map;
 public class UserItineraryQueryService {
 
     @Resource
-    private UserItineraryMapper itineraryMapper;
+    private UserItineraryMapper userItineraryMapper;
     @Resource
-    private UserItineraryDayMapper dayMapper;
+    private UserItineraryDayMapper userItineraryDayMapper;
     @Resource
-    private UserItineraryItemMapper itemMapper;
+    private UserItineraryItemMapper userItineraryItemMapper;
 
     public UserItineraryDO getById(Long id, Long conversationId) {
-        return itineraryMapper.selectByIdAndConversationId(id, conversationId);
+        return userItineraryMapper.selectByIdAndConversationId(id, conversationId);
     }
 
     public UserItineraryDO getByConversationId(Long conversationId) {
-        return itineraryMapper.selectByConversationId(conversationId);
+        return userItineraryMapper.selectByConversationId(conversationId);
     }
 
     public UserItineraryDO getByResultEventId(Long eventId) {
-        return itineraryMapper.selectByResultEventId(eventId);
+        return userItineraryMapper.selectByResultEventId(eventId);
     }
 
     public Map<Long, Map<String, Object>> getByResultEventIds(Collection<Long> eventIds) {
         Map<Long, Map<String, Object>> result = new LinkedHashMap<>();
-        itineraryMapper.selectListByResultEventIds(eventIds)
+        userItineraryMapper.selectListByResultEventIds(eventIds)
                 .forEach(itinerary -> result.put(itinerary.getResultEventId(), toMap(itinerary)));
         return result;
     }
@@ -52,8 +52,8 @@ public class UserItineraryQueryService {
         result.put("overview", mapOf("status", itinerary.getOverviewStatus(), "skeleton",
                 itinerary.getOverviewSkeleton(), "detail", itinerary.getOverviewDetail(), "slot", "TRIP_OVERVIEW"));
         result.put("planner", mapOf("type", itinerary.getPlannerType(), "validation", itinerary.getPlannerValidation()));
-        List<UserItineraryDayDO> days = dayMapper.selectListByUserItineraryId(itinerary.getId());
-        List<UserItineraryItemDO> items = itemMapper.selectListByUserItineraryId(itinerary.getId());
+        List<UserItineraryDayDO> days = userItineraryDayMapper.selectListByUserItineraryId(itinerary.getId());
+        List<UserItineraryItemDO> items = userItineraryItemMapper.selectListByUserItineraryId(itinerary.getId());
         List<Map<String, Object>> daily = new ArrayList<>();
         List<Map<String, Object>> macroDays = new ArrayList<>();
         for (UserItineraryDayDO day : days) {
