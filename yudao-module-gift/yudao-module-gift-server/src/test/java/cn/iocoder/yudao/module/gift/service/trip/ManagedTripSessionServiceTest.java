@@ -33,9 +33,9 @@ class ManagedTripSessionServiceTest {
                         .setPlanAgentSessionId("session-plan"));
 
         String intakeSessionId = service.getOrCreateSession(
-                1L, 2L, Map.of("destination", "云南"), ManagedTripAgentStage.INTAKE);
+                2L, Map.of("destination", "云南"), ManagedTripAgentStage.INTAKE);
         String planSessionId = service.getOrCreateSession(
-                1L, 2L, Map.of("destination", "云南"), ManagedTripAgentStage.PLAN);
+                2L, Map.of("destination", "云南"), ManagedTripAgentStage.PLAN);
 
         assertEquals("session-intake", intakeSessionId);
         assertEquals("session-plan", planSessionId);
@@ -51,7 +51,7 @@ class ManagedTripSessionServiceTest {
         when(conversationMapper.selectById(2L)).thenReturn(new ItineraryConversationDO().setId(2L));
         when(agentClient.createSession(any())).thenReturn("session-new");
 
-        String result = service.getOrCreateSession(1L, 2L,
+        String result = service.getOrCreateSession(2L,
                 Map.of("departure", "上海", "destination", "云南", "days", 6), ManagedTripAgentStage.INTAKE);
 
         assertEquals("session-new", result);
@@ -65,7 +65,6 @@ class ManagedTripSessionServiceTest {
         assertEquals("agent-intake", requestCaptor.getValue().agentId());
         assertEquals("environment-intake", requestCaptor.getValue().environmentId());
         assertEquals("上海-云南6日游-需求收集", requestCaptor.getValue().title());
-        assertEquals("1", requestCaptor.getValue().metadata().get("trip_id"));
         assertEquals("2", requestCaptor.getValue().metadata().get("conversation_id"));
         assertEquals("INTAKE", requestCaptor.getValue().metadata().get("agent_stage"));
     }
@@ -79,7 +78,7 @@ class ManagedTripSessionServiceTest {
                 new ItineraryConversationDO().setId(2L).setIntakeAgentSessionId("session-intake"));
         when(agentClient.createSession(any())).thenReturn("session-plan");
 
-        String result = service.getOrCreateSession(1L, 2L,
+        String result = service.getOrCreateSession(2L,
                 Map.of("destination", "云南", "days", 6), ManagedTripAgentStage.PLAN);
 
         assertEquals("session-plan", result);
@@ -106,7 +105,7 @@ class ManagedTripSessionServiceTest {
         when(conversationMapper.selectById(2L)).thenReturn(new ItineraryConversationDO().setId(2L));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> service.getOrCreateSession(1L, 2L, Map.of(), ManagedTripAgentStage.INTAKE));
+                () -> service.getOrCreateSession(2L, Map.of(), ManagedTripAgentStage.INTAKE));
 
         assertEquals("需求收集与行程生成必须配置不同的 Managed Agent ID", exception.getMessage());
         verifyNoInteractions(agentClient);

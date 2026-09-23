@@ -7,8 +7,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-@TableName("gift_itinerary_conversation")
-@KeySequence("gift_itinerary_conversation_seq")
+@TableName("gift_user_itinerary_conversation")
+@KeySequence("gift_user_itinerary_conversation_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ItineraryConversationDO extends TenantBaseDO {

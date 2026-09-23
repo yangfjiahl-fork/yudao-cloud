@@ -65,6 +65,12 @@ public class ItineraryConversationService {
     @Transactional(rollbackFor = Exception.class)
     public ItineraryEventDO createEvent(Long conversationId, String runId, Long replyEventId, String eventType,
                                         String role, String stage, String content) {
+        return createEvent(conversationId, runId, replyEventId, eventType, role, stage, content, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ItineraryEventDO createEvent(Long conversationId, String runId, Long replyEventId, String eventType,
+                                        String role, String stage, String content, String payloadJson) {
         ItineraryEventDO event = new ItineraryEventDO();
         event.setConversationId(conversationId);
         event.setRunId(runId);
@@ -73,6 +79,7 @@ public class ItineraryConversationService {
         event.setRole(role);
         event.setStage(stage);
         event.setContent(content);
+        event.setPayloadJson(payloadJson);
         event.setStatus(STATUS_ACTIVE);
         eventMapper.insert(event);
         return event;

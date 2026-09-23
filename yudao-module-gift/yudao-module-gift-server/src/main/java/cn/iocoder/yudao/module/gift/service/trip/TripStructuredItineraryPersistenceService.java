@@ -3,7 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
@@ -37,25 +37,27 @@ public class TripStructuredItineraryPersistenceService {
     @Resource
     private UserItineraryItemMapper userItineraryItemMapper;
 
-    public Long persist(TripPlanDO trip, Integer version, Long requestEventId, Long resultEventId, Long memberId,
+    public Long persist(ItineraryConversationDO conversation, Integer version, Long requestEventId,
+                        Long resultEventId, Long memberId,
                         Map<String, Object> state, Map<String, Object> itinerary) {
         UserItineraryDO existing = userItineraryMapper.selectByResultEventId(resultEventId);
         if (existing != null) {
             return existing.getId();
         }
-        UserItineraryDO userItinerary = buildUserItinerary(trip, version, requestEventId, resultEventId, memberId,
+        UserItineraryDO userItinerary = buildUserItinerary(conversation, version, requestEventId, resultEventId, memberId,
                 state, itinerary);
         userItineraryMapper.insert(userItinerary);
         persistDays(userItinerary.getId(), itinerary);
         return userItinerary.getId();
     }
 
-    private static UserItineraryDO buildUserItinerary(TripPlanDO trip, Integer version, Long requestEventId,
+    private static UserItineraryDO buildUserItinerary(ItineraryConversationDO conversation, Integer version,
+                                                        Long requestEventId,
                                                         Long resultEventId, Long memberId, Map<String, Object> state,
                                                         Map<String, Object> itinerary) {
         UserItineraryDO result = new UserItineraryDO();
         result.setMemberId(memberId);
-        result.setConversationId(trip.getConversationId());
+        result.setConversationId(conversation.getId());
         result.setRequestEventId(requestEventId);
         result.setResultEventId(resultEventId);
         result.setVersion(version);

@@ -1,8 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionTerminatedException;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -18,51 +17,23 @@ import java.util.function.Consumer;
 @Service
 public class ManagedTripPlannerService {
 
-    private static final String STAGE = "MANAGED_PLAN";
     private static final ZoneId CHINA_ZONE = ZoneId.of("Asia/Shanghai");
 
     @Resource
     private ManagedTripAgentExecutor managedTripAgentExecutor;
     @Resource
-    private TripRunLogService tripRunLogService;
-    @Resource
     private TripItineraryAssembler tripItineraryAssembler;
 
-    public Map<String, Object> plan(TripPlanDO trip, Map<String, Object> state, Consumer<String> progressConsumer) {
-        long start = System.currentTimeMillis();
-        Long runId = tripRunLogService.create(trip.getId(), STAGE, JsonUtils.toJsonString(Map.of(
-                "tripState", state)));
-        String response = null;
-        try {
-            String task = buildTask(state);
-            progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
-            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
-                    trip, state, task, ManagedTripAgentStage.PLAN);
-            String sessionId = execution.sessionId();
-            response = execution.result().response();
-            TripMacroSkeleton macroSkeleton = ManagedTripPlanValidator.validateMacroSkeleton(
-                    TripAgentFormatUtils.parseMap(response), state);
-            progressConsumer.accept("宏观路线已确认，正在按每天的城市与区域查询高德候选…");
-            Map<String, Object> itinerary = tripItineraryAssembler.assemble(state, macroSkeleton, progressConsumer);
-            tripRunLogService.complete(runId, "managed-agent", execution.result().metrics().inputTokens(),
-                    execution.result().metrics().outputTokens(), execution.result().metrics().totalTokens(),
-                    System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
-                            "sessionId", sessionId, "metrics", execution.result().metrics(),
-                            "macroSkeleton", macroSkeleton.toMap(), "itinerary", itinerary)));
-            return itinerary;
-        } catch (RuntimeException e) {
-            Map<String, Object> failureOutput = new LinkedHashMap<>();
-            if (response != null) {
-                failureOutput.put("response", response);
-            }
-            if (e instanceof ManagedAgentExecutionTerminatedException terminated) {
-                failureOutput.put("terminationReason", terminated.getReason().name());
-                failureOutput.put("metrics", terminated.getMetrics());
-            }
-            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(), failureOutput.isEmpty()
-                    ? null : JsonUtils.toJsonString(failureOutput));
-            throw e;
-        }
+    public Map<String, Object> plan(ItineraryConversationDO conversation, Map<String, Object> state,
+                                    Consumer<String> progressConsumer) {
+        String task = buildTask(state);
+        progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");
+        ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
+                conversation, state, task, ManagedTripAgentStage.PLAN);
+        TripMacroSkeleton macroSkeleton = ManagedTripPlanValidator.validateMacroSkeleton(
+                TripAgentFormatUtils.parseMap(execution.result().response()), state);
+        progressConsumer.accept("宏观路线已确认，正在按每天的城市与区域查询高德候选…");
+        return tripItineraryAssembler.assemble(state, macroSkeleton, progressConsumer);
     }
 
     private static String buildTask(Map<String, Object> state) {

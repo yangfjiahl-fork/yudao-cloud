@@ -1,9 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -24,8 +23,6 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
     private TripItineraryVersionService versionService;
 
     @Mock
-    private TripPlanMapper tripPlanMapper;
-    @Mock
     private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
     @Mock
     private UserItineraryMapper userItineraryMapper;
@@ -34,7 +31,7 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
 
     @Test
     void saveGeneratedItinerary_shouldPersistStructuredVersionEventAndPointers() {
-        TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L).setMemberId(3L);
+        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L).setMemberId(3L);
         Map<String, Object> state = Map.of("startDate", "2026-10-01", "destination", "云南");
         Map<String, Object> itinerary = new LinkedHashMap<>();
         itinerary.put("summary", "云南亲子六日行程");
@@ -53,7 +50,7 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
         assertEquals(9L, saved.messageId());
         assertEquals(3, saved.version());
         assertEquals("云南亲子六日行程", saved.displayText());
-        assertEquals(10L, trip.getCurrentItineraryId());
+        assertEquals(10L, trip.getCurrentUserItineraryId());
         assertEquals(3, itinerary.get("version"));
         Map<?, ?> normalizedDay = (Map<?, ?>) ((List<?>) itinerary.get("daily_itinerary")).get(0);
         Map<?, ?> normalizedItem = (Map<?, ?>) ((List<?>) normalizedDay.get("slots")).get(0);
@@ -64,7 +61,6 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
 
         verify(conversationService).linkItinerary(9L, 10L);
         verify(conversationService).updateCurrentItinerary(2L, 10L, "2026-10-01 云南");
-        verify(tripPlanMapper).updateById(trip);
     }
 
 }

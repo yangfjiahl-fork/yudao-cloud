@@ -53,7 +53,8 @@ Accept: text/event-stream
 ## Session 生命周期
 
 - 每个旅行会话分别创建需求收集和行程生成 Session，记录在
-  `gift_trip_plan.intake_agent_session_id` 和 `gift_trip_plan.plan_agent_session_id`。
+  `gift_user_itinerary_conversation.intake_agent_session_id` 和
+  `gift_user_itinerary_conversation.plan_agent_session_id`。
 - `INTAKE` 只能使用需求收集 Agent，`PLAN` 只能使用行程生成 Agent，两者不共享 Session 历史。
 - 两个 Agent 通过服务端已校验的 `TripState` 交接，不依赖对方的上下文。
 - `INTAKE` 只允许一次模型推理，禁止工具和 Skill 调用。

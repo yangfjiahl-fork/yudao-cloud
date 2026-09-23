@@ -1,7 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySnapshot;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import org.junit.jupiter.api.Test;
 
@@ -207,7 +207,7 @@ class TripAgentServiceImplTest {
     @Test
     @SuppressWarnings("unchecked")
     void editableItineraryContext_shouldExposeOnlyFieldsNeededToResolveItemIdentity() {
-        TripItineraryDO itinerary = new TripItineraryDO().setVersion(3).setContentJson(JsonUtils.toJsonString(Map.of(
+        TripItinerarySnapshot itinerary = new TripItinerarySnapshot().setVersion(3).setContentJson(JsonUtils.toJsonString(Map.of(
                 "daily_itinerary", List.of(Map.of("day", 2, "slots", List.of(Map.of(
                         "itemId", "item-1", "day", 2, "type", "SCENIC", "timePeriod", "AFTERNOON",
                         "sort", 1, "poiId", "poi-1", "poiName", "滇池", "locked", false,

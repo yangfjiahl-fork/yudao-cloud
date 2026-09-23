@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentClient;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionMetrics;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionOptions;
@@ -29,11 +29,11 @@ class ManagedTripAgentExecutorTest {
         ReflectionTestUtils.setField(executor, "managedTripSessionService", sessionService);
         ReflectionTestUtils.setField(executor, "managedAgentClient", agentClient);
         ReflectionTestUtils.setField(executor, "properties", new ManagedTripAgentProperties());
-        TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L);
+        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L);
         Map<String, Object> state = Map.of("destination", "云南");
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"topic\":\"TRAVEL\"}",
                 new ManagedAgentExecutionMetrics(1, 0, 200, 50, 250, 100, 300));
-        when(sessionService.getOrCreateSession(1L, 2L, state, ManagedTripAgentStage.INTAKE))
+        when(sessionService.getOrCreateSession(2L, state, ManagedTripAgentStage.INTAKE))
                 .thenReturn("session-intake");
         when(agentClient.execute(eq("session-intake"), eq("task-json"), any()))
                 .thenReturn(agentResult);
@@ -59,11 +59,11 @@ class ManagedTripAgentExecutorTest {
         ReflectionTestUtils.setField(executor, "managedTripSessionService", sessionService);
         ReflectionTestUtils.setField(executor, "managedAgentClient", agentClient);
         ReflectionTestUtils.setField(executor, "properties", new ManagedTripAgentProperties());
-        TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L);
+        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L);
         Map<String, Object> state = Map.of("destination", "云南");
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"macro_skeleton\":{}}",
                 new ManagedAgentExecutionMetrics(1, 0, 200, 50, 250, 100, 300));
-        when(sessionService.getOrCreateSession(1L, 2L, state, ManagedTripAgentStage.PLAN))
+        when(sessionService.getOrCreateSession(2L, state, ManagedTripAgentStage.PLAN))
                 .thenReturn("session-plan");
         when(agentClient.execute(eq("session-plan"), eq("task-json"), any())).thenReturn(agentResult);
 

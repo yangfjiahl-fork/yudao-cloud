@@ -27,7 +27,7 @@ public class ManagedTripSessionService {
     private ItineraryConversationMapper conversationMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public String getOrCreateSession(Long tripId, Long conversationId, Map<String, Object> state,
+    public String getOrCreateSession(Long conversationId, Map<String, Object> state,
                                      ManagedTripAgentStage stage) {
         ItineraryConversationDO current = conversationMapper.selectById(conversationId);
         if (current == null) {
@@ -35,13 +35,13 @@ public class ManagedTripSessionService {
         }
         String persistedSessionId = getSessionId(current, stage);
         if (StrUtil.isNotBlank(persistedSessionId)) {
-            log.info("[getOrCreateSession][tripId({}) stage({}) 复用 Managed Agents sessionId({})]",
-                    tripId, stage, persistedSessionId);
+            log.info("[getOrCreateSession][conversationId({}) stage({}) 复用 Managed Agents sessionId({})]",
+                    conversationId, stage, persistedSessionId);
             return persistedSessionId;
         }
         String sessionId = managedAgentClient.createSession(new ManagedAgentSessionCreateRequest(
                 getAgentId(stage), getEnvironmentId(stage), buildSessionTitle(state, stage),
-                Map.of("trip_id", String.valueOf(tripId), "conversation_id", String.valueOf(conversationId),
+                Map.of("conversation_id", String.valueOf(conversationId),
                         "agent_stage", stage.name())));
         ItineraryConversationDO update = new ItineraryConversationDO().setId(conversationId);
         if (stage == ManagedTripAgentStage.INTAKE) {
@@ -50,8 +50,8 @@ public class ManagedTripSessionService {
             update.setPlanAgentSessionId(sessionId);
         }
         conversationMapper.updateById(update);
-        log.info("[getOrCreateSession][tripId({}) stage({}) Managed Agents sessionId({}) 创建成功]",
-                tripId, stage, sessionId);
+        log.info("[getOrCreateSession][conversationId({}) stage({}) Managed Agents sessionId({}) 创建成功]",
+                conversationId, stage, sessionId);
         return sessionId;
     }
 

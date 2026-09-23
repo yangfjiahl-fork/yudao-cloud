@@ -1,14 +1,15 @@
--- 行程领域最终结构（不兼容旧的生成行程 JSON 存储）。
--- gift_trip_* 表保留原状；新 AG-UI 会话、事件和生成行程均使用 itinerary 命名空间。
+-- 行程领域最终结构（不兼容旧的 gift_trip_* 存储）。
+-- 会话、事件和个人行程版本统一使用 itinerary 命名空间。
 
 DROP TABLE IF EXISTS `gift_user_itinerary_transport_segment`;
 DROP TABLE IF EXISTS `gift_user_itinerary_item`;
 DROP TABLE IF EXISTS `gift_user_itinerary_day`;
 DROP TABLE IF EXISTS `gift_user_itinerary`;
 DROP TABLE IF EXISTS `gift_itinerary_event`;
+DROP TABLE IF EXISTS `gift_user_itinerary_conversation`;
 DROP TABLE IF EXISTS `gift_itinerary_conversation`;
 
-CREATE TABLE `gift_itinerary_conversation` (
+CREATE TABLE `gift_user_itinerary_conversation` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '会话ID，同时作为 AG-UI threadId',
   `tenant_id` bigint NOT NULL COMMENT '租户ID',
   `member_id` bigint NOT NULL COMMENT '会员ID',
@@ -28,7 +29,7 @@ CREATE TABLE `gift_itinerary_conversation` (
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
   KEY `idx_member_update_time` (`tenant_id`, `member_id`, `update_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='行程 AG-UI 会话';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程 AG-UI 会话';
 
 CREATE TABLE `gift_itinerary_event` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '事件ID，消息事件同时作为 AG-UI messageId',
@@ -37,7 +38,7 @@ CREATE TABLE `gift_itinerary_event` (
   `run_id` varchar(64) DEFAULT NULL COMMENT 'AG-UI runId',
   `reply_event_id` bigint DEFAULT NULL,
   `user_itinerary_id` bigint DEFAULT NULL,
-  `event_type` varchar(32) NOT NULL COMMENT 'USER_MESSAGE/ASSISTANT_MESSAGE/ITINERARY',
+  `event_type` varchar(32) NOT NULL COMMENT 'USER_MESSAGE/USER_ACTION/ASSISTANT_MESSAGE/ITINERARY',
   `role` varchar(16) DEFAULT NULL,
   `stage` varchar(32) DEFAULT NULL,
   `content` text DEFAULT NULL,
@@ -190,3 +191,21 @@ CREATE TABLE `gift_itinerary_item` (
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`), KEY `idx_itinerary_day_sort` (`tenant_id`, `itinerary_day_id`, `sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通用行程节点（含入站交通）';
+
+-- 高德旅行 POI 类型（value 与 AmapPoiTypeEnum.category 保持一致）
+INSERT INTO `system_dict_type` (`name`, `type`, `status`, `remark`, `creator`, `updater`, `deleted`)
+SELECT '高德 POI 类型', 'gift_amap_poi_type', 0, '旅行规划和探索页使用的高德 POI 大类', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_type` WHERE `type` = 'gift_amap_poi_type' AND `deleted` = b'0');
+
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 1, '景点', 'sightseeing', 'gift_amap_poi_type', 0, 'primary', '', '高德类型 110000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'sightseeing' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 2, '酒店', 'hotel', 'gift_amap_poi_type', 0, 'success', '', '高德类型 100000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'hotel' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 3, '美食', 'food', 'gift_amap_poi_type', 0, 'warning', '', '高德类型 050000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'food' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT 4, '购物', 'shopping', 'gift_amap_poi_type', 0, 'info', '', '高德类型 060000', 'admin', 'admin', b'0'
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` WHERE `dict_type` = 'gift_amap_poi_type' AND `value` = 'shopping' AND `deleted` = b'0');

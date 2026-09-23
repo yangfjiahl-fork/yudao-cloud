@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionMetrics;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,13 +29,10 @@ class ManagedTripPlannerServiceTest {
     @SuppressWarnings("unchecked")
     void plan_shouldGenerateMacroThenDelegateFactsAndSchedulingToJava() {
         ManagedTripAgentExecutor executor = mock(ManagedTripAgentExecutor.class);
-        TripRunLogService runLogService = mock(TripRunLogService.class);
         TripItineraryAssembler assembler = mock(TripItineraryAssembler.class);
         ManagedTripPlannerService service = new ManagedTripPlannerService();
         ReflectionTestUtils.setField(service, "managedTripAgentExecutor", executor);
-        ReflectionTestUtils.setField(service, "tripRunLogService", runLogService);
         ReflectionTestUtils.setField(service, "tripItineraryAssembler", assembler);
-        when(runLogService.create(anyLong(), anyString(), anyString())).thenReturn(8L);
         String managedResponse = """
                 {"macro_skeleton":{"days":[
                   {"day":1,"city":"昆明","area":"滇池周边","theme":"轻松亲子","anchorPoiNames":["滇池"]},
@@ -45,12 +41,13 @@ class ManagedTripPlannerServiceTest {
                 """;
         ManagedAgentExecutionMetrics metrics =
                 new ManagedAgentExecutionMetrics(2, 1, 1_200, 300, 1_500, 500, 800);
-        when(executor.execute(any(TripPlanDO.class), anyMap(), anyString(), eq(ManagedTripAgentStage.PLAN)))
+        when(executor.execute(any(ItineraryConversationDO.class), anyMap(), anyString(),
+                eq(ManagedTripAgentStage.PLAN)))
                 .thenReturn(new ManagedTripAgentExecutor.Execution("session-1",
                         new ManagedAgentExecutionResult(managedResponse, metrics)));
         Map<String, Object> expected = Map.of("daily_itinerary", List.of(), "citation_ids", List.of());
         when(assembler.assemble(anyMap(), any(TripMacroSkeleton.class), any(Consumer.class))).thenReturn(expected);
-        TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L);
+        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L);
         Map<String, Object> state = Map.of("destination", "云南", "days", 2);
 
         Map<String, Object> result = service.plan(trip, state, ignored -> { });
@@ -68,8 +65,6 @@ class ManagedTripPlannerServiceTest {
         ArgumentCaptor<TripMacroSkeleton> macroCaptor = ArgumentCaptor.forClass(TripMacroSkeleton.class);
         verify(assembler).assemble(eq(state), macroCaptor.capture(), any(Consumer.class));
         assertEquals("大理", macroCaptor.getValue().days().get(1).city());
-        verify(runLogService).complete(eq(8L), eq("managed-agent"), eq(1_200L), eq(300L), eq(1_500L),
-                anyLong(), anyString());
     }
 
 }

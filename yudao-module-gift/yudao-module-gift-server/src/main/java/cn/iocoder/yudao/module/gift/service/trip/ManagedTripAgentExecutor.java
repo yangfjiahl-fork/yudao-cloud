@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentClient;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionOptions;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
@@ -24,10 +24,10 @@ public class ManagedTripAgentExecutor {
     @Resource
     private ManagedTripAgentProperties properties;
 
-    public Execution execute(TripPlanDO trip, Map<String, Object> state, String task,
+    public Execution execute(ItineraryConversationDO conversation, Map<String, Object> state, String task,
                              ManagedTripAgentStage stage) {
         String sessionId = managedTripSessionService.getOrCreateSession(
-                trip.getId(), trip.getConversationId(), state, stage);
+                conversation.getId(), state, stage);
         return new Execution(sessionId, managedAgentClient.execute(sessionId, task, executionOptions(stage)));
     }
 

@@ -2,9 +2,10 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import com.baomidou.lock.annotation.Lock4j;
@@ -27,7 +28,7 @@ public class TripPlanEditorService {
     private static final Set<String> UPDATE_FIELDS = Set.of("startTime", "durationMinutes", "timePeriod");
 
     @Resource
-    private TripPlanMapper tripPlanMapper;
+    private ItineraryConversationService conversationService;
     @Resource
     private UserItineraryQueryService userItineraryQueryService;
     @Resource
@@ -38,20 +39,23 @@ public class TripPlanEditorService {
     @Transactional(rollbackFor = Exception.class)
     @Lock4j(keys = {"#conversationId"}, expire = 360000, acquireTimeout = 3000)
     public EditResult apply(Long conversationId, Long memberId, TripChangeCommand command) {
-        return applyInternal(conversationId, memberId, command);
+        return applyInternal(conversationId, memberId, command, ChangeContext.manual());
     }
 
     /** 供已经持有同一 conversation 锁的 Agent 编排事务调用，避免重复获取分布式锁。 */
-    EditResult applyWithinExistingLock(Long conversationId, Long memberId, TripChangeCommand command) {
-        return applyInternal(conversationId, memberId, command);
+    EditResult applyWithinExistingLock(Long conversationId, Long memberId, TripChangeCommand command,
+                                       String runId, Long requestEventId) {
+        return applyInternal(conversationId, memberId, command, ChangeContext.ai(runId, requestEventId));
     }
 
-    private EditResult applyInternal(Long conversationId, Long memberId, TripChangeCommand command) {
-        TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
-        if (trip == null || trip.getCurrentItineraryId() == null) {
+    private EditResult applyInternal(Long conversationId, Long memberId, TripChangeCommand command,
+                                     ChangeContext context) {
+        ItineraryConversationDO conversation = conversationService.getRequired(conversationId, memberId);
+        if (conversation.getCurrentUserItineraryId() == null) {
             throw new IllegalArgumentException("当前旅行尚未生成可编辑行程");
         }
-        UserItineraryDO current = userItineraryQueryService.getById(trip.getCurrentItineraryId(), conversationId);
+        UserItineraryDO current = userItineraryQueryService.getById(
+                conversation.getCurrentUserItineraryId(), conversationId);
         if (current == null) {
             throw new IllegalArgumentException("当前行程版本不存在");
         }
@@ -59,17 +63,40 @@ public class TripPlanEditorService {
             throw new IllegalStateException("行程版本已更新，请刷新后重试");
         }
 
+        Long requestEventId = context.requestEventId();
+        if (context.source() == ChangeSource.MANUAL) {
+            ItineraryEventDO requestEvent = conversationService.createEvent(conversationId, null, null,
+                    "USER_ACTION", "user", "EDIT", manualChangeDescription(command),
+                    JsonUtils.toJsonString(command));
+            requestEventId = requestEvent.getId();
+        }
+
         Map<String, Object> itinerary = userItineraryQueryService.toMap(current);
-        Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
+        Map<String, Object> state = TripAgentFormatUtils.parseMap(conversation.getStateJson());
         LinkedHashSet<Integer> affectedDays = isReplan(command)
                 ? replan(itinerary, state, command) : applyLocalCommand(itinerary, command);
         itinerary.put("last_change", Map.of(
                 "operation", command.operation().name(),
                 "baseVersion", command.baseVersion(),
+                "source", context.source().name(),
                 "affectedDays", List.copyOf(affectedDays)));
         TripItineraryVersionService.SavedItinerary saved = tripItineraryVersionService.saveGeneratedItinerary(
-                trip, memberId, state, itinerary);
+                conversation, memberId, context.runId(), requestEventId, state, itinerary);
         return new EditResult(saved, List.copyOf(affectedDays), itinerary);
+    }
+
+    private static String manualChangeDescription(TripChangeCommand command) {
+        return "手动调整行程：" + switch (command.operation()) {
+            case ADD_ITEM -> "添加行程节点";
+            case REMOVE_ITEM -> "删除行程节点";
+            case REPLACE_ITEM -> "替换行程节点";
+            case MOVE_ITEM -> "移动行程节点";
+            case UPDATE_ITEM -> "修改行程节点";
+            case LOCK_ITEM -> "锁定行程节点";
+            case UNLOCK_ITEM -> "解锁行程节点";
+            case REPLAN_DAY -> "重新规划当天行程";
+            case REPLAN_TRIP -> "重新规划全部行程";
+        };
     }
 
     private static boolean isReplan(TripChangeCommand command) {
@@ -320,6 +347,25 @@ public class TripPlanEditorService {
 
     public record EditResult(TripItineraryVersionService.SavedItinerary saved, List<Integer> affectedDays,
                              Map<String, Object> itinerary) {
+    }
+
+    private enum ChangeSource {
+        MANUAL,
+        AI
+    }
+
+    private record ChangeContext(ChangeSource source, String runId, Long requestEventId) {
+
+        private static ChangeContext manual() {
+            return new ChangeContext(ChangeSource.MANUAL, null, null);
+        }
+
+        private static ChangeContext ai(String runId, Long requestEventId) {
+            if (requestEventId == null) {
+                throw new IllegalArgumentException("AI 行程修改缺少请求事件");
+            }
+            return new ChangeContext(ChangeSource.AI, runId, requestEventId);
+        }
     }
 
     private record DayLocation(int day, List<Map<String, Object>> days, int index, List<Map<String, Object>> slots) {

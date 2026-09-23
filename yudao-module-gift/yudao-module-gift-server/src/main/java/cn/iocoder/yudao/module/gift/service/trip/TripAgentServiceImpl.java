@@ -15,13 +15,9 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItinerarySlotDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
@@ -32,6 +28,8 @@ import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItineraryRouteResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotResult;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySlotState;
+import cn.iocoder.yudao.module.gift.service.trip.bo.TripItinerarySnapshot;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.system.api.area.AreaApi;
 import com.alibaba.loongsuite.otel.util.genai.AgentInvocation;
@@ -74,7 +72,6 @@ import java.util.regex.Pattern;
 @Slf4j
 public class TripAgentServiceImpl implements TripAgentService {
 
-    private static final int STATUS_ACTIVE = 1;
     private static final String SUMMARY_ROLE_ID_CONFIG_KEY = "trip.agent.sumaryRoleId";
     private static final String QUESTION_COUNT_CONFIG_KEY = "trip.question.cnt";
     private static final int MAX_SUGGESTION_COUNT = 5;
@@ -98,15 +95,11 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private GenAiTelemetryHandler genAiTelemetryHandler;
     @Resource
-    private TripPlanMapper tripPlanMapper;
-    @Resource
     private UserItineraryMapper userItineraryMapper;
     @Resource
     private UserItineraryDayMapper userItineraryDayMapper;
     @Resource
     private UserItineraryItemMapper userItineraryItemMapper;
-    @Resource
-    private TripRunLogService tripRunLogService;
     @Resource
     private ConfigApi configApi;
     @Resource
@@ -140,25 +133,21 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createTrip(Long conversationId, Long memberId, Long provinceId, Long cityId, Long districtId) {
-        TripPlanDO existing = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
-        if (existing != null) {
-            return trimNullable(TripAgentFormatUtils.parseMap(existing.getStateJson()).get("departure"));
+        ItineraryConversationDO conversation = conversationService.getRequired(conversationId, memberId);
+        Map<String, Object> existingState = TripAgentFormatUtils.parseMap(conversation.getStateJson());
+        if (!existingState.isEmpty()) {
+            return trimNullable(existingState.get("departure"));
         }
-        TripPlanDO trip = new TripPlanDO();
-        trip.setConversationId(conversationId);
-        trip.setMemberId(memberId);
         Map<String, Object> state = new LinkedHashMap<>();
         String defaultDeparture = getDefaultDeparture(provinceId, cityId, districtId);
         if (StrUtil.isNotBlank(defaultDeparture)) {
             state.put("departure", defaultDeparture);
         }
-        trip.setStateJson(JsonUtils.toJsonString(state));
-        trip.setMissingRequiredJson(JsonUtils.toJsonString(validateState(state)));
-        trip.setStatus(STATUS_ACTIVE);
-        tripPlanMapper.insert(trip);
-        conversationService.updateState(conversationId, trip.getStateJson(), trip.getMissingRequiredJson());
-        log.info("[createTrip][tripId({}) conversationId({}) memberId({}) 初始化成功]",
-                trip.getId(), conversationId, memberId);
+        conversation.setStateJson(JsonUtils.toJsonString(state));
+        conversation.setMissingRequiredJson(JsonUtils.toJsonString(validateState(state)));
+        conversationService.updateState(conversationId, conversation.getStateJson(),
+                conversation.getMissingRequiredJson());
+        log.info("[createTrip][conversationId({}) memberId({}) 初始化成功]", conversationId, memberId);
         return defaultDeparture;
     }
 
@@ -203,15 +192,8 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private TripAgentResult doHandleManagedMessage(Long conversationId, Long memberId, String runId, String content,
                                                    Consumer<TripAgentEvent> eventConsumer) {
-        TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
-        if (trip == null) {
-            log.info("[handleMessage][conversationId({}) memberId({}) 缺少旅行状态，开始兼容初始化]",
-                    conversationId, memberId);
-            createTrip(conversationId, memberId);
-            trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
-        }
-        log.info("[handleMessage][tripId({}) conversationId({}) memberId({}) 开始编排]",
-                trip.getId(), conversationId, memberId);
+        ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
+        log.info("[handleMessage][conversationId({}) memberId({}) 开始编排]", conversationId, memberId);
         ItineraryEventDO requestEvent = createTranscriptMessage(conversationId, runId, null, content, false);
 
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
@@ -224,9 +206,9 @@ public class TripAgentServiceImpl implements TripAgentService {
             return handleOutOfTopicMessage(conversationId, memberId, runId, requestEvent.getId(), trip.getId(), state,
                     currentMissingRequired, precheckDecision, eventConsumer);
         }
-        UserItineraryDO currentUserItinerary = trip.getCurrentItineraryId() == null ? null
-                : userItineraryQueryService.getById(trip.getCurrentItineraryId(), conversationId);
-        TripItineraryDO currentItinerary = currentUserItinerary == null ? null : new TripItineraryDO()
+        UserItineraryDO currentUserItinerary = trip.getCurrentUserItineraryId() == null ? null
+                : userItineraryQueryService.getById(trip.getCurrentUserItineraryId(), conversationId);
+        TripItinerarySnapshot currentItinerary = currentUserItinerary == null ? null : new TripItinerarySnapshot()
                 .setId(currentUserItinerary.getId()).setVersion(currentUserItinerary.getVersion())
                 .setMessageId(currentUserItinerary.getResultEventId())
                 .setContentJson(JsonUtils.toJsonString(userItineraryQueryService.toMap(currentUserItinerary)));
@@ -251,12 +233,11 @@ public class TripAgentServiceImpl implements TripAgentService {
         List<String> missingRequired = validateState(state);
         boolean stateChanged = !previousState.equals(state);
         boolean generateRequested = changeCommand != null || isGenerateRequested(intake)
-                || (trip.getCurrentItineraryId() != null && stateChanged);
+                || (trip.getCurrentUserItineraryId() != null && stateChanged);
         TripOrchestrationAction action = determineAction(missingRequired, generateRequested, stateChanged,
-                trip.getCurrentItineraryId() != null);
+                trip.getCurrentUserItineraryId() != null);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
-        tripPlanMapper.updateById(trip);
         conversationService.updateState(conversationId, trip.getStateJson(), trip.getMissingRequiredJson());
         log.info("[handleMessage][tripId({}) action({}) 状态字段({}) 缺失字段({})]",
                 trip.getId(), action, state.keySet(), missingRequired);
@@ -285,7 +266,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (changeCommand != null) {
             eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", "正在应用行程修改并校验受影响日期…"));
             TripPlanEditorService.EditResult edited = tripPlanEditorService.applyWithinExistingLock(
-                    conversationId, memberId, changeCommand);
+                    conversationId, memberId, changeCommand, runId, requestEvent.getId());
             TripItineraryVersionService.SavedItinerary saved = edited.saved();
             log.info("[handleMessage][tripId({}) command({}) affectedDays({}) version({}) Agent 编辑完成]",
                     trip.getId(), changeCommand.operation(), edited.affectedDays(), saved.version());
@@ -389,12 +370,12 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @Override
     public TripItineraryRouteResult resolveItineraryRoute(Long conversationId, Long memberId, Long messageId, Integer day) {
-        TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
+        ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
         UserItineraryDO itinerary = userItineraryQueryService.getByResultEventId(messageId);
-        if (trip == null || itinerary == null || !conversationId.equals(itinerary.getConversationId())) {
+        if (itinerary == null || !conversationId.equals(itinerary.getConversationId())) {
             throw new IllegalArgumentException("行程路线不存在或不属于当前会话");
         }
-        if (!itinerary.getId().equals(trip.getCurrentItineraryId())) {
+        if (!itinerary.getId().equals(trip.getCurrentUserItineraryId())) {
             throw new IllegalArgumentException("只能解析当前生效的行程路线");
         }
         List<Map<String, Object>> segments = tripItineraryAssembler.resolveTransportSegments(
@@ -409,12 +390,12 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Override
     public TripItinerarySlotResult resolveItinerarySlot(Long conversationId, Long memberId, Long messageId,
                                                          Integer day, String slot) {
-        TripPlanDO trip = tripPlanMapper.selectByConversationIdAndMemberId(conversationId, memberId);
+        ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
         UserItineraryDO itineraryDO = userItineraryQueryService.getByResultEventId(messageId);
-        if (trip == null || itineraryDO == null || !conversationId.equals(itineraryDO.getConversationId())) {
+        if (itineraryDO == null || !conversationId.equals(itineraryDO.getConversationId())) {
             throw new IllegalArgumentException("行程骨架不存在或不属于当前会话");
         }
-        if (!itineraryDO.getId().equals(trip.getCurrentItineraryId())) {
+        if (!itineraryDO.getId().equals(trip.getCurrentUserItineraryId())) {
             throw new IllegalArgumentException("只能补充当前生效的行程骨架");
         }
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
@@ -433,16 +414,13 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (item == null) {
             throw new IllegalArgumentException("行程节点不存在");
         }
-        TripItinerarySlotDO itinerarySlot = toTransientSlot(item);
+        TripItinerarySlotState itinerarySlot = toTransientSlot(item);
         if (ObjUtil.equal(item.getResolveStatus(), SLOT_RESOLVE_STATUS_COMPLETED)) {
             return withDayTransport(withWeather(toSlotResult(messageId, itinerarySlot),
                     resolveSlotCity(state, skeletonSlot)), itineraryDO.getId(), itinerary, day);
         }
         item.setResolveStatus(SLOT_RESOLVE_STATUS_PROCESSING);
         userItineraryItemMapper.updateById(item);
-        long start = System.currentTimeMillis();
-        Long runId = tripRunLogService.create(trip.getId(), "SLOT_RESOLVE", JsonUtils.toJsonString(Map.of(
-                "messageId", String.valueOf(messageId), "day", day, "slot", slot)));
         try {
             TripResearchExecutor.SlotResearchResult researchResult = tripResearchExecutor.resolveSlot(trip.getId(), state, day, slot,
                     trimNullable(skeletonSlot.get("skeleton")), trimNullable(skeletonSlot.get("poiName")),
@@ -455,9 +433,6 @@ public class TripAgentServiceImpl implements TripAgentService {
             itinerarySlot.setCitationIdsJson(JsonUtils.toJsonString(researchResult.citationIds()));
             itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_COMPLETED);
             updateItemFromSlot(item, itinerarySlot);
-            tripRunLogService.complete(runId, null, 0L, 0L, 0L, System.currentTimeMillis() - start,
-                    JsonUtils.toJsonString(Map.of("toolPlans", researchResult.toolPlans(), "status", researchResult.status(),
-                            "candidateCount", candidates.size(), "citationIds", researchResult.citationIds())));
             return withDayTransport(withWeather(toSlotResult(messageId, itinerarySlot), city), itineraryDO.getId(),
                     itinerary, day);
         } catch (RuntimeException e) {
@@ -465,16 +440,16 @@ public class TripAgentServiceImpl implements TripAgentService {
             itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_FAILED);
             itinerarySlot.setDetail("节点补充失败，请重试");
             updateItemFromSlot(item, itinerarySlot);
-            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage());
             throw e;
         }
     }
 
     private TripItinerarySlotResult resolveItineraryOverviewSlot(Long conversationId, Long memberId, Long messageId,
-                                                                   TripPlanDO trip, UserItineraryDO itineraryDO,
+                                                                   ItineraryConversationDO trip,
+                                                                   UserItineraryDO itineraryDO,
                                                                    Map<String, Object> itinerary,
                                                                    Integer day, String slot) {
-        TripItinerarySlotDO itinerarySlot = overviewSlot(itineraryDO, day, slot);
+        TripItinerarySlotState itinerarySlot = overviewSlot(itineraryDO, day, slot);
         if (ObjUtil.equal(itinerarySlot.getResolveStatus(), SLOT_RESOLVE_STATUS_COMPLETED)
                 && StrUtil.isNotBlank(itinerarySlot.getDetail())) {
             return toSlotResult(messageId, itinerarySlot);
@@ -540,8 +515,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                                                  String stage, Long tripId, Map<String, Object> promptVariables) {
         long start = System.currentTimeMillis();
         Long roleId = getRoleId(stage);
-        Long runId = tripRunLogService.create(tripId, stage, JsonUtils.toJsonString(Map.of("content", content)));
-        log.info("[generateStream][tripId({}) runId({}) stage({}) 开始调用模型]", tripId, runId, stage);
+        log.info("[generateStream][conversationId({}) stage({}) 开始调用模型]", tripId, stage);
         StringBuilder output = new StringBuilder();
         AgentInvocation invocation = startAgentInvocation(conversationId, tripId, stage, content, roleId);
         try (invocation) {
@@ -550,17 +524,13 @@ public class TripAgentServiceImpl implements TripAgentService {
                     .setRoleId(roleId).setContent(content).setPromptVariables(promptVariables),
                     chunk -> output.append(chunk.getContent()));
             setModelResponseAttributes(invocation, response, output.toString());
-            tripRunLogService.complete(runId, response.getModel(), response.getPromptTokens(), response.getCompletionTokens(),
-                    response.getTotalTokens(), System.currentTimeMillis() - start,
-                    JsonUtils.toJsonString(Map.of("response", output.toString())));
-            log.info("[generateStream][tripId({}) runId({}) stage({}) model({}) 耗时({} ms) tokens({}) 调用成功]",
-                    tripId, runId, stage, response.getModel(), System.currentTimeMillis() - start, response.getTotalTokens());
+            log.info("[generateStream][conversationId({}) stage({}) model({}) 耗时({} ms) tokens({}) 调用成功]",
+                    tripId, stage, response.getModel(), System.currentTimeMillis() - start, response.getTotalTokens());
             return response;
         } catch (RuntimeException e) {
             invocation.fail(e);
-            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage());
-            log.error("[generate][tripId({}) runId({}) stage({}) 耗时({} ms) 调用失败]",
-                    tripId, runId, stage, System.currentTimeMillis() - start, e);
+            log.error("[generate][conversationId({}) stage({}) 耗时({} ms) 调用失败]",
+                    tripId, stage, System.currentTimeMillis() - start, e);
             throw e;
         }
     }
@@ -664,43 +634,25 @@ public class TripAgentServiceImpl implements TripAgentService {
                 assistant ? "FOLLOW_UP" : "INTAKE", content);
     }
 
-    private String executeManagedIntake(TripPlanDO trip, Map<String, Object> state,
-                                        TripItineraryDO currentItinerary, String content) {
+    private String executeManagedIntake(ItineraryConversationDO trip, Map<String, Object> state,
+                                        TripItinerarySnapshot currentItinerary, String content) {
         String task = buildManagedIntakeTask(state, currentItinerary, content);
-        return executeIntakeAgentTask(trip, state, task, "INTAKE");
+        return executeIntakeAgentTask(trip, state, task);
     }
 
-    private String executeManagedFollowUp(TripPlanDO trip, Map<String, Object> state,
+    private String executeManagedFollowUp(ItineraryConversationDO trip, Map<String, Object> state,
                                           List<String> missingRequired, int questionCount) {
         String task = buildManagedFollowUpTask(state, missingRequired, questionCount);
-        return executeIntakeAgentTask(trip, state, task, "FOLLOW_UP");
+        return executeIntakeAgentTask(trip, state, task);
     }
 
-    private String executeIntakeAgentTask(TripPlanDO trip, Map<String, Object> state, String task, String runStage) {
-        long start = System.currentTimeMillis();
-        Long runId = tripRunLogService.create(trip.getId(), runStage, task);
-        try {
-            ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
-                    trip, state, task, ManagedTripAgentStage.INTAKE);
-            tripRunLogService.complete(runId, "managed-agent", execution.result().metrics().inputTokens(),
-                    execution.result().metrics().outputTokens(), execution.result().metrics().totalTokens(),
-                    System.currentTimeMillis() - start, JsonUtils.toJsonString(Map.of(
-                            "sessionId", execution.sessionId(), "metrics", execution.result().metrics(),
-                            "response", execution.result().response())));
-            return execution.result().response();
-        } catch (RuntimeException e) {
-            Map<String, Object> failureOutput = new LinkedHashMap<>();
-            if (e instanceof ManagedAgentExecutionTerminatedException terminated) {
-                failureOutput.put("terminationReason", terminated.getReason().name());
-                failureOutput.put("metrics", terminated.getMetrics());
-            }
-            tripRunLogService.fail(runId, System.currentTimeMillis() - start, e.getMessage(),
-                    failureOutput.isEmpty() ? null : JsonUtils.toJsonString(failureOutput));
-            throw e;
-        }
+    private String executeIntakeAgentTask(ItineraryConversationDO trip, Map<String, Object> state, String task) {
+        ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
+                trip, state, task, ManagedTripAgentStage.INTAKE);
+        return execution.result().response();
     }
 
-    static String buildManagedIntakeTask(Map<String, Object> state, TripItineraryDO currentItinerary,
+    static String buildManagedIntakeTask(Map<String, Object> state, TripItinerarySnapshot currentItinerary,
                                          String content) {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("task", "EXTRACT_TRIP_REQUIREMENTS");
@@ -730,7 +682,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         return JsonUtils.toJsonString(request);
     }
 
-    static Map<String, Object> editableItineraryContext(TripItineraryDO itinerary) {
+    static Map<String, Object> editableItineraryContext(TripItinerarySnapshot itinerary) {
         if (itinerary == null) {
             return Map.of();
         }
@@ -771,7 +723,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private TripInteraction generateInteraction(TripPlanDO trip, Map<String, Object> state,
+    private TripInteraction generateInteraction(ItineraryConversationDO trip, Map<String, Object> state,
                                                 List<String> missingRequired, int questionCount) {
         List<Map<String, String>> fallbackSuggestions = buildInformationSuggestions(state, missingRequired);
         String fallbackQuestion = composeQuestions(buildFallbackQuestions(state, missingRequired, questionCount));
@@ -1290,8 +1242,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         return "null".equalsIgnoreCase(text) ? "" : text;
     }
 
-    private static TripItinerarySlotDO toTransientSlot(UserItineraryItemDO item) {
-        TripItinerarySlotDO slot = new TripItinerarySlotDO();
+    private static TripItinerarySlotState toTransientSlot(UserItineraryItemDO item) {
+        TripItinerarySlotState slot = new TripItinerarySlotState();
         slot.setId(item.getId());
         slot.setItineraryId(item.getUserItineraryId());
         slot.setDay(item.getDay());
@@ -1306,7 +1258,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         return slot;
     }
 
-    private void updateItemFromSlot(UserItineraryItemDO item, TripItinerarySlotDO slot) {
+    private void updateItemFromSlot(UserItineraryItemDO item, TripItinerarySlotState slot) {
         item.setStatus(slot.getStatus());
         item.setResolveStatus(slot.getResolveStatus());
         item.setDetail(slot.getDetail());
@@ -1315,8 +1267,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         userItineraryItemMapper.updateById(item);
     }
 
-    private TripItinerarySlotDO overviewSlot(UserItineraryDO itinerary, Integer day, String slotName) {
-        TripItinerarySlotDO slot = new TripItinerarySlotDO();
+    private TripItinerarySlotState overviewSlot(UserItineraryDO itinerary, Integer day, String slotName) {
+        TripItinerarySlotState slot = new TripItinerarySlotState();
         slot.setItineraryId(itinerary.getId());
         slot.setDay(day);
         slot.setSlot(StrUtil.trim(slotName).toUpperCase(Locale.ROOT));
@@ -1343,7 +1295,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         return slot;
     }
 
-    private void updateOverviewSlot(UserItineraryDO itinerary, Integer day, TripItinerarySlotDO slot) {
+    private void updateOverviewSlot(UserItineraryDO itinerary, Integer day, TripItinerarySlotState slot) {
         if ("TRIP_OVERVIEW".equals(slot.getSlot())) {
             itinerary.setOverviewStatus(slot.getStatus());
             itinerary.setOverviewDetail(slot.getDetail());
@@ -1380,7 +1332,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         return StrUtil.blankToDefault(city, trimNullable(state.get("destination")));
     }
 
-    private static TripItinerarySlotResult toSlotResult(Long messageId, TripItinerarySlotDO slot) {
+    private static TripItinerarySlotResult toSlotResult(Long messageId, TripItinerarySlotState slot) {
         String detail = slot.getDetail();
         if (ObjUtil.equal(slot.getResolveStatus(), SLOT_RESOLVE_STATUS_PROCESSING) && StrUtil.isBlank(detail)) {
             detail = "节点正在补充中";
@@ -1401,7 +1353,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<Map<String, Object>> bindCandidatesToSlot(TripItinerarySlotDO slot,
+    private static List<Map<String, Object>> bindCandidatesToSlot(TripItinerarySlotState slot,
                                                                     List<Map<String, Object>> candidates) {
         if (CollUtil.isEmpty(candidates)) {
             return List.of();

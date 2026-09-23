@@ -1,8 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
@@ -41,7 +41,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
     private UserItineraryItemMapper userItineraryItemMapper;
     @Test
     void persist_shouldExpandHeaderDayItemsAndTransportSegments() {
-        TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L).setMemberId(3L);
+        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L).setMemberId(3L);
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("departure", "上海");
         state.put("destination", "云南");
