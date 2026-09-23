@@ -170,7 +170,6 @@ public class TripStructuredItineraryPersistenceService {
         result.setPlanningStatus(nullableText(planning.get("status")));
         result.setMacroSource(nullableText(planning.get("macroSource")));
         result.setSelectionStatus(nullableText(planning.get("selectionStatus")));
-        result.setRouteDataStatus(nullableText(planning.get("routeDataStatus")));
         result.setBudgetStatus(nullableText(planning.get("budgetStatus")));
         result.setRequestedScenicCount(integer(planning.get("requestedScenicCount")));
         result.setSelectedScenicCount(integer(planning.get("selectedScenicCount")));
@@ -190,28 +189,8 @@ public class TripStructuredItineraryPersistenceService {
                 items.add(buildItem(userItineraryId, dayDO.getId(), dayDO.getDay(), slot, index));
             }
         }
-        applyInboundTravel(items, day);
         if (!items.isEmpty()) {
             userItineraryItemMapper.insertBatch(items);
-        }
-    }
-
-    private static void applyInboundTravel(List<UserItineraryItemDO> items, Map<String, Object> day) {
-        Map<String, UserItineraryItemDO> itemsById = new LinkedHashMap<>();
-        items.forEach(item -> itemsById.put(item.getItemId(), item));
-        for (Object value : list(day.get("transportSegments"))) {
-            Map<String, Object> segment = map(value);
-            UserItineraryItemDO target = itemsById.get(nullableText(segment.get("toItemId")));
-            if (target == null) {
-                continue;
-            }
-            target.setPreviousItemId(nullableText(segment.get("fromItemId")));
-            target.setTravelModeFromPrevious(nullableText(segment.get("mode")));
-            target.setTravelDistanceMetersFromPrevious(longValue(segment.get("distanceMeters")));
-            target.setTravelDurationMinutesFromPrevious(integer(segment.get("durationMinutes")));
-            target.setTravelProviderFromPrevious(nullableText(segment.get("provider")));
-            target.setTravelStatusFromPrevious(nullableText(segment.get("status")));
-            target.setTravelRoutePointsJson(json(segment.get("routePoints")));
         }
     }
 
@@ -342,17 +321,6 @@ public class TripStructuredItineraryPersistenceService {
             return new BigDecimal(text(value)).intValue();
         } catch (NumberFormatException ignored) {
             return fallback;
-        }
-    }
-
-    private static Long longValue(Object value) {
-        try {
-            if (value == null || StrUtil.isBlank(text(value))) {
-                return null;
-            }
-            return new BigDecimal(text(value)).longValue();
-        } catch (NumberFormatException ignored) {
-            return null;
         }
     }
 

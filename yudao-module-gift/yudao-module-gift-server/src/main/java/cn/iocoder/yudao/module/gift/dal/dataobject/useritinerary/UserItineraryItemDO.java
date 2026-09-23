@@ -57,13 +57,6 @@ public class UserItineraryItemDO extends TenantBaseDO {
     private Boolean locked;
     private String source;
     private String provider;
-    private String previousItemId;
-    private String travelModeFromPrevious;
-    private Long travelDistanceMetersFromPrevious;
-    private Integer travelDurationMinutesFromPrevious;
-    private String travelProviderFromPrevious;
-    private String travelStatusFromPrevious;
-    private String travelRoutePointsJson;
     private String poiSnapshotJson;
     private String candidatesJson;
     private String citationIdsJson;

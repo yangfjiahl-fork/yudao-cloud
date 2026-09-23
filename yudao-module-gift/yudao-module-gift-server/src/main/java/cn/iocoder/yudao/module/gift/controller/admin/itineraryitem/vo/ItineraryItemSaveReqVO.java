@@ -94,9 +94,4 @@ public class ItineraryItemSaveReqVO {
     @Schema(description = "电话")
     private String phoneNo;
 
-    private Long previousItemId;
-    private String travelModeFromPrevious;
-    private Long travelDistanceMetersFromPrevious;
-    private Integer travelDurationMinutesFromPrevious;
-
 }

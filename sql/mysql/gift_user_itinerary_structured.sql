@@ -105,7 +105,7 @@ CREATE TABLE `gift_user_itinerary_day` (
   `overview_detail` varchar(1000) DEFAULT NULL, `planner` varchar(32) DEFAULT NULL,
   `planning_status` varchar(16) DEFAULT NULL, `macro_source` varchar(32) DEFAULT NULL,
   `selection_status` varchar(16) DEFAULT NULL,
-  `route_data_status` varchar(16) DEFAULT NULL, `budget_status` varchar(16) DEFAULT NULL,
+  `budget_status` varchar(16) DEFAULT NULL,
   `requested_scenic_count` int DEFAULT NULL, `selected_scenic_count` int DEFAULT NULL,
   `day_start_time` time DEFAULT NULL, `day_end_time` time DEFAULT NULL,
   `dropped_node_ids_json` text DEFAULT NULL, `candidate_counts_json` text DEFAULT NULL,
@@ -135,13 +135,6 @@ CREATE TABLE `gift_user_itinerary_item` (
   `planning_status` varchar(16) DEFAULT NULL, `poi_verification_status` varchar(16) DEFAULT NULL,
   `must_visit` bit(1) NOT NULL DEFAULT b'0', `locked` bit(1) NOT NULL DEFAULT b'0',
   `source` varchar(32) DEFAULT NULL, `provider` varchar(32) DEFAULT NULL,
-  `previous_item_id` varchar(64) DEFAULT NULL,
-  `travel_mode_from_previous` varchar(16) DEFAULT NULL,
-  `travel_distance_meters_from_previous` bigint DEFAULT NULL,
-  `travel_duration_minutes_from_previous` int DEFAULT NULL,
-  `travel_provider_from_previous` varchar(32) DEFAULT NULL,
-  `travel_status_from_previous` varchar(16) DEFAULT NULL,
-  `travel_route_points_json` longtext DEFAULT NULL,
   `poi_snapshot_json` text DEFAULT NULL, `candidates_json` text DEFAULT NULL,
   `citation_ids_json` text DEFAULT NULL,
   `creator` varchar(64) NOT NULL DEFAULT '', `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -150,7 +143,7 @@ CREATE TABLE `gift_user_itinerary_item` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_itinerary_item` (`user_itinerary_id`, `item_id`),
   KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程节点（含入站交通）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程节点';
 
 -- 通用行程按天拆分；当前通用行程表无数据，可直接重建节点表。
 DROP TABLE IF EXISTS `gift_itinerary_item`;
@@ -181,15 +174,12 @@ CREATE TABLE `gift_itinerary_item` (
   `pic_urls` text DEFAULT NULL, `pic_sizes` text DEFAULT NULL, `tags` text DEFAULT NULL,
   `gd_position` varchar(128) DEFAULT NULL,
   `business_time` varchar(128) DEFAULT NULL, `address_detail` varchar(512) DEFAULT NULL,
-  `phone_no` varchar(64) DEFAULT NULL, `previous_item_id` bigint DEFAULT NULL,
-  `travel_mode_from_previous` varchar(16) DEFAULT NULL,
-  `travel_distance_meters_from_previous` bigint DEFAULT NULL,
-  `travel_duration_minutes_from_previous` int DEFAULT NULL,
+  `phone_no` varchar(64) DEFAULT NULL,
   `creator` varchar(64) NOT NULL DEFAULT '', `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`), KEY `idx_itinerary_day_sort` (`itinerary_day_id`, `sort`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通用行程节点（含入站交通）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通用行程节点';
 
 -- 高德旅行 POI 类型（value 与 AmapPoiTypeEnum.category 保持一致）
 INSERT INTO `system_dict_type` (`name`, `type`, `status`, `remark`, `creator`, `updater`, `deleted`)

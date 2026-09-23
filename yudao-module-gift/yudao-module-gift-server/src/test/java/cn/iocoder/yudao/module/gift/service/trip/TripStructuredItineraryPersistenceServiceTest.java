@@ -42,7 +42,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
     @Mock
     private UserItineraryItemMapper userItineraryItemMapper;
     @Test
-    void persist_shouldExpandHeaderDayItemsAndTransportSegments() {
+    void persist_shouldExpandHeaderDayAndItems() {
         ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L).setMemberId(3L);
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("departure", "上海");
@@ -80,12 +80,6 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         hotel.put("poiId", "hotel-1");
         hotel.put("poiName", "酒店");
 
-        Map<String, Object> segment = Map.ofEntries(
-                Map.entry("fromItemId", "item-1"), Map.entry("toItemId", "item-2"),
-                Map.entry("mode", "TAXI"), Map.entry("distanceMeters", 2300),
-                Map.entry("durationMinutes", 12), Map.entry("provider", "gaode"),
-                Map.entry("status", "VERIFIED"),
-                Map.entry("routePoints", List.of(Map.of("longitude", 102.7, "latitude", 25.05))));
         Map<String, Object> day = new LinkedHashMap<>();
         day.put("day", 1);
         day.put("date", "2026-10-01");
@@ -94,10 +88,8 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         day.put("theme", "亲子自然体验");
         day.put("overview", Map.of("status", "PENDING", "skeleton", "昆明亲子一日游"));
         day.put("planning", Map.of("solver", "OR_TOOLS_TSPTW", "status", "FEASIBLE",
-                "routeDataStatus", "VERIFIED", "budgetStatus", "WITHIN_BUDGET",
-                "dayStartTime", "09:00", "dayEndTime", "20:00"));
+                "budgetStatus", "WITHIN_BUDGET", "dayStartTime", "09:00", "dayEndTime", "20:00"));
         day.put("slots", List.of(slot, hotel));
-        day.put("transportSegments", List.of(segment));
 
         Map<String, Object> itinerary = new LinkedHashMap<>();
         itinerary.put("summary", "云南亲子两日行程");
@@ -154,11 +146,6 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             assertEquals("GCJ02", activity.getCoordinateSystem());
             assertNotNull(activity.getPoiSnapshotJson());
 
-            UserItineraryItemDO accommodation = insertedItems.stream()
-                    .filter(item -> "item-2".equals(item.getItemId())).findFirst().orElseThrow();
-            assertEquals("item-1", accommodation.getPreviousItemId());
-            assertEquals("TAXI", accommodation.getTravelModeFromPrevious());
-            assertEquals(2300L, accommodation.getTravelDistanceMetersFromPrevious());
         } finally {
             TenantContextHolder.clear();
         }

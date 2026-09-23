@@ -37,7 +37,6 @@ public class UserItineraryDayDO extends TenantBaseDO {
     private String planningStatus;
     private String macroSource;
     private String selectionStatus;
-    private String routeDataStatus;
     private String budgetStatus;
     private Integer requestedScenicCount;
     private Integer selectedScenicCount;

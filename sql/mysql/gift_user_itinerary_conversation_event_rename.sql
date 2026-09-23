@@ -1,6 +1,8 @@
 -- 已部署旧行程事件表的环境仅执行一次。
 -- 全新环境直接执行 gift_user_itinerary_structured.sql，无需执行本脚本。
 
+DROP TABLE IF EXISTS `gift_user_itinerary_transport_segment`;
+
 RENAME TABLE `gift_itinerary_event` TO `gift_user_itinerary_conversation_event`;
 
 ALTER TABLE `gift_user_itinerary_conversation`
@@ -27,11 +29,19 @@ ALTER TABLE `gift_user_itinerary`
 
 ALTER TABLE `gift_user_itinerary_day`
   DROP INDEX `uk_user_itinerary_day`,
+  DROP COLUMN `route_data_status`,
   ADD UNIQUE KEY `uk_user_itinerary_day` (`user_itinerary_id`, `day`);
 
 ALTER TABLE `gift_user_itinerary_item`
   DROP INDEX `uk_user_itinerary_item`,
   DROP INDEX `idx_day_sort`,
+  DROP COLUMN `previous_item_id`,
+  DROP COLUMN `travel_mode_from_previous`,
+  DROP COLUMN `travel_distance_meters_from_previous`,
+  DROP COLUMN `travel_duration_minutes_from_previous`,
+  DROP COLUMN `travel_provider_from_previous`,
+  DROP COLUMN `travel_status_from_previous`,
+  DROP COLUMN `travel_route_points_json`,
   ADD UNIQUE KEY `uk_user_itinerary_item` (`user_itinerary_id`, `item_id`),
   ADD KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`);
 
@@ -41,4 +51,8 @@ ALTER TABLE `gift_itinerary_day`
 
 ALTER TABLE `gift_itinerary_item`
   DROP INDEX `idx_itinerary_day_sort`,
+  DROP COLUMN `previous_item_id`,
+  DROP COLUMN `travel_mode_from_previous`,
+  DROP COLUMN `travel_distance_meters_from_previous`,
+  DROP COLUMN `travel_duration_minutes_from_previous`,
   ADD KEY `idx_itinerary_day_sort` (`itinerary_day_id`, `sort`);

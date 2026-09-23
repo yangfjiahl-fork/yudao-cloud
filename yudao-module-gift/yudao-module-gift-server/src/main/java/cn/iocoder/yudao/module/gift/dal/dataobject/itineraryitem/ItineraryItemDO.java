@@ -113,11 +113,4 @@ public class ItineraryItemDO extends BaseDO {
      * 电话
      */
     private String phoneNo;
-    /** 前一节点及从前一节点到当前节点的交通 */
-    private Long previousItemId;
-    private String travelModeFromPrevious;
-    private Long travelDistanceMetersFromPrevious;
-    private Integer travelDurationMinutesFromPrevious;
-
-
 }

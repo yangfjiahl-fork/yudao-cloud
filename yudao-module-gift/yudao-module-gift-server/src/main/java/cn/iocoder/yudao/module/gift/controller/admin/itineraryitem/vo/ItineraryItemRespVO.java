@@ -100,11 +100,6 @@ public class ItineraryItemRespVO {
     @ExcelProperty("电话")
     private String phoneNo;
 
-    private Long previousItemId;
-    private String travelModeFromPrevious;
-    private Long travelDistanceMetersFromPrevious;
-    private Integer travelDurationMinutesFromPrevious;
-
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;

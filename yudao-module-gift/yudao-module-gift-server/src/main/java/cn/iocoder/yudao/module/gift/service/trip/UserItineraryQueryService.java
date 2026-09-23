@@ -66,23 +66,11 @@ public class UserItineraryQueryService {
             dayMap.put("overview", mapOf("status", day.getOverviewStatus(), "skeleton",
                     day.getOverviewSkeleton(), "detail", day.getOverviewDetail(), "slot", "DAY_OVERVIEW"));
             dayMap.put("planning", mapOf("solver", day.getPlanner(), "status", day.getPlanningStatus(),
-                    "selectionStatus", day.getSelectionStatus(), "routeDataStatus", day.getRouteDataStatus(),
-                    "budgetStatus", day.getBudgetStatus()));
+                    "selectionStatus", day.getSelectionStatus(), "budgetStatus", day.getBudgetStatus()));
             List<Map<String, Object>> slots = new ArrayList<>();
-            List<Map<String, Object>> segments = new ArrayList<>();
-            items.stream().filter(item -> day.getDay().equals(item.getDay())).forEach(item -> {
-                slots.add(toMap(item));
-                if (item.getPreviousItemId() != null) {
-                    segments.add(mapOf("fromItemId", item.getPreviousItemId(), "toItemId", item.getItemId(),
-                            "mode", item.getTravelModeFromPrevious(), "distanceMeters",
-                            item.getTravelDistanceMetersFromPrevious(), "durationMinutes",
-                            item.getTravelDurationMinutesFromPrevious(), "provider",
-                            item.getTravelProviderFromPrevious(), "status", item.getTravelStatusFromPrevious(),
-                            "routePoints", json(item.getTravelRoutePointsJson())));
-                }
-            });
+            items.stream().filter(item -> day.getDay().equals(item.getDay()))
+                    .forEach(item -> slots.add(toMap(item)));
             dayMap.put("slots", slots);
-            dayMap.put("transportSegments", segments);
             daily.add(dayMap);
             macroDays.add(mapOf("day", day.getDay(), "city", day.getCity(), "area", day.getArea(),
                     "theme", day.getTheme(), "anchorPoiNames", json(day.getAnchorPoiNamesJson())));
@@ -90,30 +78,6 @@ public class UserItineraryQueryService {
         result.put("daily_itinerary", daily);
         result.put("macro_skeleton", mapOf("days", macroDays));
         return result;
-    }
-
-    public void saveTransportSegments(Long userItineraryId, List<Map<String, Object>> segments) {
-        if (segments == null || segments.isEmpty()) {
-            return;
-        }
-        Map<String, UserItineraryItemDO> items = new LinkedHashMap<>();
-        itemMapper.selectListByUserItineraryId(userItineraryId)
-                .forEach(item -> items.put(item.getItemId(), item));
-        for (Map<String, Object> segment : segments) {
-            UserItineraryItemDO target = items.get(text(segment.get("toItemId")));
-            if (target == null) {
-                continue;
-            }
-            target.setPreviousItemId(text(segment.get("fromItemId")));
-            target.setTravelModeFromPrevious(text(segment.get("mode")));
-            target.setTravelDistanceMetersFromPrevious(longValue(segment.get("distanceMeters")));
-            target.setTravelDurationMinutesFromPrevious(integer(segment.get("durationMinutes")));
-            target.setTravelProviderFromPrevious(text(segment.get("provider")));
-            target.setTravelStatusFromPrevious(text(segment.get("status")));
-            target.setTravelRoutePointsJson(segment.get("routePoints") == null ? null
-                    : JsonUtils.toJsonString(segment.get("routePoints")));
-            itemMapper.updateById(target);
-        }
     }
 
     private static Map<String, Object> toMap(UserItineraryItemDO item) {
@@ -140,20 +104,6 @@ public class UserItineraryQueryService {
 
     private static Object json(String value) {
         return value == null ? null : JsonUtils.parseObject(value, Object.class);
-    }
-
-    private static String text(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private static Long longValue(Object value) {
-        return value instanceof Number number ? number.longValue()
-                : value == null ? null : Long.valueOf(String.valueOf(value));
-    }
-
-    private static Integer integer(Object value) {
-        return value instanceof Number number ? number.intValue()
-                : value == null ? null : Integer.valueOf(String.valueOf(value));
     }
 
 }

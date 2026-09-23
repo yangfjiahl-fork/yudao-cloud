@@ -380,7 +380,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         List<Map<String, Object>> segments = tripItineraryAssembler.resolveTransportSegments(
                 userItineraryQueryService.toMap(itinerary), day);
-        userItineraryQueryService.saveTransportSegments(itinerary.getId(), segments);
         String status = segments.isEmpty() ? "PENDING" : segments.stream()
                 .allMatch(segment -> "VERIFIED".equals(segment.get("status"))) ? "VERIFIED" : "ESTIMATED";
         return new TripItineraryRouteResult().setMessageId(messageId).setDay(day).setStatus(status)
@@ -403,7 +402,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         Map<String, Object> skeletonSlot = findSlot(itinerary, day, slot);
         if (isOverviewSlot(slot)) {
             return withDayTransport(resolveItineraryOverviewSlot(conversationId, memberId, messageId, trip,
-                    itineraryDO, itinerary, day, slot), itineraryDO.getId(), itinerary, day);
+                    itineraryDO, itinerary, day, slot), itinerary, day);
         }
         String normalizedSlot = StrUtil.trim(slot).toUpperCase(Locale.ROOT);
         UserItineraryItemDO item = userItineraryItemMapper.selectByUserItineraryIdAndDayAndSlot(
@@ -414,7 +413,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         TripItinerarySlotState itinerarySlot = toTransientSlot(item);
         if (ObjUtil.equal(item.getResolveStatus(), SLOT_RESOLVE_STATUS_COMPLETED)) {
             return withDayTransport(withWeather(toSlotResult(messageId, itinerarySlot),
-                    resolveSlotCity(state, skeletonSlot)), itineraryDO.getId(), itinerary, day);
+                    resolveSlotCity(state, skeletonSlot)), itinerary, day);
         }
         item.setResolveStatus(SLOT_RESOLVE_STATUS_PROCESSING);
         userItineraryItemMapper.updateById(item);
@@ -430,8 +429,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             itinerarySlot.setCitationIdsJson(JsonUtils.toJsonString(researchResult.citationIds()));
             itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_COMPLETED);
             updateItemFromSlot(item, itinerarySlot);
-            return withDayTransport(withWeather(toSlotResult(messageId, itinerarySlot), city), itineraryDO.getId(),
-                    itinerary, day);
+            return withDayTransport(withWeather(toSlotResult(messageId, itinerarySlot), city), itinerary, day);
         } catch (RuntimeException e) {
             itinerarySlot.setStatus("PENDING");
             itinerarySlot.setResolveStatus(SLOT_RESOLVE_STATUS_FAILED);
@@ -493,14 +491,13 @@ public class TripAgentServiceImpl implements TripAgentService {
      * 节点补全时一并返回当天全部相邻 POI 的交通段，前端无需再为每个 POI 单独测距。
      * 单段高德查询失败时，组装器会自动回退为本地估算，不影响节点补全结果。
      */
-    private TripItinerarySlotResult withDayTransport(TripItinerarySlotResult result, Long itineraryId,
+    private TripItinerarySlotResult withDayTransport(TripItinerarySlotResult result,
                                                       Map<String, Object> itinerary, Integer day) {
         if (day == null || day <= 0) {
             return result.setTransportSegments(List.of());
         }
         try {
             List<Map<String, Object>> segments = tripItineraryAssembler.resolveTransportSegments(itinerary, day);
-            userItineraryQueryService.saveTransportSegments(itineraryId, segments);
             return result.setTransportSegments(segments);
         } catch (RuntimeException e) {
             log.warn("[withDayTransport][day({}) 批量测距失败，不影响节点补全]", day, e);
