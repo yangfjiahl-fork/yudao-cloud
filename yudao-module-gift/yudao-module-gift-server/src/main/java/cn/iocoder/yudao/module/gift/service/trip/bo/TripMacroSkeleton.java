@@ -13,8 +13,7 @@ public record TripMacroSkeleton(List<Day> days) {
         return result;
     }
 
-    public record Day(int day, String city, String area, String theme, List<String> anchorPoiNames,
-                      boolean transferDay) {
+    public record Day(int day, String city, String area, String theme, List<String> anchorPoiNames) {
 
         public Map<String, Object> toMap() {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -23,7 +22,6 @@ public record TripMacroSkeleton(List<Day> days) {
             result.put("area", area);
             result.put("theme", theme);
             result.put("anchorPoiNames", anchorPoiNames);
-            result.put("transferDay", transferDay);
             return result;
         }
     }

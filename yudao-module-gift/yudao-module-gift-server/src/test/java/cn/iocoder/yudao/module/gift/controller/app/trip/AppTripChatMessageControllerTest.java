@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -91,7 +92,11 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
             eventConsumer.accept(TripAgentEvent.of("model_delta", "INTAKE", "{\"state\":")
                     .setSequence(1));
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", "你的预算大约是多少？还需要确认住宿偏好和同行人的年龄。")
-                    .setMessageId(9L));
+                    .setMessageId(9L).setInputCards(List.of(Map.of(
+                            "id", "trip-duration-days", "type", "SINGLE_SELECT", "schemaVersion", 1,
+                            "field", "days", "title", "选择出行天数",
+                            "props", Map.of("selectionMode", "SINGLE", "options", List.of()),
+                            "submit", Map.of("mode", "OPTION_CONTENT")))));
             return null;
         }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
         AppTripAgUiRunReqVO reqVO = new AppTripAgUiRunReqVO();
@@ -120,6 +125,11 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
                     .map(event -> (String) event.get("delta")).collect(Collectors.joining()));
             assertEquals("trip_question_card", events.get(8).get("name"));
             assertEquals("trip-question-9", ((java.util.Map<?, ?>) events.get(8).get("value")).get("cardId"));
+            assertFalse(((Map<?, ?>) events.get(8).get("value")).containsKey("suggestions"));
+            assertEquals("SINGLE_SELECT", ((Map<?, ?>) ((List<?>) ((Map<?, ?>) events.get(8).get("value"))
+                    .get("inputCards")).get(0)).get("type"));
+            assertEquals(1, ((Map<?, ?>) ((List<?>) ((Map<?, ?>) events.get(8).get("value"))
+                    .get("inputCards")).get(0)).get("schemaVersion"));
             assertEquals("trip_question", events.get(9).get("name"));
             assertEquals("trip_progress_card", events.get(10).get("name"));
             assertEquals("completed", ((java.util.Map<?, ?>) events.get(10).get("value")).get("state"));

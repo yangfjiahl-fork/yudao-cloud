@@ -22,6 +22,7 @@ class AmapRouteQueryClientTest {
 
     private static final String WALKING_URL = "https://example.com/v3/direction/walking";
     private static final String TRANSIT_URL = "https://example.com/v3/direction/transit/integrated";
+    private static final String DRIVING_URL = "https://example.com/v3/direction/driving";
 
     private MockRestServiceServer server;
     private AmapRouteQueryClient client;
@@ -31,7 +32,8 @@ class AmapRouteQueryClientTest {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
         TripProviderProperties.Route config = new TripProviderProperties.Route()
-                .setAmapKey("test-amap-key").setWalkingUrl(WALKING_URL).setTransitUrl(TRANSIT_URL);
+                .setAmapKey("test-amap-key").setWalkingUrl(WALKING_URL).setTransitUrl(TRANSIT_URL)
+                .setDrivingUrl(DRIVING_URL);
         client = new AmapRouteQueryClient(restTemplate, config);
     }
 
@@ -79,6 +81,23 @@ class AmapRouteQueryClientTest {
         assertEquals(AmapRouteQueryClient.Mode.TRANSIT, route.mode());
         assertEquals(6800, route.distanceMeters());
         assertEquals(1800, route.durationSeconds());
+    }
+
+    @Test
+    void query_shouldParseDrivingRouteForTaxi() {
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith(DRIVING_URL)))
+                .andExpect(queryParam("strategy", "0"))
+                .andRespond(withSuccess("""
+                        {"status":"1","infocode":"10000","route":{"paths":[{"distance":"3200","duration":"600",
+                        "steps":[{"polyline":"120.1,30.2;120.2,30.3"}]}]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        AmapRouteQueryClient.Route route = client.query(new AmapRouteQueryClient.Request("杭州", "120.1,30.2", "120.2,30.3",
+                AmapRouteQueryClient.Mode.DRIVING));
+
+        assertEquals(AmapRouteQueryClient.Mode.DRIVING, route.mode());
+        assertEquals(3200, route.distanceMeters());
+        assertEquals(600, route.durationSeconds());
     }
 
     @Test

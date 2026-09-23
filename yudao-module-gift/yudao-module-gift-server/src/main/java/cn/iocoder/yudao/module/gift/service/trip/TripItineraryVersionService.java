@@ -45,6 +45,8 @@ public class TripItineraryVersionService {
     private TripItineraryMapper tripItineraryMapper;
     @Resource
     private TripItinerarySlotMapper tripItinerarySlotMapper;
+    @Resource
+    private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
 
     @Transactional(rollbackFor = Exception.class)
     public SavedItinerary saveGeneratedItinerary(TripPlanDO trip, Long memberId, Map<String, Object> state,
@@ -65,6 +67,7 @@ public class TripItineraryVersionService {
         itineraryDO.setStatus(STATUS_GENERATED);
         tripItineraryMapper.insert(itineraryDO);
         initializeItinerarySlots(itineraryDO, itinerary);
+        structuredItineraryPersistenceService.persist(trip, itineraryDO, memberId, state, itinerary);
 
         trip.setCurrentItineraryId(itineraryDO.getId());
         tripPlanMapper.updateById(trip);

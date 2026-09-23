@@ -34,7 +34,7 @@ Gift 旅行规划 C 端接口
       "event":"created",
       "conversationId":"1781604279872581776",
       "messageId":"1781604279872581777",
-      "content":"请告诉我出发地、目的地、出发日期、旅行天数、同行人数和预算，我来帮你规划旅程。"
+      "content":"请告诉我出发地、目的地、同行人数，以及开始和结束日期或旅行天数，我来帮你规划旅程。预算可以稍后补充。"
     }}
 
 保存 `conversationId`；响应中的 `content` 为助手首条消息内容。
@@ -133,12 +133,12 @@ Gift 旅行规划 C 端接口
 | `RUN_STARTED` | `threadId`、`runId` | 本轮运行已开始；首帧。 |
 | `ACTIVITY_SNAPSHOT` | `messageId`、`activityType=TRIP_PROGRESS`、`content` | 当前阶段快照。`content.stage` 为 `INTAKE`、`FOLLOW_UP` 或 `ASSEMBLE`，`content.content` 是可展示进度文字；同一 `messageId` 的后续快照应替换旧进度。 |
 | `CUSTOM`，`name=trip_progress_card` | `value.cardId`、`value.messageId`、`value.stage`、`value.content`、`value.state` | 稳定的进度卡片。`cardId`、`messageId` 均为 `trip-progress-{runId}`；同 id 的快照直接替换。`state=active` 表示仍在处理，`completed` 表示本轮已输出追问或行程结果。 |
-| `CUSTOM`，`name=trip_intake_completed` | `value.content`、`value.missingRequired`、`value.suggestions` | 后端已校验的信息收集结果。 |
+| `CUSTOM`，`name=trip_intake_completed` | `value.content`、`value.missingRequired`、`value.inputCards` | 后端已校验的信息收集结果。 |
 | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` | `messageId`、`role=assistant`、`delta` | 已持久化的助手追问或行程摘要。一个消息会有多个 `TEXT_MESSAGE_CONTENT`，客户端必须按到达顺序追加同一 `messageId` 的 `delta`，直至 `TEXT_MESSAGE_END`。 |
-| `CUSTOM`，`name=trip_question_card` | `value.cardId`、`value.messageId`、`value.missingRequired`、`value.suggestions` | 追问卡片，位于对应文本结束后。`cardId=trip-question-{messageId}`；建议项使用 `label`、`content`。 |
-| `CUSTOM`，`name=trip_itinerary_card` | `value.cardId`、`value.messageId`、`value.itinerary`、`value.suggestions` | 行程卡片，位于对应文本结束后。`cardId=trip-itinerary-{messageId}`。只使用这里或兼容事件中服务端已保存的 `itinerary` 渲染真实行程。 |
-| `CUSTOM`，`name=trip_question` | `value.messageId`、`value.missingRequired`、`value.suggestions` | 兼容别名，语义与 `trip_question_card` 相同。 |
-| `CUSTOM`，`name=trip_itinerary_skeleton` | `value.messageId`、`value.itinerary`、`value.suggestions` | 兼容别名，语义与 `trip_itinerary_card` 相同。 |
+| `CUSTOM`，`name=trip_question_card` | `value.cardId`、`value.messageId`、`value.missingRequired`、`value.inputCards` | 追问卡片，位于对应文本结束后。`cardId=trip-question-{messageId}`；所有胶囊和表单控件统一渲染 `inputCards`。 |
+| `CUSTOM`，`name=trip_itinerary_card` | `value.cardId`、`value.messageId`、`value.itinerary` | 行程卡片，位于对应文本结束后。`cardId=trip-itinerary-{messageId}`。只使用这里或兼容事件中服务端已保存的 `itinerary` 渲染真实行程。 |
+| `CUSTOM`，`name=trip_question` | `value.messageId`、`value.missingRequired`、`value.inputCards` | 兼容事件名，语义与 `trip_question_card` 相同。 |
+| `CUSTOM`，`name=trip_itinerary_skeleton` | `value.messageId`、`value.itinerary` | 兼容事件名，语义与 `trip_itinerary_card` 相同。 |
 | `RUN_FINISHED` | `threadId`、`runId`、`outcome`、`result.conversationId` | 正常终态。`outcome.type=success`。 |
 | `RUN_ERROR` | `threadId`、`runId`、`code`、`message` | 已建立 SSE 后发生的失败终态；收到后不得再等待 `RUN_FINISHED`。 |
 
@@ -147,7 +147,7 @@ Gift 旅行规划 C 端接口
 - 每个阶段：`ACTIVITY_SNAPSHOT → CUSTOM(trip_progress_card, state=active)`；两者均保留，旧客户端继续使用 `ACTIVITY_SNAPSHOT`。
 - 信息尚未收集完整，或必填信息已完成但仍在补充可选项时：`RUN_STARTED → 阶段事件* → CUSTOM(trip_intake_completed) → TEXT_MESSAGE_START → TEXT_MESSAGE_CONTENT+ → TEXT_MESSAGE_END → CUSTOM(trip_question_card) → CUSTOM(trip_question) → CUSTOM(trip_progress_card, state=completed) → RUN_FINISHED`。
 - 触发行程生成时：`RUN_STARTED → 阶段事件* → CUSTOM(trip_intake_completed) → TEXT_MESSAGE_START → TEXT_MESSAGE_CONTENT+ → TEXT_MESSAGE_END → CUSTOM(trip_itinerary_card) → CUSTOM(trip_itinerary_skeleton) → CUSTOM(trip_progress_card, state=completed) → RUN_FINISHED`。
-- `missingRequired=[]` 仅表示必填信息完整；仍可能存在可选信息追问和“立即生成行程”建议。
+- `missingRequired=[]` 仅表示出发地、目的地、出行人数已完整，并且“完整的开始/结束日期”或“旅行天数”至少提供了一项；仅提供日期区间时，后端按首尾日期都计入自动换算天数。仍可能存在预算等可选信息追问和“立即生成行程”建议。未提供预算时按每人每天 500 元且不含往返交通处理。
 - 服务端不会向本接口发送 `trip_model_delta`。模型原始 JSON、系统提示词和推理过程均不是客户端协议内容；不得将它们作为文本或卡片展示。
 - `RUN_STARTED`、`RUN_FINISHED`、`RUN_ERROR` 是单轮边界事件；其余事件均应按 `runId` 和关联的 `messageId` 归并，避免并发运行时互相覆盖。
 
@@ -161,14 +161,92 @@ Gift 旅行规划 C 端接口
 
     data:{"code":0,"msg":"","data":{"type":"TEXT_MESSAGE_END","messageId":"1781604279872581780"}}
 
-    data:{"code":0,"msg":"","data":{"type":"CUSTOM","name":"trip_question_card","value":{"cardId":"trip-question-1781604279872581780","stage":"INTAKE","messageId":"1781604279872581780","missingRequired":[],"suggestions":[{"label":"亲子友好","content":"希望行程亲子友好"},{"label":"美食与人文","content":"偏好美食和人文"},{"label":"立即生成行程","content":"请立即生成行程"}]}}}
+    data:{"code":0,"msg":"","data":{"type":"CUSTOM","name":"trip_question_card","value":{"cardId":"trip-question-1781604279872581780","stage":"INTAKE","messageId":"1781604279872581780","missingRequired":[],"inputCards":[{"id":"trip-quick-options","type":"SINGLE_SELECT","schemaVersion":1,"field":"userMessage","title":"快捷选择","props":{"selectionMode":"SINGLE","options":[{"label":"亲子友好","value":"希望行程亲子友好","content":"希望行程亲子友好"},{"label":"立即生成行程","value":"请立即生成行程","content":"请立即生成行程"}]},"submit":{"mode":"OPTION_CONTENT"}}]}}}
 
-    data:{"code":0,"msg":"","data":{"type":"CUSTOM","name":"trip_question","value":{"stage":"INTAKE","messageId":"1781604279872581780","missingRequired":[],"suggestions":[{"label":"亲子友好","content":"希望行程亲子友好"},{"label":"美食与人文","content":"偏好美食和人文"},{"label":"立即生成行程","content":"请立即生成行程"}]}}}
+    data:{"code":0,"msg":"","data":{"type":"CUSTOM","name":"trip_question","value":{"stage":"INTAKE","messageId":"1781604279872581780","missingRequired":[],"inputCards":[{"id":"trip-quick-options","type":"SINGLE_SELECT","schemaVersion":1,"field":"userMessage","title":"下一步","props":{"selectionMode":"SINGLE","options":[{"label":"立即生成行程","value":"请立即生成行程","content":"请立即生成行程"}]},"submit":{"mode":"OPTION_CONTENT"}}]}}}
 
-### 4. `suggestions` 字段
+### 4. `inputCards` 字段
 
-- `suggestions` 最多 5 项；每项包含 `label` 和 `content`。
-- 当 `missingRequired` 为空时，服务端返回的 `suggestions` 会包含 `label` 为“立即生成行程”、`content` 为“请立即生成行程”的项。
+`inputCards` 是结构化追问控件数组，也是所有胶囊和表单输入的唯一协议字段，不再输出 `suggestions`。每张卡片都使用稳定信封：
+
+- 公共字段：`id`、`type`、`schemaVersion`、`field`、`title`；二选一的卡片还带 `requiredGroup`。
+- `props`：当前 `type` 的展示和校验参数。新增卡片类型只扩展自己的 `props`，不改变事件结构。
+- `submit`：把交互值转换成用户消息的规则。`mode=OPTION_CONTENT` 表示直接提交选项 `content`；`mode=TEMPLATE` 表示将选择值替换到 `contentTemplate`。
+
+当前 `schemaVersion=1`，表示稳定信封的版本，而不是某个卡片组件的版本。前端建议使用 `type -> renderer` 注册表接入；遇到未注册的 `type` 或更高的 `schemaVersion` 时忽略该卡片并保留助手文本，不能导致整条消息渲染失败。
+
+当前支持以下类型：
+
+- `SINGLE_SELECT`：单选胶囊。缺少行程长度时返回天数选择，默认包含 2～7 天并允许自定义。
+- `DATE_RANGE`：日期范围选择。与天数选择共享 `requiredGroup=trip-duration`，两张卡完成任意一张即可。`endDate` 不是全局必填字段；但选择日期范围卡提交时需同时给出开始、结束日期，服务端按首尾日期都计入换算天数。
+- `MULTI_SELECT`：多选胶囊。询问用户想去哪些景点时使用，`field=mustVisit`；允许不选、选择一个或多个。
+
+普通偏好、“立即生成行程”等原有胶囊统一输出为 `SINGLE_SELECT`，`field=userMessage`。
+
+天数与日期范围示例：
+
+    "inputCards":[
+      {
+        "id":"trip-duration-days",
+        "type":"SINGLE_SELECT",
+        "schemaVersion":1,
+        "field":"days",
+        "title":"选择出行天数",
+        "requiredGroup":"trip-duration",
+        "props":{
+          "selectionMode":"SINGLE",
+          "allowCustom":true,
+          "options":[{"label":"3天","value":3,"content":"计划玩3天"}]
+        },
+        "submit":{"mode":"OPTION_CONTENT"}
+      },
+      {
+        "id":"trip-duration-date-range",
+        "type":"DATE_RANGE",
+        "schemaVersion":1,
+        "field":"dateRange",
+        "title":"选择出行日期",
+        "requiredGroup":"trip-duration",
+        "props":{
+          "fields":[
+            {"name":"startDate","label":"开始日期"},
+            {"name":"endDate","label":"结束日期","globallyRequired":false}
+          ],
+          "completeRangeRequired":true
+        },
+        "submit":{
+          "mode":"TEMPLATE",
+          "contentTemplate":"我计划{{startDate}}出发，{{endDate}}返程"
+        }
+      }
+    ]
+
+景点多选示例：
+
+    {
+      "id":"trip-must-visit",
+      "type":"MULTI_SELECT",
+      "schemaVersion":1,
+      "field":"mustVisit",
+      "title":"选择想去的景点",
+      "props":{
+        "selectionMode":"MULTIPLE",
+        "minSelections":0,
+        "maxSelections":2,
+        "options":[
+          {"label":"滇池","value":"我想去滇池","content":"我想去滇池"},
+          {"label":"石林","value":"我想去石林","content":"我想去石林"}
+        ]
+      },
+      "submit":{
+        "mode":"TEMPLATE",
+        "label":"确认选择",
+        "contentTemplate":"我想去：{{contents}}",
+        "emptyContent":"这些景点都不去"
+      }
+    }
+
+前端提交仍复用普通用户消息：单选直接发送选项 `content`；日期范围按模板替换日期后发送；多选把所选项的 `content` 用中文逗号连接后替换 `{{contents}}`。不新增提交接口。
 
 四、行程骨架
 ------------
@@ -287,7 +365,7 @@ Gift 旅行规划 C 端接口
 
 - 总览节点的模型生成文本在 `detail` 返回，`candidates`、`citationIds`、`weather` 可为空或不存在。
 - `status` 可能为 `PENDING`、`RESOLVED` 或 `FAILED`。
-- `transportSegments` 为当前 `day` 的相邻节点批量测距结果；首日存在已确认 `transport.arrival` 经纬度时，以抵达机场/车站为首段起点，之后按 POI 相邻顺序计算，住宿仅为最后一段终点。到达点尚未确认坐标时，不会伪造“住宿 → 首个 POI”首段；`day=0` 时为空数组。每段含距离、耗时、出行方式和状态；`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。
+- `transportSegments` 为当前 `day` 的相邻节点批量测距结果；首日存在已确认 `transport.arrival` 经纬度时，以抵达机场/车站为首段起点，之后按 POI 相邻顺序计算，住宿仅为最后一段终点。到达点尚未确认坐标时，不会伪造“住宿 → 首个 POI”首段；`day=0` 时为空数组。市内交通默认 `mode=TAXI`，高德驾车路径作为出租车距离、耗时和轨迹依据。`status=VERIFIED` 表示高德路径规划结果，`ESTIMATED` 表示高德不可用时的本地估算。`ESTIMATED` 段的 `provider` 可为空。
 
 六、按天获取交通路线
 --------------------

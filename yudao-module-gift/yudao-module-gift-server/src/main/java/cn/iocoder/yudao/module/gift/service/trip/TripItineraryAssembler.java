@@ -44,6 +44,7 @@ public class TripItineraryAssembler {
     private static final double EARTH_RADIUS_METERS = 6_371_000D;
     private static final int DEFAULT_DAY_START_MINUTES = 9 * 60;
     private static final int DEFAULT_DAY_END_MINUTES = 20 * 60;
+    private static final int DEFAULT_DAILY_BUDGET_PER_PERSON = 500;
     private static final int LUNCH_START_MINUTES = 11 * 60 + 30;
     private static final int LUNCH_END_MINUTES = 13 * 60 + 30;
     private static final int DINNER_START_MINUTES = 17 * 60 + 30;
@@ -285,9 +286,6 @@ public class TripItineraryAssembler {
                                                MacroDayCandidates candidates) {
         TripMacroSkeleton.Day macroDay = candidates.day();
         List<ScenicCandidate> scenicCandidates = candidates.scenicCandidates();
-        if (macroDay.transferDay() && scenicCandidates.size() > 1) {
-            scenicCandidates = scenicCandidates.subList(0, 1);
-        }
         Map<String, Object> day = buildDay(state, macroDay.city(), startDate, macroDay.day(), scenicCandidates,
                 rankMealCandidates(candidates.restaurants()),
                 rankHotelCandidates(candidates.hotels(), ObjUtil.defaultIfNull(normalizeAmount(state.get("hotelBudget")), 300)));
@@ -295,7 +293,6 @@ public class TripItineraryAssembler {
         day.put("area", macroDay.area());
         day.put("theme", macroDay.theme());
         day.put("anchorPoiNames", macroDay.anchorPoiNames());
-        day.put("transferDay", macroDay.transferDay());
         Map<String, Object> overview = (Map<String, Object>) day.get("overview");
         overview.put("city", macroDay.city());
         overview.put("area", macroDay.area());
@@ -303,7 +300,6 @@ public class TripItineraryAssembler {
         ((List<Map<String, Object>>) day.get("slots")).forEach(slot -> slot.put("area", macroDay.area()));
         Map<String, Object> planning = (Map<String, Object>) day.get("planning");
         planning.put("macroSource", "MANAGED_AGENT");
-        planning.put("transferDay", macroDay.transferDay());
         return day;
     }
 
@@ -769,8 +765,7 @@ public class TripItineraryAssembler {
         Integer travelerCount = MapUtil.getInt(state, "travelerCount");
         Integer days = MapUtil.getInt(state, "days");
         long hotelCost = nodeCost(accommodation);
-        if (budget == null || budget <= 0 || travelerCount == null || travelerCount <= 0 || days == null || days <= 0
-                || hotelCost < 0) {
+        if (travelerCount == null || travelerCount <= 0 || days == null || days <= 0 || hotelCost < 0) {
             return null;
         }
         for (int index = 1; index < bindings.size(); index++) {
@@ -779,7 +774,8 @@ public class TripItineraryAssembler {
                 return null;
             }
         }
-        return Math.max(0L, (long) budget / days - hotelCost / travelerCount);
+        long dailyBudget = budget == null || budget <= 0 ? DEFAULT_DAILY_BUDGET_PER_PERSON : (long) budget / days;
+        return Math.max(0L, dailyBudget - hotelCost / travelerCount);
     }
 
     private static long nodeCost(Map<String, Object> slot) {
@@ -1098,8 +1094,8 @@ public class TripItineraryAssembler {
 
     private void enrichRouteSegment(Map<String, Object> segment, String city, String originLongitude, String originLatitude,
                                     String destinationLongitude, String destinationLatitude, double estimatedDistance) {
-        // 行程节点间按公共交通测距；短距离也不以步行作为出游交通方案。
-        TripTravelQueryService.RouteMode mode = TripTravelQueryService.RouteMode.TRANSIT;
+        // 默认按出租车出行；高德使用驾车路径作为出租车的距离、耗时与轨迹依据。
+        TripTravelQueryService.RouteMode mode = TripTravelQueryService.RouteMode.TAXI;
         if (tripTravelQueryService.isRouteAvailable()) {
             try {
                 TripTravelQueryService.Route route = tripTravelQueryService.queryRoute(city,

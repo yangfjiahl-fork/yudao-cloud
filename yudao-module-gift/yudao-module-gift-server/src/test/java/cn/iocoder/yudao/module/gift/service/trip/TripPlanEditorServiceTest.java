@@ -137,9 +137,9 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
                 Map.of("day", 2, "slots", List.of(item("item-b", 2, "MORNING", 0)))));
         content.put("macro_skeleton", Map.of("days", List.of(
                 Map.of("day", 1, "city", "昆明", "area", "滇池", "theme", "亲子",
-                        "anchorPoiNames", List.of("滇池"), "transferDay", false),
+                        "anchorPoiNames", List.of("滇池")),
                 Map.of("day", 2, "city", "大理", "area", "古城", "theme", "人文",
-                        "anchorPoiNames", List.of("大理古城"), "transferDay", true))));
+                        "anchorPoiNames", List.of("大理古城")))));
         return new TripItineraryDO().setId(10L).setTripId(1L).setVersion(2)
                 .setContentJson(JsonUtils.toJsonString(content));
     }

@@ -24,7 +24,7 @@ public final class TripInformationSchema {
             field("departure", "departure", "出发地", "你从哪里出发？", "从上海出发", "我从上海出发"),
             field("destination", "destination", "目的地", "你想去哪里旅行？", "去杭州", "目的地是杭州"),
             field("startDate", "start_date", "出发日期", "你的出发日期是？", "两周后出发", "我计划两周后出发"),
-            field("days", "days", "旅行天数", "这次计划玩几天？", "玩 3 天", "计划玩3天"),
+            field("days", "days", "旅行日期或天数", "请告诉我开始和结束日期，或者这次计划玩几天？", "玩 3 天", "计划玩3天"),
             field("travelerCount", "traveler_count", "出行人数", "这次一共几个人出行？", "2 人出行", "总共2人出行"),
             field("budget", "budget", "预算", "你的预算大约是多少？", "人均 ¥1,500", "人均预算1500元"),
             new Field("hotelBudget", "hotel_budget", "住宿预算", "每晚住宿预算大约是多少？", List.of(
@@ -45,7 +45,7 @@ public final class TripInformationSchema {
 
     /** 生成首版行程前必须具备的字段；其余字段随时可补充以提升推荐个性化。 */
     private static final Set<String> REQUIRED_STATE_KEYS = Set.of(
-            "departure", "destination", "startDate", "days", "travelerCount", "budget");
+            "departure", "destination", "travelerCount");
     private static final Map<String, Field> FIELDS_BY_STATE_KEY = FIELDS.stream()
             .collect(Collectors.toUnmodifiableMap(Field::stateKey, Function.identity()));
     private static final Map<String, Field> FIELDS_BY_MISSING_KEY = FIELDS.stream()

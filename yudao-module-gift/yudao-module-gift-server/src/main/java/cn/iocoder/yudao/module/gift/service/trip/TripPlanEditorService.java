@@ -125,7 +125,7 @@ public class TripPlanEditorService {
             anchors.add(instruction);
             anchors.addAll(day.anchorPoiNames());
             return new TripMacroSkeleton.Day(day.day(), day.city(), day.area(), day.theme(),
-                    anchors.stream().limit(2).toList(), day.transferDay());
+                    anchors.stream().limit(2).toList());
         }).toList();
         return new TripMacroSkeleton(days);
     }
@@ -185,7 +185,7 @@ public class TripPlanEditorService {
             List<String> anchors = day.get("anchorPoiNames") instanceof List<?> values
                     ? values.stream().map(TripPlanEditorService::text).filter(StrUtil::isNotBlank).toList() : List.of();
             macroDays.add(new TripMacroSkeleton.Day(dayNumber, text(day.get("city")), text(day.get("area")),
-                    text(day.get("theme")), anchors, MapUtil.getBool(day, "transferDay", false)));
+                    text(day.get("theme")), anchors));
         }
         if (macroDays.isEmpty()) {
             throw new IllegalArgumentException("当前行程的宏观骨架为空");

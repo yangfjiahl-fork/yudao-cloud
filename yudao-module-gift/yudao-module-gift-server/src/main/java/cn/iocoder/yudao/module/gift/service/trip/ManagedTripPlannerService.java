@@ -74,16 +74,17 @@ public class ManagedTripPlannerService {
         request.put("tripState", state);
         request.put("latestUserMessage", latestUserMessage);
         request.put("defaults", Map.of(
-                "budgetTier", "MEDIUM",
+                "dailyBudgetPerPerson", 500,
+                "budgetExcludesRoundTrip", true,
                 "pace", "NORMAL",
+                "transportMode", "TAXI",
                 "dailyStartTime", "09:00",
                 "dailyEndTime", "20:00"));
         request.put("requiredOutput", List.of(
                 "只输出一个 JSON 对象，不要 Markdown",
                 "输出 macro_skeleton.days，数量必须与 tripState.days 完全一致",
-                "每天包含 day、city、area、theme、anchorPoiNames、transferDay",
+                "每天包含 day、city、area、theme、anchorPoiNames",
                 "anchorPoiNames 每天 1～2 个，仅作为后端高德检索锚点，不输出坐标、酒店、餐厅或日内时刻",
-                "城市变化当天必须设置 transferDay=true，并降低当天游览强度",
                 "跨城顺序、每日区域与主题必须符合 tripState 的日期、亲子偏好、预算和节奏约束"));
         return JsonUtils.toJsonString(request);
     }

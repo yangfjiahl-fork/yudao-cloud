@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary;
 import lombok.*;
 import java.util.*;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.*;
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
@@ -31,6 +32,18 @@ public class UserItineraryDO extends BaseDO {
      * 会员ID
      */
     private Long memberId;
+    /**
+     * 旅行规划ID，对应 gift_trip_plan.id
+     */
+    private Long tripId;
+    /**
+     * 行程版本ID，对应 gift_trip_itinerary.id
+     */
+    private Long tripItineraryId;
+    private Long conversationId;
+    private Long messageId;
+    private Integer version;
+    private Integer status;
     /**
      * 标题
      */
@@ -71,6 +84,25 @@ public class UserItineraryDO extends BaseDO {
      * 偏好
      */
     private String preference;
+    private String departure;
+    private String destination;
+    private Integer travelerCount;
+    private Integer budget;
+    private Integer hotelBudget;
+    private String travelerProfileJson;
+    private String interestsJson;
+    private String pace;
+    private String mustVisitJson;
+    private String constraintsJson;
+    private LocalTime dailyStartTime;
+    private LocalTime dailyEndTime;
+    private String overviewStatus;
+    private String overviewSkeleton;
+    private String overviewDetail;
+    private String plannerType;
+    private String plannerValidation;
+    private String macroSkeletonJson;
+    private String citationIdsJson;
 
 
 }

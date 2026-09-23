@@ -53,17 +53,9 @@ public final class ManagedTripPlanValidator {
             if (anchors.isEmpty() || anchors.size() > 2) {
                 throw new IllegalArgumentException("第 " + dayNumber + " 天必须包含 1～2 个 anchor POI");
             }
-            normalizedDays.add(new TripMacroSkeleton.Day(dayNumber, city, area, theme, anchors,
-                    Boolean.TRUE.equals(MapUtil.getBool(day, "transferDay"))));
+            normalizedDays.add(new TripMacroSkeleton.Day(dayNumber, city, area, theme, anchors));
         }
         normalizedDays.sort(Comparator.comparingInt(TripMacroSkeleton.Day::day));
-        for (int index = 1; index < normalizedDays.size(); index++) {
-            TripMacroSkeleton.Day previous = normalizedDays.get(index - 1);
-            TripMacroSkeleton.Day current = normalizedDays.get(index);
-            if (!previous.city().equals(current.city()) && !current.transferDay()) {
-                throw new IllegalArgumentException("第 " + current.day() + " 天发生换城但未标记 transferDay");
-            }
-        }
         return new TripMacroSkeleton(List.copyOf(normalizedDays));
     }
 

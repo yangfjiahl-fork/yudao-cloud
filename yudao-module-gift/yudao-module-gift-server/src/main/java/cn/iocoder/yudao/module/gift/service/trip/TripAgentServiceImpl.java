@@ -52,6 +52,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -167,7 +168,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             log.warn("[handleManagedMessage][conversationId({}) memberId({}) 托管 Agent 预算熔断 reason({}) snapshot({})]",
                     conversationId, memberId, e.getReason(), e.getMetrics());
             eventConsumer.accept(TripAgentEvent.of("question", "BUDGET_GUARD", fallback)
-                    .setMessageId(assistant.getId()).setMissingRequired(List.of()).setSuggestions(List.of()));
+                    .setMessageId(assistant.getId()).setMissingRequired(List.of()));
             return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(fallback)
                     .setMissingRequired(List.of());
         }
@@ -246,9 +247,9 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         TripInteraction interaction = needFollowUp ? generateInteraction(conversationId, memberId, state, missingRequired,
                 trip.getId(), promptVariables, questionCount, eventConsumer, modelDeltaSequence) : null;
-        List<Map<String, String>> suggestions = needFollowUp ? interaction.suggestions() : List.of();
+        List<Map<String, Object>> inputCards = needFollowUp ? interaction.inputCards() : List.of();
         eventConsumer.accept(TripAgentEvent.of("intake_completed", "INTAKE", buildIntakeCompletedContent(state, missingRequired))
-                .setMissingRequired(missingRequired).setSuggestions(suggestions));
+                .setMissingRequired(missingRequired).setInputCards(inputCards));
 
         if (CollUtil.isNotEmpty(missingRequired)) {
             String question = interaction.question();
@@ -257,7 +258,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(missingRequired);
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
-                    .setMissingRequired(missingRequired).setSuggestions(suggestions));
+                    .setMissingRequired(missingRequired).setInputCards(inputCards));
             return result;
         }
 
@@ -273,7 +274,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                     .setItinerary(edited.itinerary()).setMissingRequired(List.of());
             eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", saved.displayText())
                     .setMessageId(saved.messageId()).setItinerary(edited.itinerary())
-                    .setMissingRequired(List.of()).setSuggestions(List.of()));
+                    .setMissingRequired(List.of()));
             return result;
         }
 
@@ -284,7 +285,7 @@ public class TripAgentServiceImpl implements TripAgentService {
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(List.of());
             eventConsumer.accept(TripAgentEvent.of("question", "INTAKE", question).setMessageId(assistant.getId())
-                    .setMissingRequired(List.of()).setSuggestions(suggestions));
+                    .setMissingRequired(List.of()).setInputCards(inputCards));
             return result;
         }
 
@@ -314,7 +315,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 .setItinerary(itinerary).setMissingRequired(List.of());
         eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", saved.displayText())
                 .setMessageId(saved.messageId())
-                .setItinerary(itinerary).setMissingRequired(List.of()).setSuggestions(suggestions));
+                .setItinerary(itinerary).setMissingRequired(List.of()));
         return result;
     }
 
@@ -324,11 +325,12 @@ public class TripAgentServiceImpl implements TripAgentService {
                                                      Consumer<TripAgentEvent> eventConsumer) {
         String reply = decision.reply();
         List<Map<String, String>> suggestions = buildInformationSuggestions(state, missingRequired);
+        List<Map<String, Object>> inputCards = TripInputCardFactory.build(missingRequired, reply, suggestions);
         AiChatMessageRespDTO assistant = createTranscriptMessage(conversationId, memberId, reply, true);
         log.info("[handleOutOfTopicMessage][tripId({}) action({}) reason({}) messageId({})]",
                 tripId, decision.action(), decision.reason(), assistant.getId());
         eventConsumer.accept(TripAgentEvent.of("question", "TOPIC_GUARD", reply)
-                .setMessageId(assistant.getId()).setMissingRequired(missingRequired).setSuggestions(suggestions));
+                .setMessageId(assistant.getId()).setMissingRequired(missingRequired).setInputCards(inputCards));
         return new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(reply)
                 .setMissingRequired(missingRequired);
     }
@@ -762,11 +764,14 @@ public class TripAgentServiceImpl implements TripAgentService {
             }
             String question = CollUtil.isNotEmpty(questions) ? composeQuestions(questions) : fallbackQuestion;
             List<Map<String, String>> suggestions = parseSuggestions(interaction.get("suggestions"));
-            return new TripInteraction(question, ensureGenerateSuggestion(
-                    CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions, missingRequired));
+            suggestions = ensureGenerateSuggestion(
+                    CollUtil.isNotEmpty(suggestions) ? suggestions : fallbackSuggestions, missingRequired);
+            return new TripInteraction(question, TripInputCardFactory.build(missingRequired, question, suggestions));
         } catch (RuntimeException e) {
             log.warn("[generateInteraction][tripId({}) 追问文案生成失败，使用字段默认文案]", tripId, e);
-            return new TripInteraction(fallbackQuestion, ensureGenerateSuggestion(fallbackSuggestions, missingRequired));
+            List<Map<String, String>> suggestions = ensureGenerateSuggestion(fallbackSuggestions, missingRequired);
+            return new TripInteraction(fallbackQuestion,
+                    TripInputCardFactory.build(missingRequired, fallbackQuestion, suggestions));
         }
     }
 
@@ -1152,7 +1157,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private record TripInteraction(String question, List<Map<String, String>> suggestions) {
+    private record TripInteraction(String question, List<Map<String, Object>> inputCards) {
     }
 
     @SuppressWarnings("unchecked")
@@ -1219,6 +1224,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         String startDate = trimNullable(state.get("startDate"));
         String endDate = trimNullable(state.get("endDate"));
         LocalDate parsedStartDate = null;
+        LocalDate parsedEndDate = null;
         try {
             if (StrUtil.isNotBlank(startDate)) {
                 parsedStartDate = LocalDate.parse(startDate);
@@ -1228,17 +1234,25 @@ public class TripAgentServiceImpl implements TripAgentService {
             startDate = null;
         }
         try {
-            if (StrUtil.isNotBlank(endDate) && (parsedStartDate == null
-                    || LocalDate.parse(endDate).isBefore(parsedStartDate))) {
-                state.remove("endDate");
-                endDate = null;
+            if (StrUtil.isNotBlank(endDate)) {
+                parsedEndDate = LocalDate.parse(endDate);
+                if (parsedStartDate == null || parsedEndDate.isBefore(parsedStartDate)) {
+                    state.remove("endDate");
+                    endDate = null;
+                    parsedEndDate = null;
+                }
             }
         } catch (RuntimeException e) {
             state.remove("endDate");
             endDate = null;
+            parsedEndDate = null;
         }
-        if (StrUtil.isBlank(startDate)) {
-            missing.add("start_date");
+        if (days == null && parsedStartDate != null && parsedEndDate != null) {
+            long inclusiveDays = ChronoUnit.DAYS.between(parsedStartDate, parsedEndDate) + 1;
+            if (inclusiveDays >= 1 && inclusiveDays <= 30) {
+                days = Math.toIntExact(inclusiveDays);
+                state.put("days", days);
+            }
         }
         if (days == null) {
             missing.add("days");
@@ -1250,9 +1264,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         if (travelers == null) {
             missing.add("traveler_count");
-        }
-        if (StrUtil.isBlank(trimNullable(state.get("budget")))) {
-            missing.add("budget");
         }
         return missing;
     }

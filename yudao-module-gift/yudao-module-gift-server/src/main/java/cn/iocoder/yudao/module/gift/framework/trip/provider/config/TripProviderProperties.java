@@ -49,6 +49,7 @@ public class TripProviderProperties {
         private String amapKey;
         private String walkingUrl = "https://restapi.amap.com/v3/direction/walking";
         private String transitUrl = "https://restapi.amap.com/v3/direction/transit/integrated";
+        private String drivingUrl = "https://restapi.amap.com/v3/direction/driving";
     }
 
 }

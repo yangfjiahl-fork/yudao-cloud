@@ -17,6 +17,10 @@ import cn.iocoder.yudao.module.gift.controller.admin.useritinerary.vo.*;
 @Mapper
 public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
 
+    default UserItineraryDO selectByTripItineraryId(Long tripItineraryId) {
+        return selectOne(UserItineraryDO::getTripItineraryId, tripItineraryId);
+    }
+
     default PageResult<UserItineraryDO> selectPage(UserItineraryPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<UserItineraryDO>()
                 .eqIfPresent(UserItineraryDO::getMemberId, reqVO.getMemberId())

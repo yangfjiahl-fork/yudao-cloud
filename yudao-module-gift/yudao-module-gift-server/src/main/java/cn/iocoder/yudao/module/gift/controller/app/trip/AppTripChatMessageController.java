@@ -310,7 +310,7 @@ public class AppTripChatMessageController {
         putIfNotNull(result, "item", event.getItem());
         putIfNotNull(result, "itinerary", event.getItinerary());
         putIfNotNull(result, "missingRequired", event.getMissingRequired());
-        putIfNotNull(result, "suggestions", event.getSuggestions());
+        putIfNotNull(result, "inputCards", event.getInputCards());
         return result;
     }
 

@@ -15,7 +15,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 高德 Web 服务路径规划客户端，仅负责单段步行或公交路径的事实查询。 */
+/** 高德 Web 服务路径规划客户端，负责单段步行、公交或驾车路径的事实查询。 */
 @AllArgsConstructor
 @Slf4j
 public class AmapRouteQueryClient {
@@ -38,14 +38,21 @@ public class AmapRouteQueryClient {
     @Cacheable(cacheNames = "tripRouteGaode#5m", key = "#request == null ? '' : #request.toString()")
     public Route query(Request request) {
         validateRequest(request);
+        String routeUrl = switch (request.mode()) {
+            case WALKING -> config.getWalkingUrl();
+            case TRANSIT -> config.getTransitUrl();
+            case DRIVING -> config.getDrivingUrl();
+        };
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
-                .fromUriString(request.mode() == Mode.WALKING ? config.getWalkingUrl() : config.getTransitUrl())
+                .fromUriString(routeUrl)
                 .queryParam("key", config.getAmapKey())
                 .queryParam("origin", request.origin())
                 .queryParam("destination", request.destination())
                 .queryParam("output", "JSON");
         if (request.mode() == Mode.TRANSIT) {
             uriBuilder.queryParam("city", request.city()).queryParam("strategy", 0).queryParam("extensions", "all");
+        } else if (request.mode() == Mode.DRIVING) {
+            uriBuilder.queryParam("strategy", 0).queryParam("extensions", "all");
         }
         long start = System.currentTimeMillis();
         try {
@@ -60,7 +67,8 @@ public class AmapRouteQueryClient {
                 throw new RouteQueryException("AMAP_" + StrUtil.blankToDefault(JsonUtils.getText(root, "infocode"), "UNKNOWN"));
             }
             JsonNode route = root.path("route");
-            JsonNode path = request.mode() == Mode.WALKING ? route.path("paths").path(0) : route.path("transits").path(0);
+            JsonNode path = request.mode() == Mode.TRANSIT
+                    ? route.path("transits").path(0) : route.path("paths").path(0);
             int distance = path.path("distance").asInt(-1);
             int duration = path.path("duration").asInt(-1);
             if (distance < 0 || duration < 0) {
@@ -138,7 +146,8 @@ public class AmapRouteQueryClient {
 
     public enum Mode {
         WALKING,
-        TRANSIT
+        TRANSIT,
+        DRIVING
     }
 
     public record Request(String city, String origin, String destination, Mode mode) {

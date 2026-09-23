@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -60,7 +61,7 @@ class TripItineraryAssemblerTest {
         ));
         when(queryService.isRouteAvailable()).thenReturn(true);
         when(queryService.queryRoute(anyString(), anyString(), anyString(), any(TripTravelQueryService.RouteMode.class)))
-                .thenReturn(new TripTravelQueryService.Route("gaode", TripTravelQueryService.RouteMode.TRANSIT, 840, 720,
+                .thenReturn(new TripTravelQueryService.Route("gaode", TripTravelQueryService.RouteMode.TAXI, 840, 720,
                         List.of(new TripTravelQueryService.RoutePoint(120.0900D, 30.1950D),
                                 new TripTravelQueryService.RoutePoint(120.1000D, 30.2000D))));
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -112,7 +113,7 @@ class TripItineraryAssemblerTest {
         List<Map<String, Object>> firstDaySegments = assembler.resolveTransportSegments(itinerary, 1);
         Map<?, ?> firstSegment = firstDaySegments.get(0);
         assertEquals("VERIFIED", firstSegment.get("status"));
-        assertEquals("TRANSIT", firstSegment.get("mode"));
+        assertEquals("TAXI", firstSegment.get("mode"));
         assertEquals(12, firstSegment.get("durationMinutes"));
         assertEquals("arrival-1", firstSegment.get("fromPoiId"));
         assertEquals("120.2200", firstSegment.get("fromLongitude"));
@@ -124,7 +125,7 @@ class TripItineraryAssemblerTest {
         assertEquals("hotel-1", firstDaySegments.get(firstDaySegments.size() - 1).get("toPoiId"));
         verify(queryService, atLeastOnce()).isRouteAvailable();
         verify(queryService, atLeastOnce()).queryRoute(anyString(), anyString(), anyString(),
-                eq(TripTravelQueryService.RouteMode.TRANSIT));
+                eq(TripTravelQueryService.RouteMode.TAXI));
 
         Map<?, ?> secondDay = (Map<?, ?>) days.get(1);
         assertTrue(((List<?>) secondDay.get("slots")).stream().map(Map.class::cast)
@@ -147,7 +148,10 @@ class TripItineraryAssemblerTest {
 
     @Test
     void schema_shouldKeepRequiredAndOptionalFieldsInOneDefinition() {
-        assertEquals(6, TripInformationSchema.getRequiredStateKeys().size());
+        assertEquals(3, TripInformationSchema.getRequiredStateKeys().size());
+        assertFalse(TripInformationSchema.getRequiredStateKeys().contains("startDate"));
+        assertFalse(TripInformationSchema.getRequiredStateKeys().contains("days"));
+        assertFalse(TripInformationSchema.getRequiredStateKeys().contains("budget"));
         assertTrue(TripInformationSchema.supports("constraints"));
         assertTrue(TripInformationSchema.supports("dailyStartTime"));
         assertTrue(TripInformationSchema.supports("mustVisit"));
@@ -245,8 +249,8 @@ class TripItineraryAssemblerTest {
         });
         TripItineraryAssembler assembler = createAssembler(queryService);
         TripMacroSkeleton macro = new TripMacroSkeleton(List.of(
-                new TripMacroSkeleton.Day(1, "昆明", "滇池周边", "轻松亲子", List.of("滇池"), false),
-                new TripMacroSkeleton.Day(2, "大理", "大理古城", "换城与人文", List.of("大理古城"), true)));
+                new TripMacroSkeleton.Day(1, "昆明", "滇池周边", "轻松亲子", List.of("滇池")),
+                new TripMacroSkeleton.Day(2, "大理", "大理古城", "换城与人文", List.of("大理古城"))));
 
         Map<String, Object> itinerary = assembler.assemble(Map.of(
                 "destination", "云南", "startDate", "2026-10-01", "days", 2, "travelerCount", 4), macro,
@@ -259,7 +263,7 @@ class TripItineraryAssemblerTest {
         assertEquals("滇池周边", firstDay.get("area"));
         assertEquals("轻松亲子", firstDay.get("theme"));
         assertEquals("大理", secondDay.get("city"));
-        assertEquals(true, secondDay.get("transferDay"));
+        assertFalse(secondDay.containsKey("transferDay"));
         assertEquals("FEASIBLE", ((Map<?, ?>) firstDay.get("planning")).get("status"));
         assertEquals("FEASIBLE", ((Map<?, ?>) secondDay.get("planning")).get("status"));
         assertEquals("MANAGED_MACRO_JAVA", ((Map<?, ?>) itinerary.get("planner")).get("type"));
@@ -321,8 +325,8 @@ class TripItineraryAssemblerTest {
         when(queryService.queryHotels(anyString(), anyString(), eq(1), eq(25))).thenReturn(List.of());
         TripItineraryAssembler assembler = createAssembler(queryService);
         TripMacroSkeleton macro = new TripMacroSkeleton(List.of(
-                new TripMacroSkeleton.Day(1, "昆明", "滇池", "亲子", List.of("滇池"), false),
-                new TripMacroSkeleton.Day(2, "大理", "古城", "人文", List.of("大理古城"), true)));
+                new TripMacroSkeleton.Day(1, "昆明", "滇池", "亲子", List.of("滇池")),
+                new TripMacroSkeleton.Day(2, "大理", "古城", "人文", List.of("大理古城"))));
 
         List<Map<String, Object>> days = assembler.replanDays(Map.of("days", 2), macro, Set.of(2), ignored -> { });
 

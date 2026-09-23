@@ -42,6 +42,8 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
     private TripItineraryMapper tripItineraryMapper;
     @Mock
     private TripItinerarySlotMapper tripItinerarySlotMapper;
+    @Mock
+    private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
 
     @Test
     void saveGeneratedItinerary_shouldPersistVersionSlotsPointerAndTitle() {
@@ -92,6 +94,7 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
             assertEquals(9L, itineraryCaptor.getValue().getMessageId());
             assertEquals(3, JsonUtils.parseObject(itineraryCaptor.getValue().getContentJson(), Map.class).get("version"));
             verify(tripItinerarySlotMapper, times(4)).insert(any(TripItinerarySlotDO.class));
+            verify(structuredItineraryPersistenceService).persist(trip, itineraryCaptor.getValue(), 3L, state, itinerary);
             verify(tripPlanMapper).updateById(trip);
 
             ArgumentCaptor<AiChatConversationUpdateReqDTO> titleCaptor =

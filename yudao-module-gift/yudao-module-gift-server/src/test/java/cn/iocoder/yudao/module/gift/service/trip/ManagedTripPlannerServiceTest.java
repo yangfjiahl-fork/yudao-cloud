@@ -39,8 +39,8 @@ class ManagedTripPlannerServiceTest {
         when(runLogService.create(anyLong(), anyString(), anyString())).thenReturn(8L);
         String managedResponse = """
                 {"macro_skeleton":{"days":[
-                  {"day":1,"city":"昆明","area":"滇池周边","theme":"轻松亲子","anchorPoiNames":["滇池"],"transferDay":false},
-                  {"day":2,"city":"大理","area":"大理古城","theme":"换城人文","anchorPoiNames":["大理古城"],"transferDay":true}
+                  {"day":1,"city":"昆明","area":"滇池周边","theme":"轻松亲子","anchorPoiNames":["滇池"]},
+                  {"day":2,"city":"大理","area":"大理古城","theme":"换城人文","anchorPoiNames":["大理古城"]}
                 ]}}
                 """;
         ManagedAgentExecutionMetrics metrics =
@@ -65,6 +65,9 @@ class ManagedTripPlannerServiceTest {
         verify(executor).execute(eq(trip), eq(state), taskCaptor.capture(), eq(ManagedTripAgentStage.PLAN));
         assertTrue(taskCaptor.getValue().contains("GENERATE_TRIP_MACRO_SKELETON"));
         assertTrue(taskCaptor.getValue().contains("anchorPoiNames"));
+        assertTrue(taskCaptor.getValue().contains("dailyBudgetPerPerson\":500"));
+        assertTrue(taskCaptor.getValue().contains("transportMode\":\"TAXI"));
+        assertFalse(taskCaptor.getValue().contains("transferDay"));
         assertFalse(taskCaptor.getValue().contains("daily_itinerary"));
         ArgumentCaptor<TripMacroSkeleton> macroCaptor = ArgumentCaptor.forClass(TripMacroSkeleton.class);
         verify(assembler).assemble(eq(state), macroCaptor.capture(), any(Consumer.class));

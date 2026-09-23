@@ -146,6 +146,7 @@ yudao:
         amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
         walking-url: ${AMAP_WALKING_ROUTE_URL:https://restapi.amap.com/v3/direction/walking}
         transit-url: ${AMAP_TRANSIT_ROUTE_URL:https://restapi.amap.com/v3/direction/transit/integrated}
+        driving-url: ${AMAP_DRIVING_ROUTE_URL:https://restapi.amap.com/v3/direction/driving}
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:

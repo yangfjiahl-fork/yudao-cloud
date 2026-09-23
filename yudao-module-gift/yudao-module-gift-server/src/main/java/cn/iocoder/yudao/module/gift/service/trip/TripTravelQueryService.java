@@ -145,8 +145,11 @@ public class TripTravelQueryService {
 
     /** 查询同城单段路径；调用方决定是否在失败时回退为本地估算。 */
     public Route queryRoute(String city, String origin, String destination, RouteMode mode) {
-        AmapRouteQueryClient.Mode amapMode = mode == RouteMode.WALKING
-                ? AmapRouteQueryClient.Mode.WALKING : AmapRouteQueryClient.Mode.TRANSIT;
+        AmapRouteQueryClient.Mode amapMode = switch (mode) {
+            case WALKING -> AmapRouteQueryClient.Mode.WALKING;
+            case TRANSIT -> AmapRouteQueryClient.Mode.TRANSIT;
+            case TAXI -> AmapRouteQueryClient.Mode.DRIVING;
+        };
         AmapRouteQueryClient.Route route = amapRouteQueryClient.query(new AmapRouteQueryClient.Request(city, origin, destination, amapMode));
         List<RoutePoint> routePoints = route.routePoints().stream()
                 .map(point -> new RoutePoint(point.longitude(), point.latitude())).toList();
@@ -257,7 +260,8 @@ public class TripTravelQueryService {
 
     public enum RouteMode {
         WALKING,
-        TRANSIT
+        TRANSIT,
+        TAXI
     }
 
     public record Route(String provider, RouteMode mode, int distanceMeters, int durationSeconds, List<RoutePoint> routePoints) {

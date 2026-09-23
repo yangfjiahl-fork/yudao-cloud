@@ -33,7 +33,7 @@ class ManagedTripSessionServiceTest {
 
         assertEquals("session-trip", result);
         verifyNoInteractions(agentClient);
-        verify(tripPlanMapper, never()).updateById(any());
+        verify(tripPlanMapper, never()).updateById(any(TripPlanDO.class));
     }
 
     @Test

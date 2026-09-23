@@ -98,6 +98,70 @@ class TripAgentServiceImplTest {
     }
 
     @Test
+    void validateState_shouldAllowMissingStartDateAndBudget() {
+        Map<String, Object> state = new LinkedHashMap<>(Map.of(
+                "departure", "上海", "destination", "云南", "days", 6, "travelerCount", 4));
+
+        assertEquals(List.of(), TripAgentServiceImpl.validateState(state));
+    }
+
+    @Test
+    void validateState_shouldDeriveInclusiveDaysFromDateRange() {
+        Map<String, Object> state = new LinkedHashMap<>(Map.of(
+                "departure", "上海", "destination", "云南", "startDate", "2026-10-01",
+                "endDate", "2026-10-06", "travelerCount", 4));
+
+        assertEquals(List.of(), TripAgentServiceImpl.validateState(state));
+        assertEquals(6, state.get("days"));
+    }
+
+    @Test
+    void validateState_shouldRequireDaysWhenDateRangeIsIncomplete() {
+        Map<String, Object> state = new LinkedHashMap<>(Map.of(
+                "departure", "上海", "destination", "云南", "startDate", "2026-10-01",
+                "travelerCount", 4));
+
+        assertEquals(List.of("days"), TripAgentServiceImpl.validateState(state));
+    }
+
+    @Test
+    void buildInputCards_shouldOfferDurationAndDateRangeAlternatives() {
+        List<Map<String, Object>> cards = TripInputCardFactory.build(List.of("days"),
+                "请告诉我开始和结束日期，或者这次计划玩几天？", List.of());
+
+        assertEquals(List.of("SINGLE_SELECT", "DATE_RANGE"),
+                cards.stream().map(card -> (String) card.get("type")).toList());
+        assertEquals("trip-duration", cards.get(0).get("requiredGroup"));
+        assertEquals("trip-duration", cards.get(1).get("requiredGroup"));
+        assertEquals(1, cards.get(0).get("schemaVersion"));
+        Map<?, ?> dateRangeProps = (Map<?, ?>) cards.get(1).get("props");
+        assertEquals(false, ((Map<?, ?>) ((List<?>) dateRangeProps.get("fields")).get(1)).get("globallyRequired"));
+        assertEquals(true, dateRangeProps.get("completeRangeRequired"));
+        assertEquals("TEMPLATE", ((Map<?, ?>) cards.get(1).get("submit")).get("mode"));
+    }
+
+    @Test
+    void buildInputCards_shouldUseMultiSelectForScenicSuggestions() {
+        List<Map<String, String>> suggestions = List.of(
+                Map.of("label", "滇池", "content", "我想去滇池"),
+                Map.of("label", "石林", "content", "我想去石林"),
+                Map.of("label", "立即生成行程", "content", "请立即生成行程"));
+
+        List<Map<String, Object>> cards = TripInputCardFactory.build(List.of(),
+                "滇池和石林这些景点有哪些想去？", suggestions);
+
+        assertEquals(2, cards.size());
+        assertEquals("MULTI_SELECT", cards.get(0).get("type"));
+        assertEquals("mustVisit", cards.get(0).get("field"));
+        assertEquals(2, ((List<?>) ((Map<?, ?>) cards.get(0).get("props")).get("options")).size());
+        assertEquals("TEMPLATE", ((Map<?, ?>) cards.get(0).get("submit")).get("mode"));
+        assertEquals("SINGLE_SELECT", cards.get(1).get("type"));
+        assertEquals("请立即生成行程", ((Map<?, ?>) ((List<?>) ((Map<?, ?>) cards.get(1).get("props"))
+                .get("options")).get(0)).get("content"));
+        assertEquals("OPTION_CONTENT", ((Map<?, ?>) cards.get(1).get("submit")).get("mode"));
+    }
+
+    @Test
     void extractAgentChangeCommand_shouldUseCurrentServerVersion() {
         Map<String, Object> intake = Map.of("change_command", Map.of(
                 "operation", "MOVE_ITEM",
