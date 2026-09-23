@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.framework.trip.provider.config;
 
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClientFacade;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.gaode.GaodeTravelPlaceQueryClient;
@@ -30,8 +31,8 @@ public class TripProviderConfiguration {
     }
 
     @Bean
-    public AmapWeatherClient amapWeatherClient(RestTemplate restTemplate, TripProviderProperties properties) {
-        return new AmapWeatherClient(restTemplate, properties.getWeather().getAmap());
+    public AmapWeatherClient amapWeatherClient(RestTemplate restTemplate, AmapProperties amapProperties) {
+        return new AmapWeatherClient(restTemplate, amapProperties);
     }
 
     @Bean
@@ -48,8 +49,8 @@ public class TripProviderConfiguration {
 
     @Bean
     public GaodeScenicSpotQueryClient gaodeScenicSpotQueryClient(RestTemplate restTemplate,
-                                                                  TripProviderProperties properties) {
-        return new GaodeScenicSpotQueryClient(restTemplate, properties.getScenicSpot());
+                                                                  AmapProperties amapProperties) {
+        return new GaodeScenicSpotQueryClient(restTemplate, amapProperties);
     }
 
     @Bean
@@ -60,8 +61,8 @@ public class TripProviderConfiguration {
 
     @Bean
     public GaodeTravelPlaceQueryClient gaodeTravelPlaceQueryClient(RestTemplate restTemplate,
-            TripProviderProperties properties) {
-        return new GaodeTravelPlaceQueryClient(restTemplate, properties.getTravelPlace());
+            AmapProperties amapProperties) {
+        return new GaodeTravelPlaceQueryClient(restTemplate, amapProperties);
     }
 
     @Bean
@@ -71,12 +72,13 @@ public class TripProviderConfiguration {
     }
 
     @Bean
-    public AmapRouteQueryClient amapRouteQueryClient(RestTemplateBuilder restTemplateBuilder, TripProviderProperties properties) {
+    public AmapRouteQueryClient amapRouteQueryClient(RestTemplateBuilder restTemplateBuilder,
+                                                      AmapProperties amapProperties) {
         RestTemplate routeRestTemplate = restTemplateBuilder
                 .connectTimeout(Duration.ofSeconds(2))
                 .readTimeout(Duration.ofSeconds(2))
                 .build();
-        return new AmapRouteQueryClient(routeRestTemplate, properties.getRoute());
+        return new AmapRouteQueryClient(routeRestTemplate, amapProperties);
     }
 
 }

@@ -3,7 +3,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.weather.amap;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherProvider;
 import lombok.AllArgsConstructor;
@@ -29,7 +29,7 @@ public class AmapWeatherClient implements WeatherClient {
     private static final String ADCODE_PATTERN = "\\d{6}";
 
     private final RestTemplate restTemplate;
-    private final TripProviderProperties.Weather.Amap config;
+    private final AmapProperties config;
 
     @Override
     public WeatherProvider getProvider() {
@@ -38,7 +38,7 @@ public class AmapWeatherClient implements WeatherClient {
 
     @Override
     public boolean isConfigured() {
-        return config != null && StrUtil.isAllNotBlank(config.getApiKey(), config.getGeocodeUrl(),
+        return config != null && StrUtil.isAllNotBlank(config.getKey(), config.getGeocodingUrl(),
                 config.getWeatherUrl());
     }
 
@@ -65,9 +65,9 @@ public class AmapWeatherClient implements WeatherClient {
     }
 
     private String resolveAdcode(String city) {
-        URI uri = UriComponentsBuilder.fromUriString(config.getGeocodeUrl())
+        URI uri = UriComponentsBuilder.fromUriString(config.getGeocodingUrl())
                 .queryParam("address", city)
-                .queryParam("key", config.getApiKey())
+                .queryParam("key", config.getKey())
                 .queryParam("output", "JSON")
                 .build().encode().toUri();
         AmapGeocodeRespDTO response;
@@ -94,7 +94,7 @@ public class AmapWeatherClient implements WeatherClient {
     private AmapWeatherRespDTO queryWeather(String adcode, String requestedCity) {
         URI uri = UriComponentsBuilder.fromUriString(config.getWeatherUrl())
                 .queryParam("city", adcode)
-                .queryParam("key", config.getApiKey())
+                .queryParam("key", config.getKey())
                 .queryParam("extensions", "base")
                 .queryParam("output", "JSON")
                 .build().encode().toUri();
@@ -117,10 +117,10 @@ public class AmapWeatherClient implements WeatherClient {
     }
 
     private void validateConfig() {
-        if (config == null || StrUtil.isBlank(config.getApiKey())) {
+        if (config == null || StrUtil.isBlank(config.getKey())) {
             throw new IllegalStateException("高德天气 API Key 未配置");
         }
-        if (StrUtil.hasBlank(config.getGeocodeUrl(), config.getWeatherUrl())) {
+        if (StrUtil.hasBlank(config.getGeocodingUrl(), config.getWeatherUrl())) {
             throw new IllegalStateException("高德天气接口地址未配置");
         }
     }

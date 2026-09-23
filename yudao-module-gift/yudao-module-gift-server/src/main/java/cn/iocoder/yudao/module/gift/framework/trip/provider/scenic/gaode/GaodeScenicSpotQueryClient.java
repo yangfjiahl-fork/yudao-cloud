@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.gaode;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.scenic.ScenicSpotQueryClient;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,10 +21,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Slf4j
 public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
 
-    private static final String DEFAULT_URL = "https://restapi.amap.com/v5/place/text";
-
     private final RestTemplate restTemplate;
-    private final TripProviderProperties.ScenicSpot config;
+    private final AmapProperties config;
 
     @Override
     @Cacheable(cacheNames = "tripScenicGaode#10m",
@@ -36,7 +34,7 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
             log.warn("[query][高德景点查询不支持当前类型，type({})]", type);
             return Response.failure(type, "高德景点查询仅支持 SCENIC_SPOT");
         }
-        if (config == null || StrUtil.isBlank(config.getAmapKey())) {
+        if (config == null || StrUtil.isBlank(config.getKey())) {
             log.warn("[query][高德景点查询配置缺失，type({})]", type);
             return Response.failure(type, "高德景点查询服务未配置 AMAP_WEB_SERVICE_KEY");
         }
@@ -50,8 +48,8 @@ public class GaodeScenicSpotQueryClient implements ScenicSpotQueryClient {
         int page = request == null || request.getPage() == null ? 1 : request.getPage();
         String region = request == null ? null : request.getRegion();
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
-                .fromUriString(StrUtil.blankToDefault(config.getAmapUrl(), DEFAULT_URL))
-                .queryParam("key", config.getAmapKey())
+                .fromUriString(config.getPlaceSearchUrl())
+                .queryParam("key", config.getKey())
                 .queryParam("types", types)
                 .queryParam("show_fields", "business,photos")
                 .queryParam("page_size", 25)

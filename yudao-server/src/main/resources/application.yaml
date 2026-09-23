@@ -363,28 +363,21 @@ yudao:
     amap:
       key: ${AMAP_WEB_SERVICE_KEY:}
       reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}
+      geocoding-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
+      place-search-url: ${AMAP_PLACE_SEARCH_URL:${AMAP_TRAVEL_PLACE_URL:${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}}}
+      place-around-search-url: ${AMAP_PLACE_AROUND_SEARCH_URL:${AMAP_TRAVEL_PLACE_AROUND_URL:https://restapi.amap.com/v5/place/around}}
+      place-detail-url: ${AMAP_PLACE_DETAIL_URL:${AMAP_TRAVEL_PLACE_DETAIL_URL:https://restapi.amap.com/v5/place/detail}}
+      weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
+      walking-route-url: ${AMAP_WALKING_ROUTE_URL:https://restapi.amap.com/v3/direction/walking}
+      transit-route-url: ${AMAP_TRANSIT_ROUTE_URL:https://restapi.amap.com/v3/direction/transit/integrated}
+      driving-route-url: ${AMAP_DRIVING_ROUTE_URL:https://restapi.amap.com/v3/direction/driving}
     trip-provider:
       weather:
         app-code: ${ALIYUN_WEATHER_APP_CODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}}
         url: ${ALIYUN_WEATHER_URL:https://ali-weather.showapi.com/area-to-weather}
-        amap:
-          api-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
-          geocode-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
-          weather-url: ${AMAP_WEATHER_URL:https://restapi.amap.com/v3/weather/weatherInfo}
       scenic-spot:
         base-url: ${ALIYUN_SCENIC_SPOT_BASE_URL:https://jmqgjdcx.market.alicloudapi.com}
         app-code: ${ALIYUN_SCENIC_SPOT_APPCODE:${yudao.trade.express.aliyun-kd100.app-code:${ALIYUN_KD100_APP_CODE:}}}
-        amap-url: ${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}
-        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
-        amap-types: ${AMAP_SCENIC_SPOT_TYPES:110000}
-      travel-place:
-        amap-url: ${AMAP_TRAVEL_PLACE_URL:https://restapi.amap.com/v5/place/text}
-        amap-detail-url: ${AMAP_TRAVEL_PLACE_DETAIL_URL:https://restapi.amap.com/v5/place/detail}
-        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
-      route:
-        amap-key: ${AMAP_WEB_SERVICE_KEY:${yudao.gift.amap.key:}}
-        walking-url: ${AMAP_WALKING_ROUTE_URL:https://restapi.amap.com/v3/direction/walking}
-        transit-url: ${AMAP_TRANSIT_ROUTE_URL:https://restapi.amap.com/v3/direction/transit/integrated}
   codegen:
     base-package: ${yudao.info.base-package}
     db-schemas: ${spring.datasource.dynamic.datasource.master.name}

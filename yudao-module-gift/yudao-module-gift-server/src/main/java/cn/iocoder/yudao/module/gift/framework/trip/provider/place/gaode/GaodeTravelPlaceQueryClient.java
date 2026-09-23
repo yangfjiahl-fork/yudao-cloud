@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.place.gaode;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,15 +21,12 @@ import java.util.List;
 @Slf4j
 public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
 
-    private static final String DEFAULT_URL = "https://restapi.amap.com/v5/place/text";
-    private static final String DEFAULT_AROUND_URL = "https://restapi.amap.com/v5/place/around";
-    private static final String DEFAULT_DETAIL_URL = "https://restapi.amap.com/v5/place/detail";
     private static final int DEFAULT_LIMIT = 25;
     private static final int MAX_LIMIT = 25;
     private static final int MAX_PAGE = 100;
 
     private final RestTemplate restTemplate;
-    private final TripProviderProperties.TravelPlace config;
+    private final AmapProperties config;
 
     @Override
     public String provider() {
@@ -47,7 +44,7 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         if (request.getType() == AmapPoiTypeEnum.SCENIC) {
             return Response.failure("景点请使用景点查询服务");
         }
-        if (config == null || StrUtil.isBlank(config.getAmapKey())) {
+        if (config == null || StrUtil.isBlank(config.getKey())) {
             log.warn("[query][高德旅行地点查询配置缺失，type({}) region({})]", request.getType(), request.getRegion());
             return Response.failure("高德旅行地点查询服务未配置 AMAP_WEB_SERVICE_KEY");
         }
@@ -56,9 +53,8 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         String types = request.getType().getAmapTypeCode();
         boolean around = StrUtil.isNotBlank(request.getLocation());
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
-                .fromUriString(around ? StrUtil.blankToDefault(config.getAmapAroundUrl(), DEFAULT_AROUND_URL)
-                        : StrUtil.blankToDefault(config.getAmapUrl(), DEFAULT_URL))
-                .queryParam("key", config.getAmapKey())
+                .fromUriString(around ? config.getPlaceAroundSearchUrl() : config.getPlaceSearchUrl())
+                .queryParam("key", config.getKey())
                 .queryParam("types", types);
         if (around) {
             uriBuilder.queryParam("location", request.getLocation())
@@ -101,13 +97,13 @@ public class GaodeTravelPlaceQueryClient implements TravelPlaceQueryClient {
         if (StrUtil.isBlank(poiId)) {
             return Response.failure("旅行地点详情查询缺少 POI 编号");
         }
-        if (config == null || StrUtil.isBlank(config.getAmapKey())) {
+        if (config == null || StrUtil.isBlank(config.getKey())) {
             log.warn("[getPlaceDetail][高德旅行地点详情配置缺失，poiId({})]", poiId);
             return Response.failure("高德旅行地点详情服务未配置 AMAP_WEB_SERVICE_KEY");
         }
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
-                .fromUriString(StrUtil.blankToDefault(config.getAmapDetailUrl(), DEFAULT_DETAIL_URL))
-                .queryParam("key", config.getAmapKey()).queryParam("id", poiId)
+                .fromUriString(config.getPlaceDetailUrl())
+                .queryParam("key", config.getKey()).queryParam("id", poiId)
                 .queryParam("show_fields", "business,photos").queryParam("output", "json");
         long startTime = System.currentTimeMillis();
         try {

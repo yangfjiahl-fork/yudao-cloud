@@ -10,46 +10,18 @@ public class TripProviderProperties {
 
     private Weather weather = new Weather();
     private ScenicSpot scenicSpot = new ScenicSpot();
-    private TravelPlace travelPlace = new TravelPlace();
-    private Route route = new Route();
 
     @Data
     public static class Weather {
 
         private String appCode;
         private String url = "https://ali-weather.showapi.com/area-to-weather";
-        private Amap amap = new Amap();
-
-        @Data
-        public static class Amap {
-            private String apiKey;
-            private String geocodeUrl = "https://restapi.amap.com/v3/geocode/geo";
-            private String weatherUrl = "https://restapi.amap.com/v3/weather/weatherInfo";
-        }
     }
 
     @Data
     public static class ScenicSpot {
         private String baseUrl;
         private String appCode;
-        private String amapUrl = "https://restapi.amap.com/v5/place/text";
-        private String amapKey;
-    }
-
-    @Data
-    public static class TravelPlace {
-        private String amapUrl = "https://restapi.amap.com/v5/place/text";
-        private String amapAroundUrl = "https://restapi.amap.com/v5/place/around";
-        private String amapDetailUrl = "https://restapi.amap.com/v5/place/detail";
-        private String amapKey;
-    }
-
-    @Data
-    public static class Route {
-        private String amapKey;
-        private String walkingUrl = "https://restapi.amap.com/v3/direction/walking";
-        private String transitUrl = "https://restapi.amap.com/v3/direction/transit/integrated";
-        private String drivingUrl = "https://restapi.amap.com/v3/direction/driving";
     }
 
 }

@@ -6,12 +6,16 @@ import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.yudao.framework.ip.core.utils.IPUtils;
 import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripLocationRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripPlaceSearchReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripPlaceSearchRespVO;
 import cn.iocoder.yudao.module.gift.framework.geo.core.AmapGeocodingClient;
+import cn.iocoder.yudao.module.gift.framework.geo.core.AmapPlaceSearchClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -40,6 +44,17 @@ public class AppTripLocationController {
 
     @Resource
     private AmapGeocodingClient amapGeocodingClient;
+    @Resource
+    private AmapPlaceSearchClient amapPlaceSearchClient;
+
+    @GetMapping("/places")
+    @Operation(summary = "搜索地点", description = "未传坐标时按关键词和可选城市搜索；传入高德 GCJ-02 经纬度时按距离搜索周边地点")
+    public CommonResult<AppTripPlaceSearchRespVO> searchPlaces(@Valid AppTripPlaceSearchReqVO reqVO) {
+        AmapPlaceSearchClient.SearchResult result = amapPlaceSearchClient.search(
+                new AmapPlaceSearchClient.SearchRequest(reqVO.getKeyword(), reqVO.getCity(), reqVO.getLongitude(),
+                        reqVO.getLatitude(), reqVO.getRadius(), reqVO.getPageNo(), reqVO.getPageSize()));
+        return success(AppTripPlaceSearchRespVO.from(result, reqVO.getPageNo(), reqVO.getPageSize()));
+    }
 
     @GetMapping("/reverse-geocode")
     @Operation(summary = "根据经纬度获取城市", description = "经纬度均大于 0 时使用高德 GCJ-02 逆地理编码；任一小于等于 0 时使用客户端 IP 本地解析")

@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.framework.trip.provider.route.amap;
 
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,9 +31,9 @@ class AmapRouteQueryClientTest {
     void setUp() {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
-        TripProviderProperties.Route config = new TripProviderProperties.Route()
-                .setAmapKey("test-amap-key").setWalkingUrl(WALKING_URL).setTransitUrl(TRANSIT_URL)
-                .setDrivingUrl(DRIVING_URL);
+        AmapProperties config = new AmapProperties()
+                .setKey("test-amap-key").setWalkingRouteUrl(WALKING_URL).setTransitRouteUrl(TRANSIT_URL)
+                .setDrivingRouteUrl(DRIVING_URL);
         client = new AmapRouteQueryClient(restTemplate, config);
     }
 
@@ -102,7 +102,7 @@ class AmapRouteQueryClientTest {
 
     @Test
     void query_shouldRejectMissingApiKey() {
-        client = new AmapRouteQueryClient(new RestTemplate(), new TripProviderProperties.Route().setAmapKey(""));
+        client = new AmapRouteQueryClient(new RestTemplate(), new AmapProperties().setKey(""));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> client.query(new AmapRouteQueryClient.Request("杭州", "120.1,30.2", "120.2,30.3", AmapRouteQueryClient.Mode.WALKING)));

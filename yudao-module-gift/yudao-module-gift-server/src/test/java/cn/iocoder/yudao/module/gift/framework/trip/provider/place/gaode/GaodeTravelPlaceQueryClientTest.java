@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.framework.trip.provider.place.gaode;
 
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.TravelPlaceQueryClient;
 import org.junit.jupiter.api.AfterEach;
@@ -34,9 +34,9 @@ class GaodeTravelPlaceQueryClientTest {
     void setUp() {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
-        TripProviderProperties.TravelPlace config = new TripProviderProperties.TravelPlace()
-                .setAmapUrl(AMAP_URL).setAmapAroundUrl(AMAP_AROUND_URL).setAmapDetailUrl(AMAP_DETAIL_URL)
-                .setAmapKey("test-amap-key");
+        AmapProperties config = new AmapProperties()
+                .setPlaceSearchUrl(AMAP_URL).setPlaceAroundSearchUrl(AMAP_AROUND_URL)
+                .setPlaceDetailUrl(AMAP_DETAIL_URL).setKey("test-amap-key");
         client = new GaodeTravelPlaceQueryClient(restTemplate, config);
     }
 

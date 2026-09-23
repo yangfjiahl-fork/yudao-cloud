@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.framework.trip.provider.weather.amap;
 
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.weather.WeatherClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,9 +29,9 @@ class AmapWeatherClientTest {
     void setUp() {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
-        TripProviderProperties.Weather.Amap config = new TripProviderProperties.Weather.Amap()
-                .setApiKey("test-api-key")
-                .setGeocodeUrl(GEOCODE_URL)
+        AmapProperties config = new AmapProperties()
+                .setKey("test-api-key")
+                .setGeocodingUrl(GEOCODE_URL)
                 .setWeatherUrl(WEATHER_URL);
         client = new AmapWeatherClient(restTemplate, config);
     }
@@ -90,7 +90,7 @@ class AmapWeatherClientTest {
     @Test
     void testGetCurrentWeather_apiKeyMissing() {
         client = new AmapWeatherClient(new RestTemplate(),
-                new TripProviderProperties.Weather.Amap().setApiKey(""));
+                new AmapProperties().setKey(""));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> client.getCurrentWeather("北京"));

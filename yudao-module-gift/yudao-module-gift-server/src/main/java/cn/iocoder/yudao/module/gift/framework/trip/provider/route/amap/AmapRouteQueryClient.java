@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.gift.framework.trip.provider.route.amap;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.framework.trip.provider.config.TripProviderProperties;
+import cn.iocoder.yudao.module.gift.framework.geo.config.AmapProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import lombok.AllArgsConstructor;
@@ -21,10 +21,10 @@ import java.util.List;
 public class AmapRouteQueryClient {
 
     private final RestTemplate restTemplate;
-    private final TripProviderProperties.Route config;
+    private final AmapProperties config;
 
     public boolean isConfigured() {
-        return config != null && StrUtil.isNotBlank(config.getAmapKey());
+        return config != null && StrUtil.isNotBlank(config.getKey());
     }
 
     @PostConstruct
@@ -39,13 +39,13 @@ public class AmapRouteQueryClient {
     public Route query(Request request) {
         validateRequest(request);
         String routeUrl = switch (request.mode()) {
-            case WALKING -> config.getWalkingUrl();
-            case TRANSIT -> config.getTransitUrl();
-            case DRIVING -> config.getDrivingUrl();
+            case WALKING -> config.getWalkingRouteUrl();
+            case TRANSIT -> config.getTransitRouteUrl();
+            case DRIVING -> config.getDrivingRouteUrl();
         };
         UriComponentsBuilder uriBuilder = UriComponentsBuilder
                 .fromUriString(routeUrl)
-                .queryParam("key", config.getAmapKey())
+                .queryParam("key", config.getKey())
                 .queryParam("origin", request.origin())
                 .queryParam("destination", request.destination())
                 .queryParam("output", "JSON");
