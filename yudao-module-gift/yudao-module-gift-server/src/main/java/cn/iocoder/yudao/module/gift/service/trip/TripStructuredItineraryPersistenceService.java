@@ -10,8 +10,10 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryIt
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,7 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 将不可变行程 JSON 同步展开为可查询、可编辑的用户行程结构。 */
+/** 将当前行程 JSON 覆盖写入可查询、可编辑的用户行程结构。 */
 @Service
 public class TripStructuredItineraryPersistenceService {
 
@@ -37,22 +39,28 @@ public class TripStructuredItineraryPersistenceService {
     @Resource
     private UserItineraryItemMapper userItineraryItemMapper;
 
-    public Long persist(ItineraryConversationDO conversation, Integer version, Long requestEventId,
-                        Long resultEventId, Long memberId,
+    @Transactional(rollbackFor = Exception.class)
+    public Long persist(ItineraryConversationDO conversation, Long requestEventId, Long resultEventId, Long memberId,
                         Map<String, Object> state, Map<String, Object> itinerary) {
-        UserItineraryDO existing = userItineraryMapper.selectByResultEventId(resultEventId);
-        if (existing != null) {
+        UserItineraryDO existing = userItineraryMapper.selectByConversationId(conversation.getId());
+        if (existing != null && resultEventId.equals(existing.getResultEventId())) {
             return existing.getId();
         }
-        UserItineraryDO userItinerary = buildUserItinerary(conversation, version, requestEventId, resultEventId, memberId,
+        UserItineraryDO userItinerary = buildUserItinerary(conversation, requestEventId, resultEventId, memberId,
                 state, itinerary);
-        userItineraryMapper.insert(userItinerary);
+        if (existing == null) {
+            userItineraryMapper.insert(userItinerary);
+        } else {
+            userItinerary.setId(existing.getId());
+            userItineraryItemMapper.deletePhysicallyByUserItineraryId(existing.getId());
+            userItineraryDayMapper.deletePhysicallyByUserItineraryId(existing.getId());
+            updateUserItinerary(userItinerary);
+        }
         persistDays(userItinerary.getId(), itinerary);
         return userItinerary.getId();
     }
 
-    private static UserItineraryDO buildUserItinerary(ItineraryConversationDO conversation, Integer version,
-                                                        Long requestEventId,
+    private static UserItineraryDO buildUserItinerary(ItineraryConversationDO conversation, Long requestEventId,
                                                         Long resultEventId, Long memberId, Map<String, Object> state,
                                                         Map<String, Object> itinerary) {
         UserItineraryDO result = new UserItineraryDO();
@@ -60,7 +68,6 @@ public class TripStructuredItineraryPersistenceService {
         result.setConversationId(conversation.getId());
         result.setRequestEventId(requestEventId);
         result.setResultEventId(resultEventId);
-        result.setVersion(version);
         result.setStatus(1);
         result.setTitle(StrUtil.blankToDefault(text(itinerary.get("summary")), "旅行方案"));
         result.setCoverUrl(findCoverUrl(itinerary));
@@ -91,6 +98,40 @@ public class TripStructuredItineraryPersistenceService {
         result.setPlannerType(nullableText(planner.get("type")));
         result.setPlannerValidation(nullableText(planner.get("validation")));
         return result;
+    }
+
+    private void updateUserItinerary(UserItineraryDO itinerary) {
+        userItineraryMapper.update(null, new UpdateWrapper<UserItineraryDO>()
+                .eq("id", itinerary.getId())
+                .set("member_id", itinerary.getMemberId())
+                .set("conversation_id", itinerary.getConversationId())
+                .set("request_event_id", itinerary.getRequestEventId())
+                .set("result_event_id", itinerary.getResultEventId())
+                .set("status", itinerary.getStatus())
+                .set("title", itinerary.getTitle())
+                .set("cover_url", itinerary.getCoverUrl())
+                .set("cover_width", itinerary.getCoverWidth())
+                .set("cover_height", itinerary.getCoverHeight())
+                .set("start_date", itinerary.getStartDate())
+                .set("end_date", itinerary.getEndDate())
+                .set("day_cnt", itinerary.getDayCnt())
+                .set("departure", itinerary.getDeparture())
+                .set("destination", itinerary.getDestination())
+                .set("traveler_count", itinerary.getTravelerCount())
+                .set("budget", itinerary.getBudget())
+                .set("hotel_budget", itinerary.getHotelBudget())
+                .set("traveler_profile_json", itinerary.getTravelerProfileJson())
+                .set("interests_json", itinerary.getInterestsJson())
+                .set("pace", itinerary.getPace())
+                .set("must_visit_json", itinerary.getMustVisitJson())
+                .set("constraints_json", itinerary.getConstraintsJson())
+                .set("daily_start_time", itinerary.getDailyStartTime())
+                .set("daily_end_time", itinerary.getDailyEndTime())
+                .set("overview_status", itinerary.getOverviewStatus())
+                .set("overview_skeleton", itinerary.getOverviewSkeleton())
+                .set("overview_detail", itinerary.getOverviewDetail())
+                .set("planner_type", itinerary.getPlannerType())
+                .set("planner_validation", itinerary.getPlannerValidation()));
     }
 
     private void persistDays(Long userItineraryId, Map<String, Object> itinerary) {

@@ -18,9 +18,6 @@ public class AppTripItineraryChangeReqVO {
     @NotNull(message = "编辑操作不能为空")
     private TripChangeCommand.Operation operation;
 
-    @Min(value = 1, message = "基础版本必须大于 0")
-    private int baseVersion;
-
     @Size(max = 128, message = "行程节点编号长度不能超过 128")
     private String itemId;
 

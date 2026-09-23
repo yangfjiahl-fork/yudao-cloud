@@ -11,7 +11,6 @@ public class AppTripItineraryChangeRespVO {
 
     private Long itineraryId;
     private Long messageId;
-    private Integer version;
     private String content;
     private List<Integer> affectedDays;
     private Map<String, Object> itinerary;

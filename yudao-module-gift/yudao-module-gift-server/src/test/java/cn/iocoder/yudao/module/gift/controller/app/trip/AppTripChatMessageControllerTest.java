@@ -9,7 +9,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryChangeReqVO;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import cn.iocoder.yudao.module.gift.service.trip.ItineraryConversationService;
-import cn.iocoder.yudao.module.gift.service.trip.TripItineraryVersionService;
+import cn.iocoder.yudao.module.gift.service.trip.TripItinerarySaveService;
 import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -50,14 +50,13 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     void changeItinerary_shouldUseSharedCommandEditor() {
         Long conversationId = 1L;
         Long memberId = 2L;
-        TripItineraryVersionService.SavedItinerary saved =
-                new TripItineraryVersionService.SavedItinerary(11L, 12L, 4, "已更新行程");
+        TripItinerarySaveService.SavedItinerary saved =
+                new TripItinerarySaveService.SavedItinerary(11L, 12L, "已更新行程");
         when(tripPlanEditorService.apply(eq(conversationId), eq(memberId), any()))
-                .thenReturn(new TripPlanEditorService.EditResult(saved, List.of(2), Map.of("version", 4)));
+                .thenReturn(new TripPlanEditorService.EditResult(saved, List.of(2), Map.of("summary", "已更新行程")));
         AppTripItineraryChangeReqVO reqVO = new AppTripItineraryChangeReqVO();
         reqVO.setConversationId(conversationId);
         reqVO.setOperation(TripChangeCommand.Operation.MOVE_ITEM);
-        reqVO.setBaseVersion(3);
         reqVO.setItemId("item-1");
         reqVO.setDay(2);
         reqVO.setTimePeriod("AFTERNOON");
@@ -70,7 +69,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
 
             assertEquals(0, response.getCode());
             verify(tripPlanEditorService).apply(eq(conversationId), eq(memberId),
-                    eq(new TripChangeCommand(TripChangeCommand.Operation.MOVE_ITEM, 3,
+                    eq(new TripChangeCommand(TripChangeCommand.Operation.MOVE_ITEM,
                             "item-1", 2, "AFTERNOON", 1, null)));
         }
     }
@@ -168,7 +167,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
             @SuppressWarnings("unchecked")
             Consumer<TripAgentEvent> eventConsumer = invocation.getArgument(4);
             eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", "已为你生成三日行程。")
-                    .setMessageId(10L).setItinerary(java.util.Map.of("version", 1)));
+                    .setMessageId(10L).setItinerary(java.util.Map.of("summary", "云南行程")));
             return null;
         }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), eq("run-1"), any(), any());
 
@@ -182,7 +181,8 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
             assertEquals("TEXT_MESSAGE_END", events.get(3).get("type"));
             assertEquals("trip_itinerary_card", events.get(4).get("name"));
             assertEquals("trip-itinerary-10", ((java.util.Map<?, ?>) events.get(4).get("value")).get("cardId"));
-            assertEquals(java.util.Map.of("version", 1), ((java.util.Map<?, ?>) events.get(4).get("value")).get("itinerary"));
+            assertEquals(java.util.Map.of("summary", "云南行程"),
+                    ((java.util.Map<?, ?>) events.get(4).get("value")).get("itinerary"));
             assertEquals("trip_itinerary_skeleton", events.get(5).get("name"));
         } finally {
             TenantContextHolder.clear();

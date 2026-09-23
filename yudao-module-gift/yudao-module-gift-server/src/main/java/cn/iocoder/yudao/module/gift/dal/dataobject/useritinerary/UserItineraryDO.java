@@ -35,7 +35,6 @@ public class UserItineraryDO extends BaseDO {
     private Long conversationId;
     private Long requestEventId;
     private Long resultEventId;
-    private Integer version;
     private Integer status;
     /**
      * 标题

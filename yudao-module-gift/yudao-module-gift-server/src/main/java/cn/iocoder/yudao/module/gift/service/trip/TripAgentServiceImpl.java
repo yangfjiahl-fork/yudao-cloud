@@ -14,7 +14,7 @@ import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
@@ -115,7 +115,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private ManagedTripAgentExecutor managedTripAgentExecutor;
     @Resource
-    private TripItineraryVersionService tripItineraryVersionService;
+    private TripItinerarySaveService tripItinerarySaveService;
     @Resource
     private TripPlanEditorService tripPlanEditorService;
     @Resource
@@ -170,7 +170,8 @@ public class TripAgentServiceImpl implements TripAgentService {
             return doHandleManagedMessage(conversationId, memberId, runId, content, eventConsumer);
         } catch (ManagedAgentExecutionTerminatedException e) {
             String fallback = buildManagedBudgetFallback(e.getReason());
-            ItineraryEventDO assistant = createTranscriptMessage(conversationId, runId, null, fallback, true);
+            UserItineraryConversationEventDO assistant = createTranscriptMessage(
+                    conversationId, runId, null, fallback, true);
             log.warn("[handleManagedMessage][conversationId({}) memberId({}) 托管 Agent 预算熔断 reason({}) snapshot({})]",
                     conversationId, memberId, e.getReason(), e.getMetrics());
             eventConsumer.accept(TripAgentEvent.of("question", "BUDGET_GUARD", fallback)
@@ -194,7 +195,8 @@ public class TripAgentServiceImpl implements TripAgentService {
                                                    Consumer<TripAgentEvent> eventConsumer) {
         ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
         log.info("[handleMessage][conversationId({}) memberId({}) 开始编排]", conversationId, memberId);
-        ItineraryEventDO requestEvent = createTranscriptMessage(conversationId, runId, null, content, false);
+        UserItineraryConversationEventDO requestEvent = createTranscriptMessage(
+                conversationId, runId, null, content, false);
 
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
         Map<String, Object> previousState = TripAgentFormatUtils.parseMap(JsonUtils.toJsonString(state));
@@ -206,10 +208,9 @@ public class TripAgentServiceImpl implements TripAgentService {
             return handleOutOfTopicMessage(conversationId, memberId, runId, requestEvent.getId(), trip.getId(), state,
                     currentMissingRequired, precheckDecision, eventConsumer);
         }
-        UserItineraryDO currentUserItinerary = trip.getCurrentUserItineraryId() == null ? null
-                : userItineraryQueryService.getById(trip.getCurrentUserItineraryId(), conversationId);
+        UserItineraryDO currentUserItinerary = userItineraryQueryService.getByConversationId(conversationId);
         TripItinerarySnapshot currentItinerary = currentUserItinerary == null ? null : new TripItinerarySnapshot()
-                .setId(currentUserItinerary.getId()).setVersion(currentUserItinerary.getVersion())
+                .setId(currentUserItinerary.getId())
                 .setMessageId(currentUserItinerary.getResultEventId())
                 .setContentJson(JsonUtils.toJsonString(userItineraryQueryService.toMap(currentUserItinerary)));
         eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在提取本轮出行需求…"));
@@ -222,8 +223,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                     currentMissingRequired, topicDecision, eventConsumer);
         }
         mergeInformationState(state, extractState(intake), content);
-        TripChangeCommand changeCommand = currentItinerary == null ? null
-                : extractAgentChangeCommand(intake, currentItinerary.getVersion());
+        TripChangeCommand changeCommand = currentItinerary == null ? null : extractAgentChangeCommand(intake);
         if (changeCommand == null) {
             applyItineraryPatch(state, intake.get("itinerary_patch"));
         } else {
@@ -233,9 +233,9 @@ public class TripAgentServiceImpl implements TripAgentService {
         List<String> missingRequired = validateState(state);
         boolean stateChanged = !previousState.equals(state);
         boolean generateRequested = changeCommand != null || isGenerateRequested(intake)
-                || (trip.getCurrentUserItineraryId() != null && stateChanged);
+                || (currentItinerary != null && stateChanged);
         TripOrchestrationAction action = determineAction(missingRequired, generateRequested, stateChanged,
-                trip.getCurrentUserItineraryId() != null);
+                currentItinerary != null);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
         conversationService.updateState(conversationId, trip.getStateJson(), trip.getMissingRequiredJson());
@@ -254,7 +254,8 @@ public class TripAgentServiceImpl implements TripAgentService {
 
         if (CollUtil.isNotEmpty(missingRequired)) {
             String question = interaction.question();
-            ItineraryEventDO assistant = createTranscriptMessage(conversationId, runId, requestEvent.getId(), question, true);
+            UserItineraryConversationEventDO assistant = createTranscriptMessage(
+                    conversationId, runId, requestEvent.getId(), question, true);
             log.info("[handleMessage][tripId({}) 返回追问 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(missingRequired);
@@ -267,9 +268,9 @@ public class TripAgentServiceImpl implements TripAgentService {
             eventConsumer.accept(TripAgentEvent.of("stage", "ASSEMBLE", "正在应用行程修改并校验受影响日期…"));
             TripPlanEditorService.EditResult edited = tripPlanEditorService.applyWithinExistingLock(
                     conversationId, memberId, changeCommand, runId, requestEvent.getId());
-            TripItineraryVersionService.SavedItinerary saved = edited.saved();
-            log.info("[handleMessage][tripId({}) command({}) affectedDays({}) version({}) Agent 编辑完成]",
-                    trip.getId(), changeCommand.operation(), edited.affectedDays(), saved.version());
+            TripItinerarySaveService.SavedItinerary saved = edited.saved();
+            log.info("[handleMessage][tripId({}) command({}) affectedDays({}) Agent 编辑完成]",
+                    trip.getId(), changeCommand.operation(), edited.affectedDays());
             TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON")
                     .setMessageId(saved.messageId()).setContent(saved.displayText())
                     .setItinerary(edited.itinerary()).setMissingRequired(List.of());
@@ -281,7 +282,8 @@ public class TripAgentServiceImpl implements TripAgentService {
 
         if (!action.requiresPlanning()) {
             String question = interaction.question();
-            ItineraryEventDO assistant = createTranscriptMessage(conversationId, runId, requestEvent.getId(), question, true);
+            UserItineraryConversationEventDO assistant = createTranscriptMessage(
+                    conversationId, runId, requestEvent.getId(), question, true);
             log.info("[handleMessage][tripId({}) 等待用户确认生成或继续补充 messageId({})]", trip.getId(), assistant.getId());
             TripAgentResult result = new TripAgentResult().setType("QUESTION").setMessageId(assistant.getId()).setContent(question)
                     .setMissingRequired(List.of());
@@ -305,11 +307,11 @@ public class TripAgentServiceImpl implements TripAgentService {
         } finally {
             assembleSpan.end();
         }
-        TripItineraryVersionService.SavedItinerary saved = tripItineraryVersionService.saveGeneratedItinerary(
+        TripItinerarySaveService.SavedItinerary saved = tripItinerarySaveService.saveGeneratedItinerary(
                 trip, memberId, runId, requestEvent.getId(), state, itinerary);
 
-        log.info("[handleMessage][tripId({}) 行程 itineraryId({}) version({}) messageId({}) 引用数量({}) 已生成]",
-                trip.getId(), saved.itineraryId(), saved.version(), saved.messageId(),
+        log.info("[handleMessage][tripId({}) 行程 itineraryId({}) messageId({}) 引用数量({}) 已生成]",
+                trip.getId(), saved.itineraryId(), saved.messageId(),
                 ((List<?>) itinerary.get("citation_ids")).size());
         TripAgentResult result = new TripAgentResult().setType("ITINERARY_SKELETON").setMessageId(saved.messageId())
                 .setContent(saved.displayText())
@@ -328,7 +330,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         String reply = decision.reply();
         List<Map<String, String>> suggestions = buildInformationSuggestions(state, missingRequired);
         List<Map<String, Object>> inputCards = TripInputCardFactory.build(missingRequired, reply, suggestions);
-        ItineraryEventDO assistant = createTranscriptMessage(conversationId, runId, requestEventId, reply, true);
+        UserItineraryConversationEventDO assistant = createTranscriptMessage(
+                conversationId, runId, requestEventId, reply, true);
         log.info("[handleOutOfTopicMessage][tripId({}) action({}) reason({}) messageId({})]",
                 tripId, decision.action(), decision.reason(), assistant.getId());
         eventConsumer.accept(TripAgentEvent.of("question", "TOPIC_GUARD", reply)
@@ -370,13 +373,10 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @Override
     public TripItineraryRouteResult resolveItineraryRoute(Long conversationId, Long memberId, Long messageId, Integer day) {
-        ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
+        conversationService.getRequired(conversationId, memberId);
         UserItineraryDO itinerary = userItineraryQueryService.getByResultEventId(messageId);
         if (itinerary == null || !conversationId.equals(itinerary.getConversationId())) {
             throw new IllegalArgumentException("行程路线不存在或不属于当前会话");
-        }
-        if (!itinerary.getId().equals(trip.getCurrentUserItineraryId())) {
-            throw new IllegalArgumentException("只能解析当前生效的行程路线");
         }
         List<Map<String, Object>> segments = tripItineraryAssembler.resolveTransportSegments(
                 userItineraryQueryService.toMap(itinerary), day);
@@ -394,9 +394,6 @@ public class TripAgentServiceImpl implements TripAgentService {
         UserItineraryDO itineraryDO = userItineraryQueryService.getByResultEventId(messageId);
         if (itineraryDO == null || !conversationId.equals(itineraryDO.getConversationId())) {
             throw new IllegalArgumentException("行程骨架不存在或不属于当前会话");
-        }
-        if (!itineraryDO.getId().equals(trip.getCurrentUserItineraryId())) {
-            throw new IllegalArgumentException("只能补充当前生效的行程骨架");
         }
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
         if (StrUtil.isBlank(trimNullable(state.get("destination")))) {
@@ -623,12 +620,14 @@ public class TripAgentServiceImpl implements TripAgentService {
         return String.join("", names);
     }
 
-    private ItineraryEventDO createTranscriptMessage(Long conversationId, String content, boolean assistant) {
+    private UserItineraryConversationEventDO createTranscriptMessage(Long conversationId, String content,
+                                                                     boolean assistant) {
         return createTranscriptMessage(conversationId, null, null, content, assistant);
     }
 
-    private ItineraryEventDO createTranscriptMessage(Long conversationId, String runId, Long replyEventId,
-                                                       String content, boolean assistant) {
+    private UserItineraryConversationEventDO createTranscriptMessage(Long conversationId, String runId,
+                                                                     Long replyEventId, String content,
+                                                                     boolean assistant) {
         return conversationService.createEvent(conversationId, runId, replyEventId,
                 assistant ? "ASSISTANT_MESSAGE" : "USER_MESSAGE", assistant ? "assistant" : "user",
                 assistant ? "FOLLOW_UP" : "INTAKE", content);
@@ -708,9 +707,6 @@ public class TripAgentServiceImpl implements TripAgentService {
             }
         }
         Map<String, Object> result = new LinkedHashMap<>();
-        if (itinerary.getVersion() != null) {
-            result.put("version", itinerary.getVersion());
-        }
         result.put("items", items);
         return result;
     }
@@ -793,8 +789,8 @@ public class TripAgentServiceImpl implements TripAgentService {
         return "GENERATE".equalsIgnoreCase(trimNullable(intake.get("action")));
     }
 
-    /** 将 Agent 输出转换为服务端统一命令；baseVersion 始终取当前快照，不信任模型提供的版本。 */
-    static TripChangeCommand extractAgentChangeCommand(Map<String, Object> intake, int baseVersion) {
+    /** 将 Agent 输出转换为服务端统一命令。 */
+    static TripChangeCommand extractAgentChangeCommand(Map<String, Object> intake) {
         Object rawCommand = firstNonNull(intake.get("change_command"), intake.get("changeCommand"));
         Object rawCommands = intake.get("change_commands");
         if (rawCommand == null && rawCommands instanceof List<?> commands && !commands.isEmpty()) {
@@ -812,14 +808,14 @@ public class TripAgentServiceImpl implements TripAgentService {
             } catch (IllegalArgumentException ex) {
                 throw new IllegalArgumentException("Agent 返回了不支持的行程变更操作：" + operationText, ex);
             }
-            return new TripChangeCommand(operation, baseVersion, trimNullable(command.get("itemId")),
+            return new TripChangeCommand(operation, trimNullable(command.get("itemId")),
                     MapUtil.getInt(command, "day"), trimNullable(command.get("timePeriod")),
                     MapUtil.getInt(command, "sort"), stringKeyMap(command.get("values")));
         }
-        return legacyItineraryPatchCommand(intake.get("itinerary_patch"), baseVersion);
+        return legacyItineraryPatchCommand(intake.get("itinerary_patch"));
     }
 
-    private static TripChangeCommand legacyItineraryPatchCommand(Object value, int baseVersion) {
+    private static TripChangeCommand legacyItineraryPatchCommand(Object value) {
         if (!(value instanceof Map<?, ?> patch) || !(patch.get("operations") instanceof List<?> operations)) {
             return null;
         }
@@ -846,10 +842,10 @@ public class TripAgentServiceImpl implements TripAgentService {
         if (affectedDays.size() == 1) {
             Map<String, Object> values = instructions.isEmpty() ? Map.of()
                     : Map.of("instruction", String.join("；", instructions));
-            return new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY, baseVersion, null,
+            return new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY, null,
                     affectedDays.iterator().next(), null, null, values);
         }
-        return new TripChangeCommand(TripChangeCommand.Operation.REPLAN_TRIP, baseVersion,
+        return new TripChangeCommand(TripChangeCommand.Operation.REPLAN_TRIP,
                 null, null, null, null, Map.of());
     }
 

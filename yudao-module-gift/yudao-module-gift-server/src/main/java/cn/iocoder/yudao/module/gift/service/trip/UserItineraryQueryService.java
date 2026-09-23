@@ -30,6 +30,10 @@ public class UserItineraryQueryService {
         return itineraryMapper.selectByIdAndConversationId(id, conversationId);
     }
 
+    public UserItineraryDO getByConversationId(Long conversationId) {
+        return itineraryMapper.selectByConversationId(conversationId);
+    }
+
     public UserItineraryDO getByResultEventId(Long eventId) {
         return itineraryMapper.selectByResultEventId(eventId);
     }
@@ -44,7 +48,6 @@ public class UserItineraryQueryService {
     public Map<String, Object> toMap(UserItineraryDO itinerary) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", itinerary.getId());
-        result.put("version", itinerary.getVersion());
         result.put("summary", itinerary.getTitle());
         result.put("overview", mapOf("status", itinerary.getOverviewStatus(), "skeleton",
                 itinerary.getOverviewSkeleton(), "detail", itinerary.getOverviewDetail(), "slot", "TRIP_OVERVIEW"));

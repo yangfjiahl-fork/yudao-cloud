@@ -1,10 +1,11 @@
 -- 行程领域最终结构（不兼容旧的 gift_trip_* 存储）。
--- 会话、事件和个人行程版本统一使用 itinerary 命名空间。
+-- 用户会话、会话事件和个人行程统一使用 user_itinerary 命名空间。
 
 DROP TABLE IF EXISTS `gift_user_itinerary_transport_segment`;
 DROP TABLE IF EXISTS `gift_user_itinerary_item`;
 DROP TABLE IF EXISTS `gift_user_itinerary_day`;
 DROP TABLE IF EXISTS `gift_user_itinerary`;
+DROP TABLE IF EXISTS `gift_user_itinerary_conversation_event`;
 DROP TABLE IF EXISTS `gift_itinerary_event`;
 DROP TABLE IF EXISTS `gift_user_itinerary_conversation`;
 DROP TABLE IF EXISTS `gift_itinerary_conversation`;
@@ -18,7 +19,6 @@ CREATE TABLE `gift_user_itinerary_conversation` (
   `province_id` bigint DEFAULT NULL,
   `city_id` bigint DEFAULT NULL,
   `district_id` bigint DEFAULT NULL,
-  `current_user_itinerary_id` bigint DEFAULT NULL,
   `intake_agent_session_id` varchar(64) DEFAULT NULL,
   `plan_agent_session_id` varchar(64) DEFAULT NULL,
   `state_json` text NOT NULL,
@@ -28,10 +28,10 @@ CREATE TABLE `gift_user_itinerary_conversation` (
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
-  KEY `idx_member_update_time` (`tenant_id`, `member_id`, `update_time`)
+  KEY `idx_member_update_time` (`member_id`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程 AG-UI 会话';
 
-CREATE TABLE `gift_itinerary_event` (
+CREATE TABLE `gift_user_itinerary_conversation_event` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '事件ID，消息事件同时作为 AG-UI messageId',
   `tenant_id` bigint NOT NULL,
   `conversation_id` bigint NOT NULL,
@@ -48,10 +48,10 @@ CREATE TABLE `gift_itinerary_event` (
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
-  KEY `idx_conversation_event` (`tenant_id`, `conversation_id`, `id`),
-  KEY `idx_run_id` (`tenant_id`, `run_id`),
-  KEY `idx_user_itinerary_id` (`tenant_id`, `user_itinerary_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='行程 AG-UI 持久事件';
+  KEY `idx_conversation_event` (`conversation_id`, `id`),
+  KEY `idx_run_id` (`run_id`),
+  KEY `idx_user_itinerary_id` (`user_itinerary_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程会话 AG-UI 持久事件';
 
 CREATE TABLE `gift_user_itinerary` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -60,7 +60,6 @@ CREATE TABLE `gift_user_itinerary` (
   `member_id` bigint NOT NULL,
   `request_event_id` bigint DEFAULT NULL,
   `result_event_id` bigint DEFAULT NULL,
-  `version` int NOT NULL,
   `status` tinyint NOT NULL DEFAULT 1,
   `title` varchar(128) NOT NULL,
   `cover_url` varchar(1024) NOT NULL DEFAULT '',
@@ -90,10 +89,10 @@ CREATE TABLE `gift_user_itinerary` (
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_conversation_version` (`tenant_id`, `conversation_id`, `version`),
-  UNIQUE KEY `uk_result_event_id` (`tenant_id`, `result_event_id`),
-  KEY `idx_member_start_date` (`tenant_id`, `member_id`, `start_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户生成行程版本';
+  UNIQUE KEY `uk_conversation_id` (`conversation_id`),
+  UNIQUE KEY `uk_result_event_id` (`result_event_id`),
+  KEY `idx_member_start_date` (`member_id`, `start_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户生成行程';
 
 CREATE TABLE `gift_user_itinerary_day` (
   `id` bigint NOT NULL AUTO_INCREMENT, `tenant_id` bigint NOT NULL,
@@ -113,7 +112,7 @@ CREATE TABLE `gift_user_itinerary_day` (
   `creator` varchar(64) NOT NULL DEFAULT '', `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
-  PRIMARY KEY (`id`), UNIQUE KEY `uk_user_itinerary_day` (`tenant_id`, `user_itinerary_id`, `day`)
+  PRIMARY KEY (`id`), UNIQUE KEY `uk_user_itinerary_day` (`user_itinerary_id`, `day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程每日安排';
 
 CREATE TABLE `gift_user_itinerary_item` (
@@ -149,8 +148,8 @@ CREATE TABLE `gift_user_itinerary_item` (
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_user_itinerary_item` (`tenant_id`, `user_itinerary_id`, `item_id`),
-  KEY `idx_day_sort` (`tenant_id`, `user_itinerary_day_id`, `sort`)
+  UNIQUE KEY `uk_user_itinerary_item` (`user_itinerary_id`, `item_id`),
+  KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程节点（含入站交通）';
 
 -- 通用行程按天拆分；当前通用行程表无数据，可直接重建节点表。
@@ -165,7 +164,7 @@ CREATE TABLE `gift_itinerary_day` (
   `creator` varchar(64) NOT NULL DEFAULT '', `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
-  PRIMARY KEY (`id`), UNIQUE KEY `uk_itinerary_day` (`tenant_id`, `itinerary_id`, `day`)
+  PRIMARY KEY (`id`), UNIQUE KEY `uk_itinerary_day` (`itinerary_id`, `day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通用行程每日安排';
 
 CREATE TABLE `gift_itinerary_item` (
@@ -189,7 +188,7 @@ CREATE TABLE `gift_itinerary_item` (
   `creator` varchar(64) NOT NULL DEFAULT '', `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updater` varchar(64) NOT NULL DEFAULT '', `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
-  PRIMARY KEY (`id`), KEY `idx_itinerary_day_sort` (`tenant_id`, `itinerary_day_id`, `sort`)
+  PRIMARY KEY (`id`), KEY `idx_itinerary_day_sort` (`itinerary_day_id`, `sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通用行程节点（含入站交通）';
 
 -- 高德旅行 POI 类型（value 与 AmapPoiTypeEnum.category 保持一致）

@@ -254,7 +254,6 @@ Gift 旅行规划 C 端接口
 `CUSTOM(name=trip_itinerary_skeleton).value.itinerary` 和消息历史中的 `itinerary` 使用同一结构：
 
     {
-      "version":1,
       "overview":{
         "slot":"TRIP_OVERVIEW",
         "label":"行程总览",
@@ -303,7 +302,7 @@ Gift 旅行规划 C 端接口
 - 每日 `slots` 的类型为 `MORNING`、`LUNCH`、`AFTERNOON`、`DINNER`、`ACCOMMODATION`。
 - 每日可选 `planning` 字段由后端确定性排程写入，包含 `solver`、`status`、`routeDataStatus`、`budgetStatus`、`droppedNodeIds` 及日间起止时间。
 - 当每日候选不足或完整排程不可行时，后端会在不跳过必去景点、午晚餐和住宿约束的前提下减少当日景点数量；`status` 仍为 `FEASIBLE`，并通过可选 `selectionStatus=DEGRADED`、`requestedScenicCount`、`selectedScenicCount` 标识降级结果。
-- 节点可选 `plannedStartTime`、`plannedEndTime`、`travelMinutesFromPrevious`、`routeStatus`、`planningStatus`；它们表示当前行程版本的排程结果。
+- 节点可选 `plannedStartTime`、`plannedEndTime`、`travelMinutesFromPrevious`、`routeStatus`、`planningStatus`；它们表示当前行程的排程结果。
 - 节点字段可能因暂无候选而缺失 `poiId`、`poiName`、经纬度或停留时长；此时 `skeleton` 仍会返回。
 - `status` 初始为 `PENDING`；补全成功后以节点补全接口响应为准。
 

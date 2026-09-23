@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
@@ -19,14 +19,12 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
@@ -39,30 +37,29 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     @Mock
     private UserItineraryQueryService userItineraryQueryService;
     @Mock
-    private TripItineraryVersionService versionService;
+    private TripItinerarySaveService saveService;
     @Mock
     private TripItineraryAssembler itineraryAssembler;
 
     @Test
     @SuppressWarnings("unchecked")
-    void apply_shouldMoveItemAndSaveNewImmutableVersion() {
+    void apply_shouldMoveItemAndOverwriteCurrentItinerary() {
         ItineraryConversationDO trip = trip();
         when(conversationService.getRequired(2L, 3L)).thenReturn(trip);
-        UserItineraryDO current = itinerary(2);
-        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
+        UserItineraryDO current = itinerary();
+        when(userItineraryQueryService.getByConversationId(2L)).thenReturn(current);
         when(userItineraryQueryService.toMap(current)).thenReturn(itineraryMap());
         mockManualRequestEvent();
-        when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), isNull(), eq(8L), anyMap(), anyMap()))
-                .thenReturn(new TripItineraryVersionService.SavedItinerary(11L, 12L, 3, "已更新行程"));
-        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.MOVE_ITEM, 2,
+        when(saveService.saveGeneratedItinerary(eq(trip), eq(3L), isNull(), eq(8L), anyMap(), anyMap()))
+                .thenReturn(new TripItinerarySaveService.SavedItinerary(11L, 12L, "已更新行程"));
+        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.MOVE_ITEM,
                 "item-a", 2, "AFTERNOON", 0, Map.of());
 
         TripPlanEditorService.EditResult result = editorService.apply(2L, 3L, command);
 
         assertEquals(List.of(1, 2), result.affectedDays());
-        assertEquals(3, result.saved().version());
         ArgumentCaptor<Map<String, Object>> itineraryCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(versionService).saveGeneratedItinerary(eq(trip), eq(3L), isNull(), eq(8L), anyMap(),
+        verify(saveService).saveGeneratedItinerary(eq(trip), eq(3L), isNull(), eq(8L), anyMap(),
                 itineraryCaptor.capture());
         Map<String, Object> edited = itineraryCaptor.getValue();
         List<Map<String, Object>> days = (List<Map<String, Object>>) edited.get("daily_itinerary");
@@ -77,32 +74,19 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     }
 
     @Test
-    void apply_shouldRejectStaleBaseVersion() {
-        when(conversationService.getRequired(2L, 3L)).thenReturn(trip());
-        UserItineraryDO current = itinerary(3);
-        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
-        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.LOCK_ITEM, 2,
-                "item-a", null, null, null, Map.of());
-
-        assertThrows(IllegalStateException.class, () -> editorService.apply(2L, 3L, command));
-
-        verifyNoInteractions(versionService);
-    }
-
-    @Test
     @SuppressWarnings("unchecked")
     void apply_shouldReplanOnlyAffectedDayAndPreserveLockedItem() {
         ItineraryConversationDO trip = trip();
         when(conversationService.getRequired(2L, 3L)).thenReturn(trip);
-        UserItineraryDO current = itinerary(2);
-        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
+        UserItineraryDO current = itinerary();
+        when(userItineraryQueryService.getByConversationId(2L)).thenReturn(current);
         when(userItineraryQueryService.toMap(current)).thenReturn(replanItineraryMap());
         mockManualRequestEvent();
         when(itineraryAssembler.replanDays(anyMap(), any(), eq(Set.of(1)), any(Consumer.class)))
                 .thenReturn(List.of(replannedDay()));
-        when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), isNull(), eq(8L), anyMap(), anyMap()))
-                .thenReturn(new TripItineraryVersionService.SavedItinerary(11L, 12L, 3, "已更新行程"));
-        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY, 2,
+        when(saveService.saveGeneratedItinerary(eq(trip), eq(3L), isNull(), eq(8L), anyMap(), anyMap()))
+                .thenReturn(new TripItinerarySaveService.SavedItinerary(11L, 12L, "已更新行程"));
+        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.REPLAN_DAY,
                 null, 1, null, null, Map.of("instruction", "换成亲子乐园"));
 
         TripPlanEditorService.EditResult result = editorService.apply(2L, 3L, command);
@@ -123,33 +107,32 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     void applyWithinExistingLock_shouldReuseAiRequestEvent() {
         ItineraryConversationDO trip = trip();
         when(conversationService.getRequired(2L, 3L)).thenReturn(trip);
-        UserItineraryDO current = itinerary(2);
-        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
+        UserItineraryDO current = itinerary();
+        when(userItineraryQueryService.getByConversationId(2L)).thenReturn(current);
         when(userItineraryQueryService.toMap(current)).thenReturn(itineraryMap());
-        when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), eq("run-1"), eq(7L), anyMap(), anyMap()))
-                .thenReturn(new TripItineraryVersionService.SavedItinerary(11L, 12L, 3, "已更新行程"));
-        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.LOCK_ITEM, 2,
+        when(saveService.saveGeneratedItinerary(eq(trip), eq(3L), eq("run-1"), eq(7L), anyMap(), anyMap()))
+                .thenReturn(new TripItinerarySaveService.SavedItinerary(11L, 12L, "已更新行程"));
+        TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.LOCK_ITEM,
                 "item-a", null, null, null, Map.of());
 
         TripPlanEditorService.EditResult result = editorService.applyWithinExistingLock(
                 2L, 3L, command, "run-1", 7L);
 
         assertEquals("AI", ((Map<?, ?>) result.itinerary().get("last_change")).get("source"));
-        verify(versionService).saveGeneratedItinerary(eq(trip), eq(3L), eq("run-1"), eq(7L), anyMap(), anyMap());
+        verify(saveService).saveGeneratedItinerary(eq(trip), eq(3L), eq("run-1"), eq(7L), anyMap(), anyMap());
     }
 
     private void mockManualRequestEvent() {
         when(conversationService.createEvent(eq(2L), isNull(), isNull(), eq("USER_ACTION"), eq("user"),
-                eq("EDIT"), anyString(), anyString())).thenReturn(new ItineraryEventDO().setId(8L));
+                eq("EDIT"), anyString(), anyString())).thenReturn(new UserItineraryConversationEventDO().setId(8L));
     }
 
     private static ItineraryConversationDO trip() {
-        return new ItineraryConversationDO().setId(2L).setMemberId(3L)
-                .setCurrentUserItineraryId(10L).setStateJson("{}");
+        return new ItineraryConversationDO().setId(2L).setMemberId(3L).setStateJson("{}");
     }
 
-    private static UserItineraryDO itinerary(int version) {
-        return new UserItineraryDO().setId(10L).setConversationId(2L).setVersion(version);
+    private static UserItineraryDO itinerary() {
+        return new UserItineraryDO().setId(10L).setConversationId(2L);
     }
 
     private static Map<String, Object> itineraryMap() {

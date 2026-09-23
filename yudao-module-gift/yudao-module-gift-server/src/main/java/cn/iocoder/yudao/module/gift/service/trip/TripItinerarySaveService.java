@@ -3,8 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,14 +15,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-/** 统一保存不可变行程版本，并更新当前行程指针。 */
+/** 统一保存当前行程，并更新会话标题。 */
 @Service
-public class TripItineraryVersionService {
+public class TripItinerarySaveService {
 
     @Resource
     private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
-    @Resource
-    private UserItineraryMapper userItineraryMapper;
     @Resource
     private ItineraryConversationService conversationService;
 
@@ -38,20 +35,15 @@ public class TripItineraryVersionService {
     public SavedItinerary saveGeneratedItinerary(ItineraryConversationDO conversation, Long memberId,
                                                   String runId, Long requestEventId,
                                                   Map<String, Object> state, Map<String, Object> itinerary) {
-        Integer maxVersion = userItineraryMapper.selectMaxVersionByConversationId(conversation.getId());
-        int version = (maxVersion == null ? 0 : maxVersion) + 1;
         normalizeItineraryItems(itinerary);
-        itinerary.put("version", version);
         String displayText = StrUtil.blankToDefault(text(itinerary.get("summary")), "已为你生成旅行方案。");
-        ItineraryEventDO assistant = conversationService.createEvent(conversation.getId(), runId, requestEventId,
+        UserItineraryConversationEventDO assistant = conversationService.createEvent(conversation.getId(), runId, requestEventId,
                 "ITINERARY", "assistant", "ASSEMBLE", displayText);
         Long itineraryId = structuredItineraryPersistenceService.persist(
-                conversation, version, requestEventId, assistant.getId(), memberId, state, itinerary);
+                conversation, requestEventId, assistant.getId(), memberId, state, itinerary);
         conversationService.linkItinerary(assistant.getId(), itineraryId);
-        conversationService.updateCurrentItinerary(conversation.getId(), itineraryId,
-                buildConversationTitle(state));
-        conversation.setCurrentUserItineraryId(itineraryId);
-        return new SavedItinerary(itineraryId, assistant.getId(), version, displayText);
+        conversationService.updateTitle(conversation.getId(), buildConversationTitle(state));
+        return new SavedItinerary(itineraryId, assistant.getId(), displayText);
     }
 
     private static String buildConversationTitle(Map<String, Object> state) {
@@ -130,7 +122,7 @@ public class TripItineraryVersionService {
         return "null".equalsIgnoreCase(result) ? "" : result;
     }
 
-    public record SavedItinerary(Long itineraryId, Long messageId, int version, String displayText) {
+    public record SavedItinerary(Long itineraryId, Long messageId, String displayText) {
     }
 
 }

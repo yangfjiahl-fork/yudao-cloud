@@ -3,7 +3,7 @@ package cn.iocoder.yudao.module.gift.controller.app.trip;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiMessageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
@@ -170,14 +170,13 @@ public class AppTripChatMessageController {
             @Valid @RequestBody AppTripItineraryChangeReqVO reqVO) {
         Long memberId = getLoginUserId();
         conversationService.getRequired(reqVO.getConversationId(), memberId);
-        TripChangeCommand command = new TripChangeCommand(reqVO.getOperation(), reqVO.getBaseVersion(),
-                reqVO.getItemId(), reqVO.getDay(), reqVO.getTimePeriod(), reqVO.getSort(), reqVO.getValues());
+        TripChangeCommand command = new TripChangeCommand(reqVO.getOperation(), reqVO.getItemId(), reqVO.getDay(),
+                reqVO.getTimePeriod(), reqVO.getSort(), reqVO.getValues());
         TripPlanEditorService.EditResult result = tripPlanEditorService.apply(
                 reqVO.getConversationId(), memberId, command);
         AppTripItineraryChangeRespVO response = new AppTripItineraryChangeRespVO();
         response.setItineraryId(result.saved().itineraryId());
         response.setMessageId(result.saved().messageId());
-        response.setVersion(result.saved().version());
         response.setContent(result.saved().displayText());
         response.setAffectedDays(result.affectedDays());
         response.setItinerary(result.itinerary());
@@ -303,7 +302,7 @@ public class AppTripChatMessageController {
         }
     }
 
-    private static AppTripChatMessageRespVO toMessage(ItineraryEventDO event) {
+    private static AppTripChatMessageRespVO toMessage(UserItineraryConversationEventDO event) {
         AppTripChatMessageRespVO result = new AppTripChatMessageRespVO();
         result.setId(event.getId());
         result.setReplyId(event.getReplyEventId());

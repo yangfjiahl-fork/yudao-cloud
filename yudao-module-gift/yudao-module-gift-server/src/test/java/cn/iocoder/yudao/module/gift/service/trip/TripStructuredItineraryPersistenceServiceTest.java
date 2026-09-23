@@ -24,7 +24,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -125,7 +127,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
 
         TenantContextHolder.setTenantId(20L);
         try {
-            assertEquals(100L, service.persist(trip, 3, 8L, 9L, 3L, state, itinerary));
+            assertEquals(100L, service.persist(trip, 8L, 9L, 3L, state, itinerary));
 
             ArgumentCaptor<UserItineraryDO> headerCaptor = ArgumentCaptor.forClass(UserItineraryDO.class);
             verify(userItineraryMapper).insert(headerCaptor.capture());
@@ -133,7 +135,6 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             assertEquals(2L, header.getConversationId());
             assertEquals(8L, header.getRequestEventId());
             assertEquals(9L, header.getResultEventId());
-            assertEquals(3, header.getVersion());
             assertEquals(LocalDate.of(2026, 10, 2), header.getEndDate());
             assertEquals("https://example.com/dianchi.jpg", header.getCoverUrl());
             assertEquals("MANAGED_MACRO_JAVA", header.getPlannerType());
@@ -161,6 +162,21 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         } finally {
             TenantContextHolder.clear();
         }
+    }
+
+    @Test
+    void persist_shouldOverwriteExistingItineraryForConversation() {
+        ItineraryConversationDO conversation = new ItineraryConversationDO().setId(2L).setMemberId(3L);
+        UserItineraryDO existing = new UserItineraryDO().setId(100L).setConversationId(2L).setResultEventId(7L);
+        when(userItineraryMapper.selectByConversationId(2L)).thenReturn(existing);
+
+        Long itineraryId = service.persist(conversation, 8L, 9L, 3L, Map.of(), Map.of());
+
+        assertEquals(100L, itineraryId);
+        verify(userItineraryItemMapper).deletePhysicallyByUserItineraryId(100L);
+        verify(userItineraryDayMapper).deletePhysicallyByUserItineraryId(100L);
+        verify(userItineraryMapper).update(isNull(), any());
+        verify(userItineraryMapper, never()).insert(any(UserItineraryDO.class));
     }
 
 }

@@ -4,7 +4,7 @@ import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** 在当前不可变快照上应用统一编辑命令，并将结果保存为新版本。 */
+/** 在当前行程上应用统一编辑命令，并覆盖保存结果。 */
 @Service
 public class TripPlanEditorService {
 
@@ -32,7 +32,7 @@ public class TripPlanEditorService {
     @Resource
     private UserItineraryQueryService userItineraryQueryService;
     @Resource
-    private TripItineraryVersionService tripItineraryVersionService;
+    private TripItinerarySaveService tripItinerarySaveService;
     @Resource
     private TripItineraryAssembler tripItineraryAssembler;
 
@@ -51,21 +51,14 @@ public class TripPlanEditorService {
     private EditResult applyInternal(Long conversationId, Long memberId, TripChangeCommand command,
                                      ChangeContext context) {
         ItineraryConversationDO conversation = conversationService.getRequired(conversationId, memberId);
-        if (conversation.getCurrentUserItineraryId() == null) {
-            throw new IllegalArgumentException("当前旅行尚未生成可编辑行程");
-        }
-        UserItineraryDO current = userItineraryQueryService.getById(
-                conversation.getCurrentUserItineraryId(), conversationId);
+        UserItineraryDO current = userItineraryQueryService.getByConversationId(conversationId);
         if (current == null) {
-            throw new IllegalArgumentException("当前行程版本不存在");
-        }
-        if (!Integer.valueOf(command.baseVersion()).equals(current.getVersion())) {
-            throw new IllegalStateException("行程版本已更新，请刷新后重试");
+            throw new IllegalArgumentException("当前旅行尚未生成可编辑行程");
         }
 
         Long requestEventId = context.requestEventId();
         if (context.source() == ChangeSource.MANUAL) {
-            ItineraryEventDO requestEvent = conversationService.createEvent(conversationId, null, null,
+            UserItineraryConversationEventDO requestEvent = conversationService.createEvent(conversationId, null, null,
                     "USER_ACTION", "user", "EDIT", manualChangeDescription(command),
                     JsonUtils.toJsonString(command));
             requestEventId = requestEvent.getId();
@@ -77,10 +70,9 @@ public class TripPlanEditorService {
                 ? replan(itinerary, state, command) : applyLocalCommand(itinerary, command);
         itinerary.put("last_change", Map.of(
                 "operation", command.operation().name(),
-                "baseVersion", command.baseVersion(),
                 "source", context.source().name(),
                 "affectedDays", List.copyOf(affectedDays)));
-        TripItineraryVersionService.SavedItinerary saved = tripItineraryVersionService.saveGeneratedItinerary(
+        TripItinerarySaveService.SavedItinerary saved = tripItinerarySaveService.saveGeneratedItinerary(
                 conversation, memberId, context.runId(), requestEventId, state, itinerary);
         return new EditResult(saved, List.copyOf(affectedDays), itinerary);
     }
@@ -345,7 +337,7 @@ public class TripPlanEditorService {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
-    public record EditResult(TripItineraryVersionService.SavedItinerary saved, List<Integer> affectedDays,
+    public record EditResult(TripItinerarySaveService.SavedItinerary saved, List<Integer> affectedDays,
                              Map<String, Object> itinerary) {
     }
 

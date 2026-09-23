@@ -7,7 +7,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversati
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatConversationUpdateReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatCreateStreamRespVO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.service.trip.ItineraryConversationService;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -61,7 +61,7 @@ public class AppTripChatConversationController {
         String content = StrUtil.isNotBlank(defaultDeparture)
                 ? "已根据你所在位置暂定从" + defaultDeparture + "出发；如需修改可直接告诉我。" + TRAVEL_GUIDE_MESSAGE
                 : TRAVEL_GUIDE_MESSAGE;
-        ItineraryEventDO message = conversationService.createEvent(conversationId, null, null,
+        UserItineraryConversationEventDO message = conversationService.createEvent(conversationId, null, null,
                 "ASSISTANT_MESSAGE", "assistant", "WELCOME", content);
         log.info("[createConversation][conversationId({}) memberId({}) guideMessageId({}) 创建成功]",
                 conversationId, userId, message.getId());

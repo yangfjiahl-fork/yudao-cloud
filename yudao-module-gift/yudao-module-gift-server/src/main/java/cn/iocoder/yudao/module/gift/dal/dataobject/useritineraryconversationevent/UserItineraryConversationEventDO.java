@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent;
+package cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent;
 
 import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -7,11 +7,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-@TableName("gift_itinerary_event")
-@KeySequence("gift_itinerary_event_seq")
+@TableName("gift_user_itinerary_conversation_event")
+@KeySequence("gift_user_itinerary_conversation_event_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class ItineraryEventDO extends TenantBaseDO {
+public class UserItineraryConversationEventDO extends TenantBaseDO {
 
     @TableId
     private Long id;

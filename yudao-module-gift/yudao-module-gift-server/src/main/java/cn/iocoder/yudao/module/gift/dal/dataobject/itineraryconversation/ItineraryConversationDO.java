@@ -21,7 +21,6 @@ public class ItineraryConversationDO extends TenantBaseDO {
     private Long provinceId;
     private Long cityId;
     private Long districtId;
-    private Long currentUserItineraryId;
     private String intakeAgentSessionId;
     private String planAgentSessionId;
     private String stateJson;

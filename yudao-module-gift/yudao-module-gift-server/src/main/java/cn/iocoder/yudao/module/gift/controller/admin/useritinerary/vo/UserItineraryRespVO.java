@@ -28,9 +28,6 @@ public class UserItineraryRespVO {
     @ExcelProperty("会员ID")
     private Long memberId;
 
-    @ExcelProperty("版本")
-    private Integer version;
-
     @ExcelProperty("状态")
     private Integer status;
 

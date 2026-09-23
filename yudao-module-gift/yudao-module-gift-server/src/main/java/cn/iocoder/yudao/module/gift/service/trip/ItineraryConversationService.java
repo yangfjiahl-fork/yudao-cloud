@@ -1,9 +1,9 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.itineraryconversation.ItineraryConversationMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.itineraryevent.ItineraryEventMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritineraryconversationevent.UserItineraryConversationEventMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +18,7 @@ public class ItineraryConversationService {
     @Resource
     private ItineraryConversationMapper conversationMapper;
     @Resource
-    private ItineraryEventMapper eventMapper;
+    private UserItineraryConversationEventMapper eventMapper;
 
     public ItineraryConversationDO getRequired(Long id, Long memberId) {
         ItineraryConversationDO conversation = conversationMapper.selectByIdAndMemberId(id, memberId);
@@ -57,21 +57,22 @@ public class ItineraryConversationService {
         conversationMapper.deleteById(id);
     }
 
-    public List<ItineraryEventDO> getEvents(Long conversationId, Long memberId) {
+    public List<UserItineraryConversationEventDO> getEvents(Long conversationId, Long memberId) {
         getRequired(conversationId, memberId);
         return eventMapper.selectListByConversationId(conversationId);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public ItineraryEventDO createEvent(Long conversationId, String runId, Long replyEventId, String eventType,
-                                        String role, String stage, String content) {
+    public UserItineraryConversationEventDO createEvent(Long conversationId, String runId, Long replyEventId,
+                                                        String eventType, String role, String stage, String content) {
         return createEvent(conversationId, runId, replyEventId, eventType, role, stage, content, null);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public ItineraryEventDO createEvent(Long conversationId, String runId, Long replyEventId, String eventType,
-                                        String role, String stage, String content, String payloadJson) {
-        ItineraryEventDO event = new ItineraryEventDO();
+    public UserItineraryConversationEventDO createEvent(Long conversationId, String runId, Long replyEventId,
+                                                        String eventType, String role, String stage, String content,
+                                                        String payloadJson) {
+        UserItineraryConversationEventDO event = new UserItineraryConversationEventDO();
         event.setConversationId(conversationId);
         event.setRunId(runId);
         event.setReplyEventId(replyEventId);
@@ -86,12 +87,12 @@ public class ItineraryConversationService {
     }
 
     public void linkItinerary(Long eventId, Long userItineraryId) {
-        eventMapper.updateById(new ItineraryEventDO().setId(eventId).setUserItineraryId(userItineraryId));
+        eventMapper.updateById(new UserItineraryConversationEventDO().setId(eventId)
+                .setUserItineraryId(userItineraryId));
     }
 
-    public void updateCurrentItinerary(Long conversationId, Long userItineraryId, String title) {
-        conversationMapper.updateById(new ItineraryConversationDO().setId(conversationId)
-                .setCurrentUserItineraryId(userItineraryId).setTitle(title));
+    public void updateTitle(Long conversationId, String title) {
+        conversationMapper.updateById(new ItineraryConversationDO().setId(conversationId).setTitle(title));
     }
 
     public void updateState(Long conversationId, String stateJson, String missingRequiredJson) {

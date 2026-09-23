@@ -21,7 +21,7 @@
 `change_command.operation` 只能是 `ADD_ITEM`、`REMOVE_ITEM`、`REPLACE_ITEM`、
 `MOVE_ITEM`、`UPDATE_ITEM`、`LOCK_ITEM`、`UNLOCK_ITEM`、`REPLAN_DAY` 或
 `REPLAN_TRIP`。项目级操作应使用现有 `itemId`；重新规划某天使用 `day`；修改说明放入
-`values.instruction`。不要输出 `baseVersion`，服务端使用当前版本。
+`values.instruction`。
 
 跑题时输出 `topic=OFF_TOPIC`、`action=CHAT`、空 `state`；无法判断时输出
 `topic=UNCERTAIN`、`action=CHAT`、空 `state`。最终只输出一个 JSON 对象，不得输出 Markdown、解释或思考过程。

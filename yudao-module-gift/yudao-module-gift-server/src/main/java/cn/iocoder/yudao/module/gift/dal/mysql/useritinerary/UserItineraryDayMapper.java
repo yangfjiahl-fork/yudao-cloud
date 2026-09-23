@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import org.apache.ibatis.annotations.Mapper;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
+import org.apache.ibatis.annotations.Delete;
 
 import java.util.List;
 
@@ -20,4 +21,7 @@ public interface UserItineraryDayMapper extends BaseMapperX<UserItineraryDayDO> 
                 .eq(UserItineraryDayDO::getUserItineraryId, itineraryId)
                 .eq(UserItineraryDayDO::getDay, day));
     }
+
+    @Delete("DELETE FROM gift_user_itinerary_day WHERE user_itinerary_id = #{userItineraryId}")
+    int deletePhysicallyByUserItineraryId(Long userItineraryId);
 }

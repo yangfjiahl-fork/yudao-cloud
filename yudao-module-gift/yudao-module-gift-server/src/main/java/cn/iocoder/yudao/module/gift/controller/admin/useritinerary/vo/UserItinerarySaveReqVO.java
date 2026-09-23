@@ -24,9 +24,6 @@ public class UserItinerarySaveReqVO {
     @NotNull(message = "会员ID不能为空")
     private Long memberId;
 
-    @NotNull(message = "版本不能为空")
-    private Integer version;
-
     @NotNull(message = "状态不能为空")
     private Integer status;
 

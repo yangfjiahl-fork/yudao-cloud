@@ -20,7 +20,6 @@ public class UserItineraryPageReqVO extends PageParam {
     @Schema(description = "会员ID", example = "5188")
     private Long memberId;
 
-    private Integer version;
     private Integer status;
 
     @Schema(description = "标题")

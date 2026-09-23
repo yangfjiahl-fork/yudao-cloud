@@ -30,5 +30,4 @@
 
 - `operation` 使用 `TripChangeCommand.Operation` 枚举值。
 - 单轮只接受一个命令；组合修改应拆成多轮。
-- `baseVersion` 由服务端从当前 itinerary 读取，模型输出的版本不会被信任。
 - Agent 只识别意图和目标，不直接写入 POI 编号、坐标或路线事实。

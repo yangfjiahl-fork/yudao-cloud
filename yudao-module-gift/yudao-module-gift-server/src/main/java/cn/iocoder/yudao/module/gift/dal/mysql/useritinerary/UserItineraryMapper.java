@@ -17,12 +17,8 @@ import cn.iocoder.yudao.module.gift.controller.admin.useritinerary.vo.*;
 @Mapper
 public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
 
-    default Integer selectMaxVersionByConversationId(Long conversationId) {
-        UserItineraryDO itinerary = selectOne(new LambdaQueryWrapperX<UserItineraryDO>()
-                .eq(UserItineraryDO::getConversationId, conversationId)
-                .orderByDesc(UserItineraryDO::getVersion)
-                .last("LIMIT 1"));
-        return itinerary == null ? null : itinerary.getVersion();
+    default UserItineraryDO selectByConversationId(Long conversationId) {
+        return selectOne(UserItineraryDO::getConversationId, conversationId);
     }
 
     default List<UserItineraryDO> selectListByResultEventIds(Collection<Long> eventIds) {
@@ -43,7 +39,6 @@ public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
         return selectPage(reqVO, new LambdaQueryWrapperX<UserItineraryDO>()
                 .eqIfPresent(UserItineraryDO::getConversationId, reqVO.getConversationId())
                 .eqIfPresent(UserItineraryDO::getMemberId, reqVO.getMemberId())
-                .eqIfPresent(UserItineraryDO::getVersion, reqVO.getVersion())
                 .eqIfPresent(UserItineraryDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(UserItineraryDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(UserItineraryDO::getCoverUrl, reqVO.getCoverUrl())
