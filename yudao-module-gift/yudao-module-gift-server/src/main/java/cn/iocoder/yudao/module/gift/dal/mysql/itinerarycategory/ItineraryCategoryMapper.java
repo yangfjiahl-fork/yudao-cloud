@@ -26,4 +26,10 @@ public interface ItineraryCategoryMapper extends BaseMapperX<ItineraryCategoryDO
                 .orderByDesc(ItineraryCategoryDO::getId));
     }
 
+    default List<ItineraryCategoryDO> selectListForApp() {
+        return selectList(new LambdaQueryWrapperX<ItineraryCategoryDO>()
+                .orderByDesc(ItineraryCategoryDO::getSort)
+                .orderByDesc(ItineraryCategoryDO::getId));
+    }
+
 }

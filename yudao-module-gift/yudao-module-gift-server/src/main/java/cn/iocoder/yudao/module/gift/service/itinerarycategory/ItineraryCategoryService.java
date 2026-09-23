@@ -59,4 +59,11 @@ public interface ItineraryCategoryService {
      */
     PageResult<ItineraryCategoryDO> getItineraryCategoryPage(ItineraryCategoryPageReqVO pageReqVO);
 
+    /**
+     * 获得 C 端行程类别列表
+     *
+     * @return 行程类别列表
+     */
+    List<ItineraryCategoryDO> getItineraryCategoryList();
+
 }

@@ -82,4 +82,9 @@ public class ItineraryCategoryServiceImpl implements ItineraryCategoryService {
         return itineraryCategoryMapper.selectPage(pageReqVO);
     }
 
+    @Override
+    public List<ItineraryCategoryDO> getItineraryCategoryList() {
+        return itineraryCategoryMapper.selectListForApp();
+    }
+
 }

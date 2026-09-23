@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
@@ -79,6 +80,11 @@ public class ItineraryServiceImpl implements ItineraryService {
 
     @Override
     public PageResult<ItineraryDO> getItineraryPage(ItineraryPageReqVO pageReqVO) {
+        return itineraryMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public PageResult<ItineraryDO> getItineraryPage(AppItineraryPageReqVO pageReqVO) {
         return itineraryMapper.selectPage(pageReqVO);
     }
 
