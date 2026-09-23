@@ -3,16 +3,13 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryTransportSegmentDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryTransportSegmentMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -39,32 +36,30 @@ public class TripStructuredItineraryPersistenceService {
     private UserItineraryDayMapper userItineraryDayMapper;
     @Resource
     private UserItineraryItemMapper userItineraryItemMapper;
-    @Resource
-    private UserItineraryTransportSegmentMapper transportSegmentMapper;
 
-    public Long persist(TripPlanDO trip, TripItineraryDO tripItinerary, Long memberId,
+    public Long persist(TripPlanDO trip, Integer version, Long requestEventId, Long resultEventId, Long memberId,
                         Map<String, Object> state, Map<String, Object> itinerary) {
-        UserItineraryDO existing = userItineraryMapper.selectByTripItineraryId(tripItinerary.getId());
+        UserItineraryDO existing = userItineraryMapper.selectByResultEventId(resultEventId);
         if (existing != null) {
             return existing.getId();
         }
-        UserItineraryDO userItinerary = buildUserItinerary(trip, tripItinerary, memberId, state, itinerary);
+        UserItineraryDO userItinerary = buildUserItinerary(trip, version, requestEventId, resultEventId, memberId,
+                state, itinerary);
         userItineraryMapper.insert(userItinerary);
-        persistTransportBoundary(userItinerary.getId(), itinerary);
         persistDays(userItinerary.getId(), itinerary);
         return userItinerary.getId();
     }
 
-    private static UserItineraryDO buildUserItinerary(TripPlanDO trip, TripItineraryDO tripItinerary, Long memberId,
-                                                        Map<String, Object> state, Map<String, Object> itinerary) {
+    private static UserItineraryDO buildUserItinerary(TripPlanDO trip, Integer version, Long requestEventId,
+                                                        Long resultEventId, Long memberId, Map<String, Object> state,
+                                                        Map<String, Object> itinerary) {
         UserItineraryDO result = new UserItineraryDO();
         result.setMemberId(memberId);
-        result.setTripId(trip.getId());
-        result.setTripItineraryId(tripItinerary.getId());
         result.setConversationId(trip.getConversationId());
-        result.setMessageId(tripItinerary.getMessageId());
-        result.setVersion(tripItinerary.getVersion());
-        result.setStatus(tripItinerary.getStatus());
+        result.setRequestEventId(requestEventId);
+        result.setResultEventId(resultEventId);
+        result.setVersion(version);
+        result.setStatus(1);
         result.setTitle(StrUtil.blankToDefault(text(itinerary.get("summary")), "旅行方案"));
         result.setCoverUrl(findCoverUrl(itinerary));
         result.setCoverWidth(0);
@@ -74,8 +69,6 @@ public class TripStructuredItineraryPersistenceService {
         result.setStartDate(startDate);
         result.setEndDate(endDate(state, startDate, dayCnt));
         result.setDayCnt(dayCnt == null ? dayCount(itinerary) : dayCnt);
-        result.setCityId(integer(state.get("cityId")));
-        result.setNextCityId(integer(state.get("nextCityId")));
         result.setDeparture(nullableText(state.get("departure")));
         result.setDestination(nullableText(state.get("destination")));
         result.setTravelerCount(integer(state.get("travelerCount")));
@@ -86,7 +79,6 @@ public class TripStructuredItineraryPersistenceService {
         result.setPace(nullableText(state.get("pace")));
         result.setMustVisitJson(json(state.get("mustVisit")));
         result.setConstraintsJson(json(state.get("constraints")));
-        result.setPreference(preference(state));
         result.setDailyStartTime(time(state.get("dailyStartTime")));
         result.setDailyEndTime(time(state.get("dailyEndTime")));
         Map<String, Object> overview = map(itinerary.get("overview"));
@@ -96,8 +88,6 @@ public class TripStructuredItineraryPersistenceService {
         Map<String, Object> planner = map(itinerary.get("planner"));
         result.setPlannerType(nullableText(planner.get("type")));
         result.setPlannerValidation(nullableText(planner.get("validation")));
-        result.setMacroSkeletonJson(json(itinerary.get("macro_skeleton")));
-        result.setCitationIdsJson(json(itinerary.get("citation_ids")));
         return result;
     }
 
@@ -111,7 +101,6 @@ public class TripStructuredItineraryPersistenceService {
             UserItineraryDayDO dayDO = buildDay(userItineraryId, day, index);
             userItineraryDayMapper.insert(dayDO);
             persistItems(userItineraryId, dayDO, day);
-            persistSegments(userItineraryId, dayDO, day);
         }
     }
 
@@ -158,31 +147,29 @@ public class TripStructuredItineraryPersistenceService {
                 items.add(buildItem(userItineraryId, dayDO.getId(), dayDO.getDay(), slot, index));
             }
         }
+        applyInboundTravel(items, day);
         if (!items.isEmpty()) {
             userItineraryItemMapper.insertBatch(items);
         }
     }
 
-    private void persistTransportBoundary(Long userItineraryId, Map<String, Object> itinerary) {
-        Map<String, Object> transport = map(itinerary.get("transport"));
-        List<UserItineraryItemDO> items = new ArrayList<>();
-        addTransportBoundary(items, userItineraryId, "ARRIVAL", transport.get("arrival"), 0);
-        addTransportBoundary(items, userItineraryId, "DEPARTURE", transport.get("departure"), 1);
-        if (!items.isEmpty()) {
-            userItineraryItemMapper.insertBatch(items);
+    private static void applyInboundTravel(List<UserItineraryItemDO> items, Map<String, Object> day) {
+        Map<String, UserItineraryItemDO> itemsById = new LinkedHashMap<>();
+        items.forEach(item -> itemsById.put(item.getItemId(), item));
+        for (Object value : list(day.get("transportSegments"))) {
+            Map<String, Object> segment = map(value);
+            UserItineraryItemDO target = itemsById.get(nullableText(segment.get("toItemId")));
+            if (target == null) {
+                continue;
+            }
+            target.setPreviousItemId(nullableText(segment.get("fromItemId")));
+            target.setTravelModeFromPrevious(nullableText(segment.get("mode")));
+            target.setTravelDistanceMetersFromPrevious(longValue(segment.get("distanceMeters")));
+            target.setTravelDurationMinutesFromPrevious(integer(segment.get("durationMinutes")));
+            target.setTravelProviderFromPrevious(nullableText(segment.get("provider")));
+            target.setTravelStatusFromPrevious(nullableText(segment.get("status")));
+            target.setTravelRoutePointsJson(json(segment.get("routePoints")));
         }
-    }
-
-    private static void addTransportBoundary(List<UserItineraryItemDO> items, Long userItineraryId,
-                                             String slotName, Object value, int sort) {
-        Map<String, Object> slot = map(value);
-        if (slot.isEmpty()) {
-            return;
-        }
-        slot.put("itemId", "transport-" + slotName.toLowerCase());
-        slot.put("type", "TRANSPORT");
-        slot.put("slot", slotName);
-        items.add(buildItem(userItineraryId, null, 0, slot, sort));
     }
 
     private static UserItineraryItemDO buildItem(Long userItineraryId, Long userItineraryDayId, Integer day,
@@ -201,9 +188,6 @@ public class TripStructuredItineraryPersistenceService {
         result.setStartTime(time(first(slot, "startTime", "plannedStartTime")));
         result.setEndTime(time(first(slot, "endTime", "plannedEndTime")));
         result.setDurationMinutes(integer(slot.get("durationMinutes")));
-        result.setSuggestedStayMinutes(integer(slot.get("suggestedStayMinutes")));
-        result.setBufferMinutesAfter(integer(slot.get("bufferMinutesAfter")));
-        result.setTravelMinutesFromPrevious(integer(slot.get("travelMinutesFromPrevious")));
         result.setPoiId(nullableText(first(slot, snapshot, "poiId")));
         result.setPoiName(nullableText(first(slot, snapshot, "poiName")));
         result.setProvinceId(integer(slot.get("provinceId")));
@@ -228,10 +212,8 @@ public class TripStructuredItineraryPersistenceService {
         result.setStatus(StrUtil.blankToDefault(text(slot.get("status")), "PENDING"));
         result.setResolveStatus("RESOLVED".equalsIgnoreCase(result.getStatus())
                 ? RESOLVE_STATUS_COMPLETED : RESOLVE_STATUS_PENDING);
-        result.setRouteStatus(nullableText(slot.get("routeStatus")));
         result.setPlanningStatus(nullableText(slot.get("planningStatus")));
         result.setPoiVerificationStatus(nullableText(slot.get("poiVerificationStatus")));
-        result.setUtilityScore(integer(slot.get("utilityScore")));
         result.setMustVisit(bool(slot.get("mustVisit"), false));
         result.setLocked(bool(slot.get("locked"), false));
         result.setSource(nullableText(slot.get("source")));
@@ -240,44 +222,6 @@ public class TripStructuredItineraryPersistenceService {
         result.setCandidatesJson(json(slot.get("candidates")));
         result.setCitationIdsJson(json(slot.get("citationIds")));
         return result;
-    }
-
-    private void persistSegments(Long userItineraryId, UserItineraryDayDO dayDO, Map<String, Object> day) {
-        List<?> segments = list(day.get("transportSegments"));
-        List<UserItineraryTransportSegmentDO> entities = new ArrayList<>();
-        for (int index = 0; index < segments.size(); index++) {
-            Map<String, Object> segment = map(segments.get(index));
-            if (segment.isEmpty()) {
-                continue;
-            }
-            UserItineraryTransportSegmentDO entity = new UserItineraryTransportSegmentDO();
-            entity.setTenantId(TenantContextHolder.getRequiredTenantId());
-            entity.setUserItineraryId(userItineraryId);
-            entity.setUserItineraryDayId(dayDO.getId());
-            entity.setDay(dayDO.getDay());
-            entity.setSort(index);
-            entity.setFromItemId(nullableText(segment.get("fromItemId")));
-            entity.setFromPoiId(nullableText(segment.get("fromPoiId")));
-            entity.setFromPoiName(nullableText(segment.get("fromPoiName")));
-            entity.setFromLongitude(decimal(segment.get("fromLongitude")));
-            entity.setFromLatitude(decimal(segment.get("fromLatitude")));
-            entity.setToItemId(nullableText(segment.get("toItemId")));
-            entity.setToPoiId(nullableText(segment.get("toPoiId")));
-            entity.setToPoiName(nullableText(segment.get("toPoiName")));
-            entity.setToLongitude(decimal(segment.get("toLongitude")));
-            entity.setToLatitude(decimal(segment.get("toLatitude")));
-            entity.setCoordinateSystem(COORDINATE_SYSTEM_GCJ02);
-            entity.setMode(nullableText(segment.get("mode")));
-            entity.setDistanceMeters(longValue(segment.get("distanceMeters")));
-            entity.setDurationMinutes(integer(segment.get("durationMinutes")));
-            entity.setProvider(nullableText(segment.get("provider")));
-            entity.setStatus(nullableText(segment.get("status")));
-            entity.setRoutePointsJson(json(segment.get("routePoints")));
-            entities.add(entity);
-        }
-        if (!entities.isEmpty()) {
-            transportSegmentMapper.insertBatch(entities);
-        }
     }
 
     private static String findCoverUrl(Map<String, Object> itinerary) {
@@ -291,21 +235,6 @@ public class TripStructuredItineraryPersistenceService {
             }
         }
         return "";
-    }
-
-    private static String preference(Map<String, Object> state) {
-        Map<String, Object> preference = new LinkedHashMap<>();
-        putIfPresent(preference, "interests", state.get("interests"));
-        putIfPresent(preference, "pace", state.get("pace"));
-        putIfPresent(preference, "mustVisit", state.get("mustVisit"));
-        putIfPresent(preference, "constraints", state.get("constraints"));
-        return preference.isEmpty() ? null : JsonUtils.toJsonString(preference);
-    }
-
-    private static void putIfPresent(Map<String, Object> target, String key, Object value) {
-        if (value != null && (!(value instanceof String text) || StrUtil.isNotBlank(text))) {
-            target.put(key, value);
-        }
     }
 
     private static LocalDate endDate(Map<String, Object> state, LocalDate startDate, Integer days) {

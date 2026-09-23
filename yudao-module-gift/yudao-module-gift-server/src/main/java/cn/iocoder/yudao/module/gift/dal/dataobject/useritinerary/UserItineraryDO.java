@@ -32,16 +32,9 @@ public class UserItineraryDO extends BaseDO {
      * 会员ID
      */
     private Long memberId;
-    /**
-     * 旅行规划ID，对应 gift_trip_plan.id
-     */
-    private Long tripId;
-    /**
-     * 行程版本ID，对应 gift_trip_itinerary.id
-     */
-    private Long tripItineraryId;
     private Long conversationId;
-    private Long messageId;
+    private Long requestEventId;
+    private Long resultEventId;
     private Integer version;
     private Integer status;
     /**
@@ -72,18 +65,6 @@ public class UserItineraryDO extends BaseDO {
      * 天数
      */
     private Integer dayCnt;
-    /**
-     * 城市ID
-     */
-    private Integer cityId;
-    /**
-     * 城市ID
-     */
-    private Integer nextCityId;
-    /**
-     * 偏好
-     */
-    private String preference;
     private String departure;
     private String destination;
     private Integer travelerCount;
@@ -101,8 +82,6 @@ public class UserItineraryDO extends BaseDO {
     private String overviewDetail;
     private String plannerType;
     private String plannerValidation;
-    private String macroSkeletonJson;
-    private String citationIdsJson;
 
 
 }

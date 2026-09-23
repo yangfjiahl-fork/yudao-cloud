@@ -6,6 +6,7 @@ import java.util.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import cn.idev.excel.annotation.*;
 
 @Schema(description = "管理后台 - 用户行程 Response VO")
@@ -17,9 +18,21 @@ public class UserItineraryRespVO {
     @ExcelProperty("主键")
     private Long id;
 
+    @ExcelProperty("会话ID")
+    private Long conversationId;
+
+    private Long requestEventId;
+    private Long resultEventId;
+
     @Schema(description = "会员ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "5188")
     @ExcelProperty("会员ID")
     private Long memberId;
+
+    @ExcelProperty("版本")
+    private Integer version;
+
+    @ExcelProperty("状态")
+    private Integer status;
 
     @Schema(description = "标题", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("标题")
@@ -49,17 +62,24 @@ public class UserItineraryRespVO {
     @ExcelProperty("天数")
     private Integer dayCnt;
 
-    @Schema(description = "城市ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "22877")
-    @ExcelProperty("城市ID")
-    private Integer cityId;
-
-    @Schema(description = "城市ID", example = "15181")
-    @ExcelProperty("城市ID")
-    private Integer nextCityId;
-
-    @Schema(description = "偏好")
-    @ExcelProperty("偏好")
-    private String preference;
+    private String departure;
+    @ExcelProperty("目的地")
+    private String destination;
+    private Integer travelerCount;
+    private Integer budget;
+    private Integer hotelBudget;
+    private String travelerProfileJson;
+    private String interestsJson;
+    private String pace;
+    private String mustVisitJson;
+    private String constraintsJson;
+    private LocalTime dailyStartTime;
+    private LocalTime dailyEndTime;
+    private String overviewStatus;
+    private String overviewSkeleton;
+    private String overviewDetail;
+    private String plannerType;
+    private String plannerValidation;
 
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")

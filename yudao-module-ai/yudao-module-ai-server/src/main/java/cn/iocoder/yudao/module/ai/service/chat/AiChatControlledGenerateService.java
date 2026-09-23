@@ -206,12 +206,15 @@ public class AiChatControlledGenerateService {
 
     private GenerateContext buildContext(AiChatGenerateReqDTO reqDTO) {
         Integer userType = ObjUtil.defaultIfNull(reqDTO.getUserType(), UserTypeEnum.ADMIN.getValue());
-        AiChatConversationDO conversation = conversationService.getChatConversation(reqDTO.getConversationId(), userType);
-        if (conversation == null || ObjUtil.notEqual(conversation.getUserId(), reqDTO.getUserId())) {
-            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
-        }
         AiChatRoleDO role = reqDTO.getRoleId() != null
                 ? chatRoleService.validateChatRole(reqDTO.getRoleId(), userType) : null;
+        AiChatConversationDO conversation = null;
+        if (role == null) {
+            conversation = conversationService.getChatConversation(reqDTO.getConversationId(), userType);
+            if (conversation == null || ObjUtil.notEqual(conversation.getUserId(), reqDTO.getUserId())) {
+                throw exception(CHAT_CONVERSATION_NOT_EXISTS);
+            }
+        }
         AiModelDO model = modelService.validateModel(role != null ? role.getModelId() : conversation.getModelId());
         List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
         String systemMessage = StrUtil.blankToDefault(role != null ? role.getSystemMessage() : conversation.getSystemMessage(),

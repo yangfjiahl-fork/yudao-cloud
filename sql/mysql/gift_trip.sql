@@ -7,8 +7,7 @@ CREATE TABLE `gift_trip_plan` (
   `conversation_id` bigint NOT NULL,
   `member_id` bigint NOT NULL,
   `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号',
-  `intake_agent_session_id` varchar(64) DEFAULT NULL COMMENT '需求收集 Managed Agent Session 编号',
-  `plan_agent_session_id` varchar(64) DEFAULT NULL COMMENT '行程生成 Managed Agent Session 编号',
+  `managed_agent_session_id` varchar(64) DEFAULT NULL COMMENT '百炼 Managed Agents Session 编号',
   `state_json` text NOT NULL,
   `missing_required_json` text NOT NULL,
   `status` tinyint NOT NULL DEFAULT 1,
@@ -150,13 +149,10 @@ ALTER TABLE `gift_trip_itinerary`
 ALTER TABLE `gift_trip_plan`
   ADD COLUMN `current_itinerary_id` bigint DEFAULT NULL COMMENT '当前生效的旅行行程编号' AFTER `member_id`;
 
--- 托管旅行 Agent 会话：需求收集与行程生成使用独立 Session，不兼容旧单 Session 字段
+-- 托管旅行 Agent 会话：同一旅行计划持续复用 Session，避免每次生成都重新创建沙箱
 ALTER TABLE `gift_trip_plan`
-  DROP COLUMN IF EXISTS `managed_agent_session_id`,
-  ADD COLUMN IF NOT EXISTS `intake_agent_session_id` varchar(64) DEFAULT NULL
-    COMMENT '需求收集 Managed Agent Session 编号' AFTER `current_itinerary_id`,
-  ADD COLUMN IF NOT EXISTS `plan_agent_session_id` varchar(64) DEFAULT NULL
-    COMMENT '行程生成 Managed Agent Session 编号' AFTER `intake_agent_session_id`;
+  ADD COLUMN IF NOT EXISTS `managed_agent_session_id` varchar(64) DEFAULT NULL
+    COMMENT '百炼 Managed Agents Session 编号' AFTER `current_itinerary_id`;
 
 -- 已部署旅行行程的独立节点补充表（历史骨架会在首次节点请求时按需初始化）
 CREATE TABLE IF NOT EXISTS `gift_trip_itinerary_slot` (

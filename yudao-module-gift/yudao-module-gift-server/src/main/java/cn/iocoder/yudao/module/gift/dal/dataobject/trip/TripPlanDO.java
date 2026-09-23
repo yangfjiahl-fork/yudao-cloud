@@ -22,10 +22,10 @@ public class TripPlanDO extends TenantBaseDO {
      */
     private Long currentItineraryId;
     /**
-     * 信息收集与行程生成分别使用独立的百炼 Managed Agent Session。
+     * 最近一次生成或重规划使用的百炼 Managed Agents Session，仅用于审计定位。
+     * 每次 GENERATE_PLAN / EDIT_PLAN 都创建新 Session，避免继承上一次工具输出和临时上下文。
      */
-    private String intakeAgentSessionId;
-    private String planAgentSessionId;
+    private String managedAgentSessionId;
     private String stateJson;
     private String missingRequiredJson;
     private Integer status;

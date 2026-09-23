@@ -2,9 +2,8 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
@@ -30,7 +29,7 @@ public class TripPlanEditorService {
     @Resource
     private TripPlanMapper tripPlanMapper;
     @Resource
-    private TripItineraryMapper tripItineraryMapper;
+    private UserItineraryQueryService userItineraryQueryService;
     @Resource
     private TripItineraryVersionService tripItineraryVersionService;
     @Resource
@@ -52,7 +51,7 @@ public class TripPlanEditorService {
         if (trip == null || trip.getCurrentItineraryId() == null) {
             throw new IllegalArgumentException("当前旅行尚未生成可编辑行程");
         }
-        TripItineraryDO current = tripItineraryMapper.selectById(trip.getCurrentItineraryId());
+        UserItineraryDO current = userItineraryQueryService.getById(trip.getCurrentItineraryId(), conversationId);
         if (current == null) {
             throw new IllegalArgumentException("当前行程版本不存在");
         }
@@ -60,7 +59,7 @@ public class TripPlanEditorService {
             throw new IllegalStateException("行程版本已更新，请刷新后重试");
         }
 
-        Map<String, Object> itinerary = TripAgentFormatUtils.parseMap(current.getContentJson());
+        Map<String, Object> itinerary = userItineraryQueryService.toMap(current);
         Map<String, Object> state = TripAgentFormatUtils.parseMap(trip.getStateJson());
         LinkedHashSet<Integer> affectedDays = isReplan(command)
                 ? replan(itinerary, state, command) : applyLocalCommand(itinerary, command);

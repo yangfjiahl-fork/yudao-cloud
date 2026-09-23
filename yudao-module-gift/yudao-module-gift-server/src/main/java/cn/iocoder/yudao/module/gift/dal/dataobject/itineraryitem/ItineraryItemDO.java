@@ -31,6 +31,12 @@ public class ItineraryItemDO extends BaseDO {
      * 线路ID
      */
     private Long itineraryId;
+    /** 行程日ID */
+    private Long itineraryDayId;
+    /** 节点类型 */
+    private String type;
+    /** 时段 */
+    private String slot;
     /**
      * 省ID
      */
@@ -83,6 +89,14 @@ public class ItineraryItemDO extends BaseDO {
      * 排序
      */
     private Integer sort;
+    /** 开始时间 */
+    private java.time.LocalTime startTime;
+    /** 停留分钟数 */
+    private Integer durationMinutes;
+    /** POI ID */
+    private String poiId;
+    private java.math.BigDecimal longitude;
+    private java.math.BigDecimal latitude;
     /**
      * 位置
      */
@@ -99,6 +113,11 @@ public class ItineraryItemDO extends BaseDO {
      * 电话
      */
     private String phoneNo;
+    /** 前一节点及从前一节点到当前节点的交通 */
+    private Long previousItemId;
+    private String travelModeFromPrevious;
+    private Long travelDistanceMetersFromPrevious;
+    private Integer travelDurationMinutesFromPrevious;
 
 
 }

@@ -20,6 +20,9 @@ public interface ItineraryItemMapper extends BaseMapperX<ItineraryItemDO> {
     default PageResult<ItineraryItemDO> selectPage(ItineraryItemPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<ItineraryItemDO>()
                 .eqIfPresent(ItineraryItemDO::getItineraryId, reqVO.getItineraryId())
+                .eqIfPresent(ItineraryItemDO::getItineraryDayId, reqVO.getItineraryDayId())
+                .eqIfPresent(ItineraryItemDO::getType, reqVO.getType())
+                .eqIfPresent(ItineraryItemDO::getSlot, reqVO.getSlot())
                 .eqIfPresent(ItineraryItemDO::getProvinceId, reqVO.getProvinceId())
                 .eqIfPresent(ItineraryItemDO::getCityId, reqVO.getCityId())
                 .eqIfPresent(ItineraryItemDO::getDistrictId, reqVO.getDistrictId())

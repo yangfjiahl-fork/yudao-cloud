@@ -4,10 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.ip.core.Area;
 import cn.iocoder.yudao.framework.ip.core.enums.AreaTypeEnum;
 import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.framework.geo.core.AmapGeocodingClient;
 import cn.iocoder.yudao.module.gift.framework.trip.provider.place.AmapPoiTypeEnum;
 import org.springframework.stereotype.Service;
@@ -38,9 +35,7 @@ public class TripMapServiceImpl implements TripMapService {
     @Resource
     private AmapGeocodingClient amapGeocodingClient;
     @Resource
-    private TripItineraryMapper tripItineraryMapper;
-    @Resource
-    private TripPlanMapper tripPlanMapper;
+    private UserItineraryQueryService userItineraryQueryService;
 
     @Override
     public ExploreMap getExploreMap(ExploreMapRequest request) {
@@ -67,12 +62,11 @@ public class TripMapServiceImpl implements TripMapService {
 
     @Override
     public ItineraryMap getItineraryMap(Long memberId, Long itineraryId) {
-        TripItineraryDO itinerary = tripItineraryMapper.selectById(itineraryId);
-        TripPlanDO trip = itinerary == null ? null : tripPlanMapper.selectById(itinerary.getTripId());
-        if (trip == null || !Objects.equals(trip.getMemberId(), memberId)) {
+        UserItineraryDO itinerary = userItineraryQueryService.getById(itineraryId, null);
+        if (itinerary == null || !Objects.equals(itinerary.getMemberId(), memberId)) {
             throw exception(TRIP_ITINERARY_NOT_EXISTS);
         }
-        List<ItineraryDay> days = extractItineraryDays(TripAgentFormatUtils.parseMap(itinerary.getContentJson()));
+        List<ItineraryDay> days = extractItineraryDays(userItineraryQueryService.toMap(itinerary));
         List<ExploreItem> located = days.stream().flatMap(day -> day.stops().stream())
                 .filter(ItineraryStop::hasCoordinate)
                 .map(stop -> new ExploreItem(stop.poiId(), stop.poiId(), stop.name(), "itinerary", stop.latitude(),

@@ -1,10 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
@@ -14,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +35,7 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     @Mock
     private TripPlanMapper tripPlanMapper;
     @Mock
-    private TripItineraryMapper tripItineraryMapper;
+    private UserItineraryQueryService userItineraryQueryService;
     @Mock
     private TripItineraryVersionService versionService;
     @Mock
@@ -47,7 +46,9 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     void apply_shouldMoveItemAndSaveNewImmutableVersion() {
         TripPlanDO trip = trip();
         when(tripPlanMapper.selectByConversationIdAndMemberId(2L, 3L)).thenReturn(trip);
-        when(tripItineraryMapper.selectById(10L)).thenReturn(itinerary(2));
+        UserItineraryDO current = itinerary(2);
+        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
+        when(userItineraryQueryService.toMap(current)).thenReturn(itineraryMap());
         when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), anyMap(), anyMap()))
                 .thenReturn(new TripItineraryVersionService.SavedItinerary(11L, 12L, 3, "已更新行程"));
         TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.MOVE_ITEM, 2,
@@ -73,7 +74,8 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     @Test
     void apply_shouldRejectStaleBaseVersion() {
         when(tripPlanMapper.selectByConversationIdAndMemberId(2L, 3L)).thenReturn(trip());
-        when(tripItineraryMapper.selectById(10L)).thenReturn(itinerary(3));
+        UserItineraryDO current = itinerary(3);
+        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
         TripChangeCommand command = new TripChangeCommand(TripChangeCommand.Operation.LOCK_ITEM, 2,
                 "item-a", null, null, null, Map.of());
 
@@ -87,7 +89,9 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
     void apply_shouldReplanOnlyAffectedDayAndPreserveLockedItem() {
         TripPlanDO trip = trip();
         when(tripPlanMapper.selectByConversationIdAndMemberId(2L, 3L)).thenReturn(trip);
-        when(tripItineraryMapper.selectById(10L)).thenReturn(replanItinerary());
+        UserItineraryDO current = itinerary(2);
+        when(userItineraryQueryService.getById(10L, 2L)).thenReturn(current);
+        when(userItineraryQueryService.toMap(current)).thenReturn(replanItineraryMap());
         when(itineraryAssembler.replanDays(anyMap(), any(), eq(Set.of(1)), any(Consumer.class)))
                 .thenReturn(List.of(replannedDay()));
         when(versionService.saveGeneratedItinerary(eq(trip), eq(3L), anyMap(), anyMap()))
@@ -114,34 +118,34 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
                 .setCurrentItineraryId(10L).setStateJson("{}");
     }
 
-    private static TripItineraryDO itinerary(int version) {
+    private static UserItineraryDO itinerary(int version) {
+        return new UserItineraryDO().setId(10L).setConversationId(2L).setVersion(version);
+    }
+
+    private static Map<String, Object> itineraryMap() {
         Map<String, Object> first = item("item-a", 1, "MORNING", 0);
         Map<String, Object> second = item("item-b", 2, "MORNING", 0);
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("summary", "云南行程");
         content.put("citation_ids", List.of());
-        content.put("daily_itinerary", List.of(
-                Map.of("day", 1, "slots", List.of(first)),
-                Map.of("day", 2, "slots", List.of(second))));
-        return new TripItineraryDO().setId(10L).setTripId(1L).setVersion(version)
-                .setContentJson(JsonUtils.toJsonString(content));
+        content.put("daily_itinerary", new ArrayList<>(List.of(
+                day(1, first), day(2, second))));
+        return content;
     }
 
-    private static TripItineraryDO replanItinerary() {
+    private static Map<String, Object> replanItineraryMap() {
         Map<String, Object> first = item("item-a", 1, "MORNING", 0);
         first.put("poiId", "poi-a");
         first.put("locked", true);
         Map<String, Object> content = new LinkedHashMap<>();
-        content.put("daily_itinerary", List.of(
-                Map.of("day", 1, "slots", List.of(first)),
-                Map.of("day", 2, "slots", List.of(item("item-b", 2, "MORNING", 0)))));
+        content.put("daily_itinerary", new ArrayList<>(List.of(
+                day(1, first), day(2, item("item-b", 2, "MORNING", 0)))));
         content.put("macro_skeleton", Map.of("days", List.of(
                 Map.of("day", 1, "city", "昆明", "area", "滇池", "theme", "亲子",
                         "anchorPoiNames", List.of("滇池")),
                 Map.of("day", 2, "city", "大理", "area", "古城", "theme", "人文",
                         "anchorPoiNames", List.of("大理古城")))));
-        return new TripItineraryDO().setId(10L).setTripId(1L).setVersion(2)
-                .setContentJson(JsonUtils.toJsonString(content));
+        return content;
     }
 
     private static Map<String, Object> replannedDay() {
@@ -164,6 +168,13 @@ class TripPlanEditorServiceTest extends BaseMockitoUnitTest {
         result.put("timePeriod", timePeriod);
         result.put("sort", sort);
         result.put("locked", false);
+        return result;
+    }
+
+    private static Map<String, Object> day(int day, Map<String, Object> item) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("day", day);
+        result.put("slots", new ArrayList<>(List.of(item)));
         return result;
     }
 

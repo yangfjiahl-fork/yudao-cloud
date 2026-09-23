@@ -1,8 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.mysql.itineraryconversation.ItineraryConversationMapper;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentClient;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionCreateRequest;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedTripAgentProperties;
@@ -24,14 +24,14 @@ public class ManagedTripSessionService {
     @Resource
     private ManagedTripAgentProperties properties;
     @Resource
-    private TripPlanMapper tripPlanMapper;
+    private ItineraryConversationMapper conversationMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public String getOrCreateSession(Long tripId, Long conversationId, Map<String, Object> state,
                                      ManagedTripAgentStage stage) {
-        TripPlanDO current = tripPlanMapper.selectById(tripId);
+        ItineraryConversationDO current = conversationMapper.selectById(conversationId);
         if (current == null) {
-            throw new IllegalStateException("旅行计划不存在");
+            throw new IllegalStateException("行程会话不存在");
         }
         String persistedSessionId = getSessionId(current, stage);
         if (StrUtil.isNotBlank(persistedSessionId)) {
@@ -43,21 +43,21 @@ public class ManagedTripSessionService {
                 getAgentId(stage), getEnvironmentId(stage), buildSessionTitle(state, stage),
                 Map.of("trip_id", String.valueOf(tripId), "conversation_id", String.valueOf(conversationId),
                         "agent_stage", stage.name())));
-        TripPlanDO update = new TripPlanDO().setId(tripId);
+        ItineraryConversationDO update = new ItineraryConversationDO().setId(conversationId);
         if (stage == ManagedTripAgentStage.INTAKE) {
             update.setIntakeAgentSessionId(sessionId);
         } else {
             update.setPlanAgentSessionId(sessionId);
         }
-        tripPlanMapper.updateById(update);
+        conversationMapper.updateById(update);
         log.info("[getOrCreateSession][tripId({}) stage({}) Managed Agents sessionId({}) 创建成功]",
                 tripId, stage, sessionId);
         return sessionId;
     }
 
-    private static String getSessionId(TripPlanDO trip, ManagedTripAgentStage stage) {
+    private static String getSessionId(ItineraryConversationDO conversation, ManagedTripAgentStage stage) {
         return stage == ManagedTripAgentStage.INTAKE
-                ? trip.getIntakeAgentSessionId() : trip.getPlanAgentSessionId();
+                ? conversation.getIntakeAgentSessionId() : conversation.getPlanAgentSessionId();
     }
 
     private String getAgentId(ManagedTripAgentStage stage) {

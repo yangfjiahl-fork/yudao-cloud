@@ -1,19 +1,11 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
-import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationUpdateReqDTO;
-import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatMessageRespDTO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItinerarySlotDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItinerarySlotMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
@@ -23,9 +15,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,75 +24,47 @@ class TripItineraryVersionServiceTest extends BaseMockitoUnitTest {
     private TripItineraryVersionService versionService;
 
     @Mock
-    private AiChatApi aiChatApi;
-    @Mock
     private TripPlanMapper tripPlanMapper;
     @Mock
-    private TripItineraryMapper tripItineraryMapper;
-    @Mock
-    private TripItinerarySlotMapper tripItinerarySlotMapper;
-    @Mock
     private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
+    @Mock
+    private UserItineraryMapper userItineraryMapper;
+    @Mock
+    private ItineraryConversationService conversationService;
 
     @Test
-    void saveGeneratedItinerary_shouldPersistVersionSlotsPointerAndTitle() {
+    void saveGeneratedItinerary_shouldPersistStructuredVersionEventAndPointers() {
         TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L).setMemberId(3L);
         Map<String, Object> state = Map.of("startDate", "2026-10-01", "destination", "云南");
         Map<String, Object> itinerary = new LinkedHashMap<>();
         itinerary.put("summary", "云南亲子六日行程");
-        itinerary.put("citation_ids", List.of(8L));
-        itinerary.put("overview", Map.of("slot", "TRIP_OVERVIEW", "skeleton", "行程总览"));
         itinerary.put("daily_itinerary", List.of(Map.of(
-                "day", 1,
-                "overview", Map.of("slot", "DAY_OVERVIEW", "status", "RESOLVED", "detail", "昆明轻松游"),
-                "slots", List.of(Map.of("slot", "MORNING", "poiId", "poi-1", "skeleton", "游览滇池")))));
-        itinerary.put("transport", Map.of("arrival", Map.of("skeleton", "抵达昆明")));
-        when(tripItineraryMapper.selectMaxVersionByTripId(1L)).thenReturn(2);
-        when(aiChatApi.createAssistantMessage(any())).thenReturn(new AiChatMessageRespDTO().setId(9L));
-        doAnswer(invocation -> {
-            TripItineraryDO entity = invocation.getArgument(0);
-            entity.setId(10L);
-            return 1;
-        }).when(tripItineraryMapper).insert(any(TripItineraryDO.class));
+                "day", 1, "slots", List.of(Map.of("slot", "MORNING", "poiId", "poi-1")))));
+        when(userItineraryMapper.selectMaxVersionByConversationId(2L)).thenReturn(2);
+        when(conversationService.createEvent(2L, "run-1", 8L, "ITINERARY", "assistant", "ASSEMBLE",
+                "云南亲子六日行程")).thenReturn(new ItineraryEventDO().setId(9L));
+        when(structuredItineraryPersistenceService.persist(trip, 3, 8L, 9L, 3L, state, itinerary))
+                .thenReturn(10L);
 
-        TenantContextHolder.setTenantId(20L);
-        try {
-            TripItineraryVersionService.SavedItinerary saved = versionService.saveGeneratedItinerary(
-                    trip, 3L, state, itinerary);
+        TripItineraryVersionService.SavedItinerary saved = versionService.saveGeneratedItinerary(
+                trip, 3L, "run-1", 8L, state, itinerary);
 
-            assertEquals(10L, saved.itineraryId());
-            assertEquals(9L, saved.messageId());
-            assertEquals(3, saved.version());
-            assertEquals("云南亲子六日行程", saved.displayText());
-            assertEquals(10L, trip.getCurrentItineraryId());
-            assertEquals(3, itinerary.get("version"));
-            Map<?, ?> normalizedDay = (Map<?, ?>) ((List<?>) itinerary.get("daily_itinerary")).get(0);
-            Map<?, ?> normalizedItem = (Map<?, ?>) ((List<?>) normalizedDay.get("slots")).get(0);
-            assertFalse(String.valueOf(normalizedItem.get("itemId")).isBlank());
-            assertEquals(1, normalizedItem.get("day"));
-            assertEquals("ACTIVITY", normalizedItem.get("type"));
-            assertEquals("MORNING", normalizedItem.get("timePeriod"));
-            assertEquals(0, normalizedItem.get("sort"));
-            assertEquals(150, normalizedItem.get("durationMinutes"));
-            assertEquals(false, normalizedItem.get("locked"));
-            assertEquals("JAVA_PLANNER", normalizedItem.get("source"));
+        assertEquals(10L, saved.itineraryId());
+        assertEquals(9L, saved.messageId());
+        assertEquals(3, saved.version());
+        assertEquals("云南亲子六日行程", saved.displayText());
+        assertEquals(10L, trip.getCurrentItineraryId());
+        assertEquals(3, itinerary.get("version"));
+        Map<?, ?> normalizedDay = (Map<?, ?>) ((List<?>) itinerary.get("daily_itinerary")).get(0);
+        Map<?, ?> normalizedItem = (Map<?, ?>) ((List<?>) normalizedDay.get("slots")).get(0);
+        assertFalse(String.valueOf(normalizedItem.get("itemId")).isBlank());
+        assertEquals("ACTIVITY", normalizedItem.get("type"));
+        assertEquals("MORNING", normalizedItem.get("timePeriod"));
+        assertEquals(150, normalizedItem.get("durationMinutes"));
 
-            ArgumentCaptor<TripItineraryDO> itineraryCaptor = ArgumentCaptor.forClass(TripItineraryDO.class);
-            verify(tripItineraryMapper).insert(itineraryCaptor.capture());
-            assertEquals(3, itineraryCaptor.getValue().getVersion());
-            assertEquals(9L, itineraryCaptor.getValue().getMessageId());
-            assertEquals(3, JsonUtils.parseObject(itineraryCaptor.getValue().getContentJson(), Map.class).get("version"));
-            verify(tripItinerarySlotMapper, times(4)).insert(any(TripItinerarySlotDO.class));
-            verify(structuredItineraryPersistenceService).persist(trip, itineraryCaptor.getValue(), 3L, state, itinerary);
-            verify(tripPlanMapper).updateById(trip);
-
-            ArgumentCaptor<AiChatConversationUpdateReqDTO> titleCaptor =
-                    ArgumentCaptor.forClass(AiChatConversationUpdateReqDTO.class);
-            verify(aiChatApi).updateConversation(titleCaptor.capture());
-            assertEquals("2026-10-01 云南", titleCaptor.getValue().getTitle());
-        } finally {
-            TenantContextHolder.clear();
-        }
+        verify(conversationService).linkItinerary(9L, 10L);
+        verify(conversationService).updateCurrentItinerary(2L, 10L, "2026-10-01 云南");
+        verify(tripPlanMapper).updateById(trip);
     }
 
 }

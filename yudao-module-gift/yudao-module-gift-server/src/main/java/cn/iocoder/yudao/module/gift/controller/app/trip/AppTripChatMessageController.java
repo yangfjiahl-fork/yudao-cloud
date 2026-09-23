@@ -1,12 +1,9 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip;
 
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
-import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
-import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
-import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryevent.ItineraryEventDO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripChatMessageRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiMessageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
@@ -20,6 +17,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripWeatherRespVO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
+import cn.iocoder.yudao.module.gift.service.trip.ItineraryConversationService;
 import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -51,10 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
-import static cn.iocoder.yudao.module.ai.enums.ErrorCodeConstants.CHAT_CONVERSATION_NOT_EXISTS;
 
 @Tag(name = "用户 APP - 旅行规划消息")
 @RestController
@@ -66,7 +62,7 @@ public class AppTripChatMessageController {
     private static final int TEXT_DELTA_MAX_CODE_POINTS = 12;
 
     @Resource
-    private AiChatApi aiChatApi;
+    private ItineraryConversationService conversationService;
     @Resource
     private TripAgentService tripAgentService;
     @Resource
@@ -76,8 +72,8 @@ public class AppTripChatMessageController {
     @Operation(summary = "获得旅行规划消息列表")
     @Parameter(name = "conversationId", required = true, description = "对话编号", example = "1024")
     public CommonResult<List<AppTripChatMessageRespVO>> getMessageList(@RequestParam("conversationId") Long conversationId) {
-        List<AppTripChatMessageRespVO> messages = BeanUtils.toBean(aiChatApi.getMessageList(conversationId, getLoginUserId(),
-                UserTypeEnum.MEMBER.getValue()), AppTripChatMessageRespVO.class);
+        List<AppTripChatMessageRespVO> messages = conversationService.getEvents(conversationId, getLoginUserId())
+                .stream().map(AppTripChatMessageController::toMessage).toList();
         Collection<Long> messageIds = messages.stream().map(AppTripChatMessageRespVO::getId).toList();
         Map<Long, Map<String, Object>> itineraryMap = tripAgentService.getItineraryMapByMessageIds(messageIds);
         messages.forEach(message -> message.setItinerary(itineraryMap.get(message.getId())));
@@ -97,15 +93,12 @@ public class AppTripChatMessageController {
             throw new IllegalArgumentException("旅行规划仅接受 user 消息");
         }
         Long memberId = getLoginUserId();
-        AiChatConversationRespDTO conversation = aiChatApi.getConversation(conversationId, memberId,
-                UserTypeEnum.MEMBER.getValue());
-        if (conversation == null) {
-            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
-        }
+        conversationService.getRequired(conversationId, memberId);
         Long tenantId = TenantContextHolder.getRequiredTenantId();
         log.info("[runManagedAgUi][conversationId({}) runId({}) memberId({}) tenantId({}) 创建 AG-UI SSE 流]",
                 conversationId, reqVO.getRunId(), memberId, tenantId);
-        Flux<Map<String, Object>> execution = executeTrip(conversationId, memberId, tenantId, message.getContent())
+        Flux<Map<String, Object>> execution = executeTrip(conversationId, memberId, tenantId, reqVO.getRunId(),
+                        message.getContent())
                 .concatMap(event -> Flux.fromIterable(toAgUiEvents(event, reqVO.getRunId())));
         return MdcContextUtils.withReactorContext(Flux.concat(
                         Flux.just(agUiRunStarted(reqVO.getThreadId(), reqVO.getRunId())), execution,
@@ -129,11 +122,7 @@ public class AppTripChatMessageController {
     public CommonResult<AppTripItinerarySlotResolveRespVO> resolveItinerarySlot(
             @Valid @RequestBody AppTripItinerarySlotResolveReqVO reqVO) {
         Long memberId = getLoginUserId();
-        AiChatConversationRespDTO conversation = aiChatApi.getConversation(reqVO.getConversationId(), memberId,
-                UserTypeEnum.MEMBER.getValue());
-        if (conversation == null) {
-            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
-        }
+        conversationService.getRequired(reqVO.getConversationId(), memberId);
         TripItinerarySlotResult result = tripAgentService.resolveItinerarySlot(reqVO.getConversationId(), memberId,
                 reqVO.getMessageId(), reqVO.getDay(), reqVO.getSlot());
         AppTripItinerarySlotResolveRespVO response = new AppTripItinerarySlotResolveRespVO();
@@ -164,11 +153,7 @@ public class AppTripChatMessageController {
     public CommonResult<AppTripItineraryRouteResolveRespVO> resolveItineraryRoute(
             @Valid @RequestBody AppTripItineraryRouteResolveReqVO reqVO) {
         Long memberId = getLoginUserId();
-        AiChatConversationRespDTO conversation = aiChatApi.getConversation(reqVO.getConversationId(), memberId,
-                UserTypeEnum.MEMBER.getValue());
-        if (conversation == null) {
-            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
-        }
+        conversationService.getRequired(reqVO.getConversationId(), memberId);
         TripItineraryRouteResult result = tripAgentService.resolveItineraryRoute(reqVO.getConversationId(), memberId,
                 reqVO.getMessageId(), reqVO.getDay());
         AppTripItineraryRouteResolveRespVO response = new AppTripItineraryRouteResolveRespVO();
@@ -184,11 +169,7 @@ public class AppTripChatMessageController {
     public CommonResult<AppTripItineraryChangeRespVO> changeItinerary(
             @Valid @RequestBody AppTripItineraryChangeReqVO reqVO) {
         Long memberId = getLoginUserId();
-        AiChatConversationRespDTO conversation = aiChatApi.getConversation(reqVO.getConversationId(), memberId,
-                UserTypeEnum.MEMBER.getValue());
-        if (conversation == null) {
-            throw exception(CHAT_CONVERSATION_NOT_EXISTS);
-        }
+        conversationService.getRequired(reqVO.getConversationId(), memberId);
         TripChangeCommand command = new TripChangeCommand(reqVO.getOperation(), reqVO.getBaseVersion(),
                 reqVO.getItemId(), reqVO.getDay(), reqVO.getTimePeriod(), reqVO.getSort(), reqVO.getValues());
         TripPlanEditorService.EditResult result = tripPlanEditorService.apply(
@@ -203,7 +184,8 @@ public class AppTripChatMessageController {
         return success(response);
     }
 
-    private Flux<TripAgentEvent> executeTrip(Long conversationId, Long memberId, Long tenantId, String content) {
+    private Flux<TripAgentEvent> executeTrip(Long conversationId, Long memberId, Long tenantId, String runId,
+                                             String content) {
         // SSE 在 boundedElastic 线程执行，显式保留 HTTP 请求的 OTel 上下文，保证 Agent 和 LLM Span 归属同一条调用链。
         Context parentOtelContext = Context.current();
         return Flux.deferContextual(context -> {
@@ -215,7 +197,8 @@ public class AppTripChatMessageController {
                         try {
                             TenantUtils.execute(tenantId, () -> {
                                 Consumer<TripAgentEvent> eventConsumer = sink::next;
-                                tripAgentService.handleManagedMessage(conversationId, memberId, content, eventConsumer);
+                                tripAgentService.handleManagedMessage(conversationId, memberId, runId, content,
+                                        eventConsumer);
                             });
                             sink.complete();
                         } catch (Exception e) {
@@ -318,6 +301,16 @@ public class AppTripChatMessageController {
         if (value != null) {
             target.put(key, value);
         }
+    }
+
+    private static AppTripChatMessageRespVO toMessage(ItineraryEventDO event) {
+        AppTripChatMessageRespVO result = new AppTripChatMessageRespVO();
+        result.setId(event.getId());
+        result.setReplyId(event.getReplyEventId());
+        result.setType(event.getRole());
+        result.setContent(event.getContent());
+        result.setCreateTime(event.getCreateTime());
+        return result;
     }
 
     private static Map<String, Object> agUiRunStarted(String threadId, String runId) {

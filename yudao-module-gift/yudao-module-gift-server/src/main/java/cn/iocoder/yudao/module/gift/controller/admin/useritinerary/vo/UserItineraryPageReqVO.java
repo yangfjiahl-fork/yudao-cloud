@@ -15,8 +15,13 @@ import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_
 @Data
 public class UserItineraryPageReqVO extends PageParam {
 
+    private Long conversationId;
+
     @Schema(description = "会员ID", example = "5188")
     private Long memberId;
+
+    private Integer version;
+    private Integer status;
 
     @Schema(description = "标题")
     private String title;
@@ -41,14 +46,7 @@ public class UserItineraryPageReqVO extends PageParam {
     @Schema(description = "天数")
     private Integer dayCnt;
 
-    @Schema(description = "城市ID", example = "22877")
-    private Integer cityId;
-
-    @Schema(description = "城市ID", example = "15181")
-    private Integer nextCityId;
-
-    @Schema(description = "偏好")
-    private String preference;
+    private String destination;
 
     @Schema(description = "创建时间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)

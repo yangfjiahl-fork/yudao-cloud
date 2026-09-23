@@ -1,9 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripItineraryMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.trip.TripPlanMapper;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -19,26 +16,21 @@ class TripMapServiceImplTest {
 
     @Test
     void getItineraryMap_shouldExposeUnlocatedStopWithoutZeroCoordinate() {
-        TripItineraryMapper itineraryMapper = mock(TripItineraryMapper.class);
-        TripPlanMapper tripPlanMapper = mock(TripPlanMapper.class);
-        TripItineraryDO itinerary = new TripItineraryDO();
+        UserItineraryQueryService queryService = mock(UserItineraryQueryService.class);
+        UserItineraryDO itinerary = new UserItineraryDO();
         itinerary.setId(10L);
-        itinerary.setTripId(20L);
-        itinerary.setContentJson("""
+        itinerary.setMemberId(288L);
+        java.util.Map<String, Object> itineraryMap = TripAgentFormatUtils.parseMap("""
                 {"daily_itinerary":[{"day":1,"slots":[
                   {"slot":"MORNING","poiId":"B0001","poiName":"西湖","longitude":"120.155070","latitude":"30.274084","plannedStartTime":"09:00","plannedEndTime":"11:00"},
                   {"slot":"LUNCH","poiId":"B0002","poiName":"午餐"}
                 ]}]}
                 """);
-        TripPlanDO plan = new TripPlanDO();
-        plan.setId(20L);
-        plan.setMemberId(288L);
-        when(itineraryMapper.selectById(10L)).thenReturn(itinerary);
-        when(tripPlanMapper.selectById(20L)).thenReturn(plan);
+        when(queryService.getById(10L, null)).thenReturn(itinerary);
+        when(queryService.toMap(itinerary)).thenReturn(itineraryMap);
 
         TripMapServiceImpl service = new TripMapServiceImpl();
-        ReflectionTestUtils.setField(service, "tripItineraryMapper", itineraryMapper);
-        ReflectionTestUtils.setField(service, "tripPlanMapper", tripPlanMapper);
+        ReflectionTestUtils.setField(service, "userItineraryQueryService", queryService);
 
         TripMapService.ItineraryMap result = service.getItineraryMap(288L, 10L);
 

@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.gift.controller.admin.itineraryitem.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
+import java.time.LocalTime;
+import java.math.BigDecimal;
 import jakarta.validation.constraints.*;
 
 @Schema(description = "管理后台 - 文章新增/修改 Request VO")
@@ -15,6 +17,12 @@ public class ItineraryItemSaveReqVO {
     @Schema(description = "线路ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
     @NotNull(message = "线路ID不能为空")
     private Long itineraryId;
+
+    @NotNull(message = "行程日ID不能为空")
+    private Long itineraryDayId;
+
+    private String type;
+    private String slot;
 
     @Schema(description = "省ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "16725")
     @NotNull(message = "省ID不能为空")
@@ -67,6 +75,12 @@ public class ItineraryItemSaveReqVO {
     @NotNull(message = "排序不能为空")
     private Integer sort;
 
+    private LocalTime startTime;
+    private Integer durationMinutes;
+    private String poiId;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
+
     @Schema(description = "位置", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "位置不能为空")
     private String gdPosition;
@@ -79,5 +93,10 @@ public class ItineraryItemSaveReqVO {
 
     @Schema(description = "电话")
     private String phoneNo;
+
+    private Long previousItemId;
+    private String travelModeFromPrevious;
+    private Long travelDistanceMetersFromPrevious;
+    private Integer travelDurationMinutesFromPrevious;
 
 }

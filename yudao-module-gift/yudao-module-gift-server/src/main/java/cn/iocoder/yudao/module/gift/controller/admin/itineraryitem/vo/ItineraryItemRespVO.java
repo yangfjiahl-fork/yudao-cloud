@@ -5,6 +5,8 @@ import lombok.*;
 import java.util.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.math.BigDecimal;
 import cn.idev.excel.annotation.*;
 
 @Schema(description = "管理后台 - 文章 Response VO")
@@ -19,6 +21,10 @@ public class ItineraryItemRespVO {
     @Schema(description = "线路ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
     @ExcelProperty("线路ID")
     private Long itineraryId;
+
+    private Long itineraryDayId;
+    private String type;
+    private String slot;
 
     @Schema(description = "省ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "16725")
     @ExcelProperty("省ID")
@@ -72,6 +78,12 @@ public class ItineraryItemRespVO {
     @ExcelProperty("排序")
     private Integer sort;
 
+    private LocalTime startTime;
+    private Integer durationMinutes;
+    private String poiId;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
+
     @Schema(description = "位置", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("位置")
     private String gdPosition;
@@ -87,6 +99,11 @@ public class ItineraryItemRespVO {
     @Schema(description = "电话")
     @ExcelProperty("电话")
     private String phoneNo;
+
+    private Long previousItemId;
+    private String travelModeFromPrevious;
+    private Long travelDistanceMetersFromPrevious;
+    private Integer travelDurationMinutesFromPrevious;
 
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")

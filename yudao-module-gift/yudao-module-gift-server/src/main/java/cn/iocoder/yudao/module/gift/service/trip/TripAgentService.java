@@ -19,6 +19,9 @@ public interface TripAgentService {
     TripAgentResult handleManagedMessage(Long conversationId, Long memberId, String content,
                                          Consumer<TripAgentEvent> eventConsumer);
 
+    TripAgentResult handleManagedMessage(Long conversationId, Long memberId, String runId, String content,
+                                         Consumer<TripAgentEvent> eventConsumer);
+
     /** 按已授权的聊天消息编号批量恢复完整行程。 */
     Map<Long, Map<String, Object>> getItineraryMapByMessageIds(Collection<Long> messageIds);
 

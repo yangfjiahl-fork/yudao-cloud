@@ -16,6 +16,10 @@ public class ItineraryItemPageReqVO extends PageParam {
     @Schema(description = "线路ID", example = "4883")
     private Long itineraryId;
 
+    private Long itineraryDayId;
+    private String type;
+    private String slot;
+
     @Schema(description = "省ID", example = "16725")
     private Integer provinceId;
 

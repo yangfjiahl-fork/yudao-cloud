@@ -1,16 +1,14 @@
 package cn.iocoder.yudao.module.gift.controller.app.trip;
 
-import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
-import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatConversationRespDTO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiMessageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryChangeReqVO;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
+import cn.iocoder.yudao.module.gift.service.trip.ItineraryConversationService;
 import cn.iocoder.yudao.module.gift.service.trip.TripItineraryVersionService;
 import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
@@ -42,7 +40,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     private AppTripChatMessageController controller;
 
     @Mock
-    private AiChatApi aiChatApi;
+    private ItineraryConversationService conversationService;
     @Mock
     private TripAgentService tripAgentService;
     @Mock
@@ -52,8 +50,6 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     void changeItinerary_shouldUseSharedCommandEditor() {
         Long conversationId = 1L;
         Long memberId = 2L;
-        when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
-                .thenReturn(new AiChatConversationRespDTO().setId(conversationId));
         TripItineraryVersionService.SavedItinerary saved =
                 new TripItineraryVersionService.SavedItinerary(11L, 12L, 4, "已更新行程");
         when(tripPlanEditorService.apply(eq(conversationId), eq(memberId), any()))
@@ -83,11 +79,9 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     void runManagedAgUi_shouldTranslateTripEventsToAgUiProtocol() {
         Long conversationId = 1L;
         Long memberId = 2L;
-        when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
-                .thenReturn(new AiChatConversationRespDTO().setId(conversationId));
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<TripAgentEvent> eventConsumer = invocation.getArgument(3);
+            Consumer<TripAgentEvent> eventConsumer = invocation.getArgument(4);
             eventConsumer.accept(TripAgentEvent.of("stage", "INTAKE", "正在收集信息"));
             eventConsumer.accept(TripAgentEvent.of("model_delta", "INTAKE", "{\"state\":")
                     .setSequence(1));
@@ -98,7 +92,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
                             "props", Map.of("selectionMode", "SINGLE", "options", List.of()),
                             "submit", Map.of("mode", "OPTION_CONTENT")))));
             return null;
-        }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
+        }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), eq("run-1"), any(), any());
         AppTripAgUiRunReqVO reqVO = new AppTripAgUiRunReqVO();
         reqVO.setThreadId("1");
         reqVO.setRunId("run-1");
@@ -143,10 +137,8 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     void runManagedAgUi_shouldEndWithRunErrorWhenTripGenerationFails() {
         Long conversationId = 1L;
         Long memberId = 2L;
-        when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
-                .thenReturn(new AiChatConversationRespDTO().setId(conversationId));
         doThrow(new IllegalStateException("upstream unavailable"))
-                .when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
+                .when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), eq("run-1"), any(), any());
         AppTripAgUiRunReqVO reqVO = new AppTripAgUiRunReqVO();
         reqVO.setThreadId("1");
         reqVO.setRunId("run-1");
@@ -172,15 +164,13 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     void runManagedAgUi_shouldPublishItineraryCardAfterAssistantText() {
         Long conversationId = 1L;
         Long memberId = 2L;
-        when(aiChatApi.getConversation(conversationId, memberId, UserTypeEnum.MEMBER.getValue()))
-                .thenReturn(new AiChatConversationRespDTO().setId(conversationId));
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<TripAgentEvent> eventConsumer = invocation.getArgument(3);
+            Consumer<TripAgentEvent> eventConsumer = invocation.getArgument(4);
             eventConsumer.accept(TripAgentEvent.of("itinerary_skeleton", "ASSEMBLE", "已为你生成三日行程。")
                     .setMessageId(10L).setItinerary(java.util.Map.of("version", 1)));
             return null;
-        }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), any(), any());
+        }).when(tripAgentService).handleManagedMessage(eq(conversationId), eq(memberId), eq("run-1"), any(), any());
 
         TenantContextHolder.setTenantId(1L);
         try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock = mockStatic(SecurityFrameworkUtils.class)) {

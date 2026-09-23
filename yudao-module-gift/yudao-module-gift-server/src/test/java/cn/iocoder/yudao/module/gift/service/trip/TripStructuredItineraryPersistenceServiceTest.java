@@ -2,16 +2,13 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.trip.TripPlanDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryTransportSegmentDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryTransportSegmentMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -20,7 +17,6 @@ import org.mockito.Mock;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,14 +39,9 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
     private UserItineraryDayMapper userItineraryDayMapper;
     @Mock
     private UserItineraryItemMapper userItineraryItemMapper;
-    @Mock
-    private UserItineraryTransportSegmentMapper transportSegmentMapper;
-
     @Test
     void persist_shouldExpandHeaderDayItemsAndTransportSegments() {
         TripPlanDO trip = new TripPlanDO().setId(1L).setConversationId(2L).setMemberId(3L);
-        TripItineraryDO tripItinerary = new TripItineraryDO().setId(10L).setTripId(1L).setMessageId(9L)
-                .setVersion(3).setStatus(1);
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("departure", "上海");
         state.put("destination", "云南");
@@ -78,12 +69,17 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         slot.put("source", "MANAGED_MACRO_JAVA");
         slot.put("poiSnapshot", Map.of("imageUrl", "https://example.com/dianchi.jpg",
                 "address", "昆明市滇池路", "provider", "gaode"));
+        Map<String, Object> hotel = new LinkedHashMap<>();
+        hotel.put("itemId", "item-2");
+        hotel.put("day", 1);
+        hotel.put("type", "LODGING");
+        hotel.put("slot", "ACCOMMODATION");
+        hotel.put("sort", 1);
+        hotel.put("poiId", "hotel-1");
+        hotel.put("poiName", "酒店");
 
         Map<String, Object> segment = Map.ofEntries(
-                Map.entry("fromPoiId", "poi-1"), Map.entry("fromPoiName", "滇池"),
-                Map.entry("fromLongitude", "102.7000"), Map.entry("fromLatitude", "25.0500"),
-                Map.entry("toPoiId", "hotel-1"), Map.entry("toPoiName", "酒店"),
-                Map.entry("toLongitude", "102.7100"), Map.entry("toLatitude", "25.0600"),
+                Map.entry("fromItemId", "item-1"), Map.entry("toItemId", "item-2"),
                 Map.entry("mode", "TAXI"), Map.entry("distanceMeters", 2300),
                 Map.entry("durationMinutes", 12), Map.entry("provider", "gaode"),
                 Map.entry("status", "VERIFIED"),
@@ -98,7 +94,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         day.put("planning", Map.of("solver", "OR_TOOLS_TSPTW", "status", "FEASIBLE",
                 "routeDataStatus", "VERIFIED", "budgetStatus", "WITHIN_BUDGET",
                 "dayStartTime", "09:00", "dayEndTime", "20:00"));
-        day.put("slots", List.of(slot));
+        day.put("slots", List.of(slot, hotel));
         day.put("transportSegments", List.of(segment));
 
         Map<String, Object> itinerary = new LinkedHashMap<>();
@@ -112,7 +108,6 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         itinerary.put("planner", Map.of("type", "MANAGED_MACRO_JAVA", "validation", "SERVER_PLANNED"));
 
         List<UserItineraryItemDO> insertedItems = new ArrayList<>();
-        List<UserItineraryTransportSegmentDO> insertedSegments = new ArrayList<>();
         doAnswer(invocation -> {
             UserItineraryDO entity = invocation.getArgument(0);
             entity.setId(100L);
@@ -124,24 +119,20 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             return 1;
         }).when(userItineraryDayMapper).insert(any(UserItineraryDayDO.class));
         when(userItineraryItemMapper.insertBatch(any())).thenAnswer(invocation -> {
-            Collection<UserItineraryItemDO> entities = invocation.getArgument(0);
-            insertedItems.addAll(entities);
-            return true;
-        });
-        when(transportSegmentMapper.insertBatch(any())).thenAnswer(invocation -> {
-            Collection<UserItineraryTransportSegmentDO> entities = invocation.getArgument(0);
-            insertedSegments.addAll(entities);
+            insertedItems.addAll(invocation.getArgument(0));
             return true;
         });
 
         TenantContextHolder.setTenantId(20L);
         try {
-            assertEquals(100L, service.persist(trip, tripItinerary, 3L, state, itinerary));
+            assertEquals(100L, service.persist(trip, 3, 8L, 9L, 3L, state, itinerary));
 
             ArgumentCaptor<UserItineraryDO> headerCaptor = ArgumentCaptor.forClass(UserItineraryDO.class);
             verify(userItineraryMapper).insert(headerCaptor.capture());
             UserItineraryDO header = headerCaptor.getValue();
-            assertEquals(10L, header.getTripItineraryId());
+            assertEquals(2L, header.getConversationId());
+            assertEquals(8L, header.getRequestEventId());
+            assertEquals(9L, header.getResultEventId());
             assertEquals(3, header.getVersion());
             assertEquals(LocalDate.of(2026, 10, 2), header.getEndDate());
             assertEquals("https://example.com/dianchi.jpg", header.getCoverUrl());
@@ -153,7 +144,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             assertEquals("FEASIBLE", dayCaptor.getValue().getPlanningStatus());
             assertEquals(20L, dayCaptor.getValue().getTenantId());
 
-            assertEquals(3, insertedItems.size());
+            assertEquals(2, insertedItems.size());
             UserItineraryItemDO activity = insertedItems.stream()
                     .filter(item -> "item-1".equals(item.getItemId())).findFirst().orElseThrow();
             assertEquals("MORNING", activity.getSlot());
@@ -162,10 +153,11 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             assertEquals("GCJ02", activity.getCoordinateSystem());
             assertNotNull(activity.getPoiSnapshotJson());
 
-            assertEquals(1, insertedSegments.size());
-            assertEquals("TAXI", insertedSegments.get(0).getMode());
-            assertEquals(2300L, insertedSegments.get(0).getDistanceMeters());
-            assertEquals(101L, insertedSegments.get(0).getUserItineraryDayId());
+            UserItineraryItemDO accommodation = insertedItems.stream()
+                    .filter(item -> "item-2".equals(item.getItemId())).findFirst().orElseThrow();
+            assertEquals("item-1", accommodation.getPreviousItemId());
+            assertEquals("TAXI", accommodation.getTravelModeFromPrevious());
+            assertEquals(2300L, accommodation.getTravelDistanceMetersFromPrevious());
         } finally {
             TenantContextHolder.clear();
         }

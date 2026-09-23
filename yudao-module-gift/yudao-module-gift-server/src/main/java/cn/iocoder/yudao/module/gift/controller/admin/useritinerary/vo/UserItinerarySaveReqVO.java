@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import jakarta.validation.constraints.*;
 
 @Schema(description = "管理后台 - 用户行程新增/修改 Request VO")
@@ -13,9 +14,21 @@ public class UserItinerarySaveReqVO {
     @Schema(description = "主键", requiredMode = Schema.RequiredMode.REQUIRED, example = "11003")
     private Long id;
 
+    @NotNull(message = "会话ID不能为空")
+    private Long conversationId;
+
+    private Long requestEventId;
+    private Long resultEventId;
+
     @Schema(description = "会员ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "5188")
     @NotNull(message = "会员ID不能为空")
     private Long memberId;
+
+    @NotNull(message = "版本不能为空")
+    private Integer version;
+
+    @NotNull(message = "状态不能为空")
+    private Integer status;
 
     @Schema(description = "标题", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "标题不能为空")
@@ -43,14 +56,22 @@ public class UserItinerarySaveReqVO {
     @NotNull(message = "天数不能为空")
     private Integer dayCnt;
 
-    @Schema(description = "城市ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "22877")
-    @NotNull(message = "城市ID不能为空")
-    private Integer cityId;
-
-    @Schema(description = "城市ID", example = "15181")
-    private Integer nextCityId;
-
-    @Schema(description = "偏好")
-    private String preference;
+    private String departure;
+    private String destination;
+    private Integer travelerCount;
+    private Integer budget;
+    private Integer hotelBudget;
+    private String travelerProfileJson;
+    private String interestsJson;
+    private String pace;
+    private String mustVisitJson;
+    private String constraintsJson;
+    private LocalTime dailyStartTime;
+    private LocalTime dailyEndTime;
+    private String overviewStatus;
+    private String overviewSkeleton;
+    private String overviewDetail;
+    private String plannerType;
+    private String plannerValidation;
 
 }
