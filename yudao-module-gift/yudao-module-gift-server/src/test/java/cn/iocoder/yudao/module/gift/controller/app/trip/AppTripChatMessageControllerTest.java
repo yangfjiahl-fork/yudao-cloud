@@ -8,7 +8,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiMessageReq
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripAgUiRunReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripItineraryChangeReqVO;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
-import cn.iocoder.yudao.module.gift.service.trip.ItineraryConversationService;
+import cn.iocoder.yudao.module.gift.service.trip.UserItineraryConversationService;
 import cn.iocoder.yudao.module.gift.service.trip.TripItinerarySaveService;
 import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
@@ -40,7 +40,7 @@ class AppTripChatMessageControllerTest extends BaseMockitoUnitTest {
     private AppTripChatMessageController controller;
 
     @Mock
-    private ItineraryConversationService conversationService;
+    private UserItineraryConversationService userItineraryConversationService;
     @Mock
     private TripAgentService tripAgentService;
     @Mock

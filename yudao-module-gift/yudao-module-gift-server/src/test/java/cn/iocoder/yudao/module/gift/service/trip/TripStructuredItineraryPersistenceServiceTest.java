@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
@@ -43,7 +43,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
     private UserItineraryItemMapper userItineraryItemMapper;
     @Test
     void persist_shouldExpandHeaderDayAndItems() {
-        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L).setMemberId(3L);
+        UserItineraryConversationDO trip = new UserItineraryConversationDO().setId(2L).setMemberId(3L);
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("departure", "上海");
         state.put("destination", "云南");
@@ -153,7 +153,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
 
     @Test
     void persist_shouldOverwriteExistingItineraryForConversation() {
-        ItineraryConversationDO conversation = new ItineraryConversationDO().setId(2L).setMemberId(3L);
+        UserItineraryConversationDO conversation = new UserItineraryConversationDO().setId(2L).setMemberId(3L);
         UserItineraryDO existing = new UserItineraryDO().setId(100L).setConversationId(2L).setResultEventId(7L);
         when(userItineraryMapper.selectByConversationId(2L)).thenReturn(existing);
 

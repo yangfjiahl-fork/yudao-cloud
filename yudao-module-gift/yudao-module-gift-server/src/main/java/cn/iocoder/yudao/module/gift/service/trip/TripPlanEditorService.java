@@ -3,7 +3,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -28,7 +28,7 @@ public class TripPlanEditorService {
     private static final Set<String> UPDATE_FIELDS = Set.of("startTime", "durationMinutes", "timePeriod");
 
     @Resource
-    private ItineraryConversationService conversationService;
+    private UserItineraryConversationService userItineraryConversationService;
     @Resource
     private UserItineraryQueryService userItineraryQueryService;
     @Resource
@@ -50,7 +50,7 @@ public class TripPlanEditorService {
 
     private EditResult applyInternal(Long conversationId, Long memberId, TripChangeCommand command,
                                      ChangeContext context) {
-        ItineraryConversationDO conversation = conversationService.getRequired(conversationId, memberId);
+        UserItineraryConversationDO conversation = userItineraryConversationService.getRequired(conversationId, memberId);
         UserItineraryDO current = userItineraryQueryService.getByConversationId(conversationId);
         if (current == null) {
             throw new IllegalArgumentException("当前旅行尚未生成可编辑行程");
@@ -58,7 +58,7 @@ public class TripPlanEditorService {
 
         Long requestEventId = context.requestEventId();
         if (context.source() == ChangeSource.MANUAL) {
-            UserItineraryConversationEventDO requestEvent = conversationService.createEvent(conversationId, null, null,
+            UserItineraryConversationEventDO requestEvent = userItineraryConversationService.createEvent(conversationId, null, null,
                     "USER_ACTION", "user", "EDIT", manualChangeDescription(command),
                     JsonUtils.toJsonString(command));
             requestEventId = requestEvent.getId();

@@ -1,7 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.itineraryconversation.ItineraryConversationMapper;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritineraryconversation.UserItineraryConversationMapper;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentClient;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentSessionCreateRequest;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedTripAgentProperties;
@@ -25,10 +25,10 @@ class ManagedTripSessionServiceTest {
     @Test
     void getOrCreateSession_shouldReusePersistedSession() {
         ManagedAgentClient agentClient = mock(ManagedAgentClient.class);
-        ItineraryConversationMapper conversationMapper = mock(ItineraryConversationMapper.class);
-        ManagedTripSessionService service = createService(agentClient, conversationMapper);
-        when(conversationMapper.selectById(2L)).thenReturn(
-                new ItineraryConversationDO().setId(2L)
+        UserItineraryConversationMapper userItineraryConversationMapper = mock(UserItineraryConversationMapper.class);
+        ManagedTripSessionService service = createService(agentClient, userItineraryConversationMapper);
+        when(userItineraryConversationMapper.selectById(2L)).thenReturn(
+                new UserItineraryConversationDO().setId(2L)
                         .setIntakeAgentSessionId("session-intake")
                         .setPlanAgentSessionId("session-plan"));
 
@@ -40,23 +40,23 @@ class ManagedTripSessionServiceTest {
         assertEquals("session-intake", intakeSessionId);
         assertEquals("session-plan", planSessionId);
         verifyNoInteractions(agentClient);
-        verify(conversationMapper, never()).updateById(any(ItineraryConversationDO.class));
+        verify(userItineraryConversationMapper, never()).updateById(any(UserItineraryConversationDO.class));
     }
 
     @Test
     void getOrCreateSession_shouldCreateAndPersistIndependentIntakeSession() {
         ManagedAgentClient agentClient = mock(ManagedAgentClient.class);
-        ItineraryConversationMapper conversationMapper = mock(ItineraryConversationMapper.class);
-        ManagedTripSessionService service = createService(agentClient, conversationMapper);
-        when(conversationMapper.selectById(2L)).thenReturn(new ItineraryConversationDO().setId(2L));
+        UserItineraryConversationMapper userItineraryConversationMapper = mock(UserItineraryConversationMapper.class);
+        ManagedTripSessionService service = createService(agentClient, userItineraryConversationMapper);
+        when(userItineraryConversationMapper.selectById(2L)).thenReturn(new UserItineraryConversationDO().setId(2L));
         when(agentClient.createSession(any())).thenReturn("session-new");
 
         String result = service.getOrCreateSession(2L,
                 Map.of("departure", "上海", "destination", "云南", "days", 6), ManagedTripAgentStage.INTAKE);
 
         assertEquals("session-new", result);
-        ArgumentCaptor<ItineraryConversationDO> updateCaptor = ArgumentCaptor.forClass(ItineraryConversationDO.class);
-        verify(conversationMapper).updateById(updateCaptor.capture());
+        ArgumentCaptor<UserItineraryConversationDO> updateCaptor = ArgumentCaptor.forClass(UserItineraryConversationDO.class);
+        verify(userItineraryConversationMapper).updateById(updateCaptor.capture());
         assertEquals(2L, updateCaptor.getValue().getId());
         assertEquals("session-new", updateCaptor.getValue().getIntakeAgentSessionId());
         ArgumentCaptor<ManagedAgentSessionCreateRequest> requestCaptor =
@@ -72,18 +72,18 @@ class ManagedTripSessionServiceTest {
     @Test
     void getOrCreateSession_shouldCreateAndPersistIndependentPlanSession() {
         ManagedAgentClient agentClient = mock(ManagedAgentClient.class);
-        ItineraryConversationMapper conversationMapper = mock(ItineraryConversationMapper.class);
-        ManagedTripSessionService service = createService(agentClient, conversationMapper);
-        when(conversationMapper.selectById(2L)).thenReturn(
-                new ItineraryConversationDO().setId(2L).setIntakeAgentSessionId("session-intake"));
+        UserItineraryConversationMapper userItineraryConversationMapper = mock(UserItineraryConversationMapper.class);
+        ManagedTripSessionService service = createService(agentClient, userItineraryConversationMapper);
+        when(userItineraryConversationMapper.selectById(2L)).thenReturn(
+                new UserItineraryConversationDO().setId(2L).setIntakeAgentSessionId("session-intake"));
         when(agentClient.createSession(any())).thenReturn("session-plan");
 
         String result = service.getOrCreateSession(2L,
                 Map.of("destination", "云南", "days", 6), ManagedTripAgentStage.PLAN);
 
         assertEquals("session-plan", result);
-        ArgumentCaptor<ItineraryConversationDO> updateCaptor = ArgumentCaptor.forClass(ItineraryConversationDO.class);
-        verify(conversationMapper).updateById(updateCaptor.capture());
+        ArgumentCaptor<UserItineraryConversationDO> updateCaptor = ArgumentCaptor.forClass(UserItineraryConversationDO.class);
+        verify(userItineraryConversationMapper).updateById(updateCaptor.capture());
         assertEquals("session-plan", updateCaptor.getValue().getPlanAgentSessionId());
         ArgumentCaptor<ManagedAgentSessionCreateRequest> requestCaptor =
                 ArgumentCaptor.forClass(ManagedAgentSessionCreateRequest.class);
@@ -97,12 +97,12 @@ class ManagedTripSessionServiceTest {
     @Test
     void getOrCreateSession_shouldRejectSameAgentForBothStages() {
         ManagedAgentClient agentClient = mock(ManagedAgentClient.class);
-        ItineraryConversationMapper conversationMapper = mock(ItineraryConversationMapper.class);
-        ManagedTripSessionService service = createService(agentClient, conversationMapper);
+        UserItineraryConversationMapper userItineraryConversationMapper = mock(UserItineraryConversationMapper.class);
+        ManagedTripSessionService service = createService(agentClient, userItineraryConversationMapper);
         ReflectionTestUtils.setField(service, "properties", new ManagedTripAgentProperties()
                 .setIntakeAgentId("agent-shared").setIntakeEnvironmentId("environment-intake")
                 .setPlanAgentId("agent-shared").setPlanEnvironmentId("environment-plan"));
-        when(conversationMapper.selectById(2L)).thenReturn(new ItineraryConversationDO().setId(2L));
+        when(userItineraryConversationMapper.selectById(2L)).thenReturn(new UserItineraryConversationDO().setId(2L));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> service.getOrCreateSession(2L, Map.of(), ManagedTripAgentStage.INTAKE));
@@ -112,13 +112,13 @@ class ManagedTripSessionServiceTest {
     }
 
     private static ManagedTripSessionService createService(ManagedAgentClient agentClient,
-                                                           ItineraryConversationMapper conversationMapper) {
+                                                           UserItineraryConversationMapper userItineraryConversationMapper) {
         ManagedTripSessionService service = new ManagedTripSessionService();
         ReflectionTestUtils.setField(service, "managedAgentClient", agentClient);
         ReflectionTestUtils.setField(service, "properties", new ManagedTripAgentProperties()
                 .setIntakeAgentId("agent-intake").setIntakeEnvironmentId("environment-intake")
                 .setPlanAgentId("agent-plan").setPlanEnvironmentId("environment-plan"));
-        ReflectionTestUtils.setField(service, "conversationMapper", conversationMapper);
+        ReflectionTestUtils.setField(service, "userItineraryConversationMapper", userItineraryConversationMapper);
         return service;
     }
 

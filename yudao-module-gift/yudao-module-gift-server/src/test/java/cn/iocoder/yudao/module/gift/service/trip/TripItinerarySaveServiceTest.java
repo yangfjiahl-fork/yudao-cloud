@@ -1,7 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -24,17 +24,17 @@ class TripItinerarySaveServiceTest extends BaseMockitoUnitTest {
     @Mock
     private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
     @Mock
-    private ItineraryConversationService conversationService;
+    private UserItineraryConversationService userItineraryConversationService;
 
     @Test
     void saveGeneratedItinerary_shouldPersistCurrentItineraryAndEvent() {
-        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L).setMemberId(3L);
+        UserItineraryConversationDO trip = new UserItineraryConversationDO().setId(2L).setMemberId(3L);
         Map<String, Object> state = Map.of("startDate", "2026-10-01", "destination", "云南");
         Map<String, Object> itinerary = new LinkedHashMap<>();
         itinerary.put("summary", "云南亲子六日行程");
         itinerary.put("daily_itinerary", List.of(Map.of(
                 "day", 1, "slots", List.of(Map.of("slot", "MORNING", "poiId", "poi-1")))));
-        when(conversationService.createEvent(2L, "run-1", 8L, "ITINERARY", "assistant", "ASSEMBLE",
+        when(userItineraryConversationService.createEvent(2L, "run-1", 8L, "ITINERARY", "assistant", "ASSEMBLE",
                 "云南亲子六日行程")).thenReturn(new UserItineraryConversationEventDO().setId(9L));
         when(structuredItineraryPersistenceService.persist(trip, 8L, 9L, 3L, state, itinerary))
                 .thenReturn(10L);
@@ -52,8 +52,8 @@ class TripItinerarySaveServiceTest extends BaseMockitoUnitTest {
         assertEquals("MORNING", normalizedItem.get("timePeriod"));
         assertEquals(150, normalizedItem.get("durationMinutes"));
 
-        verify(conversationService).linkItinerary(9L, 10L);
-        verify(conversationService).updateTitle(2L, "2026-10-01 云南");
+        verify(userItineraryConversationService).linkItinerary(9L, 10L);
+        verify(userItineraryConversationService).updateTitle(2L, "2026-10-01 云南");
     }
 
 }

@@ -1,8 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
-import cn.iocoder.yudao.module.gift.dal.mysql.itineraryconversation.ItineraryConversationMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritineraryconversation.UserItineraryConversationMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritineraryconversationevent.UserItineraryConversationEventMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -11,29 +11,29 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
-public class ItineraryConversationService {
+public class UserItineraryConversationService {
 
     private static final int STATUS_ACTIVE = 1;
 
     @Resource
-    private ItineraryConversationMapper conversationMapper;
+    private UserItineraryConversationMapper userItineraryConversationMapper;
     @Resource
-    private UserItineraryConversationEventMapper eventMapper;
+    private UserItineraryConversationEventMapper userItineraryConversationEventMapper;
 
-    public ItineraryConversationDO getRequired(Long id, Long memberId) {
-        ItineraryConversationDO conversation = conversationMapper.selectByIdAndMemberId(id, memberId);
+    public UserItineraryConversationDO getRequired(Long id, Long memberId) {
+        UserItineraryConversationDO conversation = userItineraryConversationMapper.selectByIdAndMemberId(id, memberId);
         if (conversation == null) {
             throw new IllegalArgumentException("行程会话不存在");
         }
         return conversation;
     }
 
-    public List<ItineraryConversationDO> getList(Long memberId) {
-        return conversationMapper.selectListByMemberId(memberId);
+    public List<UserItineraryConversationDO> getList(Long memberId) {
+        return userItineraryConversationMapper.selectListByMemberId(memberId);
     }
 
     public Long create(Long memberId, Long provinceId, Long cityId, Long districtId) {
-        ItineraryConversationDO conversation = new ItineraryConversationDO();
+        UserItineraryConversationDO conversation = new UserItineraryConversationDO();
         conversation.setMemberId(memberId);
         conversation.setTitle("新旅行计划");
         conversation.setPinned(false);
@@ -43,23 +43,23 @@ public class ItineraryConversationService {
         conversation.setStateJson("{}");
         conversation.setMissingRequiredJson("[]");
         conversation.setStatus(STATUS_ACTIVE);
-        conversationMapper.insert(conversation);
+        userItineraryConversationMapper.insert(conversation);
         return conversation.getId();
     }
 
     public void update(Long id, Long memberId, String title, Boolean pinned) {
         getRequired(id, memberId);
-        conversationMapper.updateById(new ItineraryConversationDO().setId(id).setTitle(title).setPinned(pinned));
+        userItineraryConversationMapper.updateById(new UserItineraryConversationDO().setId(id).setTitle(title).setPinned(pinned));
     }
 
     public void delete(Long id, Long memberId) {
         getRequired(id, memberId);
-        conversationMapper.deleteById(id);
+        userItineraryConversationMapper.deleteById(id);
     }
 
     public List<UserItineraryConversationEventDO> getEvents(Long conversationId, Long memberId) {
         getRequired(conversationId, memberId);
-        return eventMapper.selectListByConversationId(conversationId);
+        return userItineraryConversationEventMapper.selectListByConversationId(conversationId);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -82,21 +82,21 @@ public class ItineraryConversationService {
         event.setContent(content);
         event.setPayloadJson(payloadJson);
         event.setStatus(STATUS_ACTIVE);
-        eventMapper.insert(event);
+        userItineraryConversationEventMapper.insert(event);
         return event;
     }
 
     public void linkItinerary(Long eventId, Long userItineraryId) {
-        eventMapper.updateById(new UserItineraryConversationEventDO().setId(eventId)
+        userItineraryConversationEventMapper.updateById(new UserItineraryConversationEventDO().setId(eventId)
                 .setUserItineraryId(userItineraryId));
     }
 
     public void updateTitle(Long conversationId, String title) {
-        conversationMapper.updateById(new ItineraryConversationDO().setId(conversationId).setTitle(title));
+        userItineraryConversationMapper.updateById(new UserItineraryConversationDO().setId(conversationId).setTitle(title));
     }
 
     public void updateState(Long conversationId, String stateJson, String missingRequiredJson) {
-        conversationMapper.updateById(new ItineraryConversationDO().setId(conversationId)
+        userItineraryConversationMapper.updateById(new UserItineraryConversationDO().setId(conversationId)
                 .setStateJson(stateJson).setMissingRequiredJson(missingRequiredJson));
     }
 

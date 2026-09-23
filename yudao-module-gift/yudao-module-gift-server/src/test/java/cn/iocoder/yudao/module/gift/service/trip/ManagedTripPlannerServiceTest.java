@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionMetrics;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionResult;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
@@ -41,13 +41,13 @@ class ManagedTripPlannerServiceTest {
                 """;
         ManagedAgentExecutionMetrics metrics =
                 new ManagedAgentExecutionMetrics(2, 1, 1_200, 300, 1_500, 500, 800);
-        when(executor.execute(any(ItineraryConversationDO.class), anyMap(), anyString(),
+        when(executor.execute(any(UserItineraryConversationDO.class), anyMap(), anyString(),
                 eq(ManagedTripAgentStage.PLAN)))
                 .thenReturn(new ManagedTripAgentExecutor.Execution("session-1",
                         new ManagedAgentExecutionResult(managedResponse, metrics)));
         Map<String, Object> expected = Map.of("daily_itinerary", List.of(), "citation_ids", List.of());
         when(assembler.assemble(anyMap(), any(TripMacroSkeleton.class), any(Consumer.class))).thenReturn(expected);
-        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L);
+        UserItineraryConversationDO trip = new UserItineraryConversationDO().setId(2L);
         Map<String, Object> state = Map.of("destination", "云南", "days", 2);
 
         Map<String, Object> result = service.plan(trip, state, ignored -> { });

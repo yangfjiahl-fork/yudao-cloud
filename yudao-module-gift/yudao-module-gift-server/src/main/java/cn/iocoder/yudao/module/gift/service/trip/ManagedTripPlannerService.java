@@ -1,7 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripMacroSkeleton;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -24,7 +24,7 @@ public class ManagedTripPlannerService {
     @Resource
     private TripItineraryAssembler tripItineraryAssembler;
 
-    public Map<String, Object> plan(ItineraryConversationDO conversation, Map<String, Object> state,
+    public Map<String, Object> plan(UserItineraryConversationDO conversation, Map<String, Object> state,
                                     Consumer<String> progressConsumer) {
         String task = buildTask(state);
         progressConsumer.accept("托管旅行 Agent 正在规划每日城市、区域与主题…");

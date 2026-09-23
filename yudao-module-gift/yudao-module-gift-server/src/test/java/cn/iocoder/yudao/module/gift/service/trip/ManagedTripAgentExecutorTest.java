@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.gift.service.trip;
 
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentClient;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionMetrics;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionOptions;
@@ -29,7 +29,7 @@ class ManagedTripAgentExecutorTest {
         ReflectionTestUtils.setField(executor, "managedTripSessionService", sessionService);
         ReflectionTestUtils.setField(executor, "managedAgentClient", agentClient);
         ReflectionTestUtils.setField(executor, "properties", new ManagedTripAgentProperties());
-        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L);
+        UserItineraryConversationDO trip = new UserItineraryConversationDO().setId(2L);
         Map<String, Object> state = Map.of("destination", "云南");
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"topic\":\"TRAVEL\"}",
                 new ManagedAgentExecutionMetrics(1, 0, 200, 50, 250, 100, 300));
@@ -59,7 +59,7 @@ class ManagedTripAgentExecutorTest {
         ReflectionTestUtils.setField(executor, "managedTripSessionService", sessionService);
         ReflectionTestUtils.setField(executor, "managedAgentClient", agentClient);
         ReflectionTestUtils.setField(executor, "properties", new ManagedTripAgentProperties());
-        ItineraryConversationDO trip = new ItineraryConversationDO().setId(2L);
+        UserItineraryConversationDO trip = new UserItineraryConversationDO().setId(2L);
         Map<String, Object> state = Map.of("destination", "云南");
         ManagedAgentExecutionResult agentResult = new ManagedAgentExecutionResult("{\"macro_skeleton\":{}}",
                 new ManagedAgentExecutionMetrics(1, 0, 200, 50, 250, 100, 300));

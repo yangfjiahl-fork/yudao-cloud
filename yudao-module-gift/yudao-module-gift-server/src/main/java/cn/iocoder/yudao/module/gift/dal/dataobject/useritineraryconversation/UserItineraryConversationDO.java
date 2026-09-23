@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation;
+package cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation;
 
 import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 @KeySequence("gift_user_itinerary_conversation_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class ItineraryConversationDO extends TenantBaseDO {
+public class UserItineraryConversationDO extends TenantBaseDO {
 
     @TableId
     private Long id;

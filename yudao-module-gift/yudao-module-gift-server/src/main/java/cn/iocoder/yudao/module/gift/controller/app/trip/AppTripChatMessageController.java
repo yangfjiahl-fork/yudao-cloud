@@ -17,7 +17,7 @@ import cn.iocoder.yudao.module.gift.controller.app.trip.vo.AppTripWeatherRespVO;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.gift.service.trip.TripAgentService;
-import cn.iocoder.yudao.module.gift.service.trip.ItineraryConversationService;
+import cn.iocoder.yudao.module.gift.service.trip.UserItineraryConversationService;
 import cn.iocoder.yudao.module.gift.service.trip.TripPlanEditorService;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripAgentEvent;
 import cn.iocoder.yudao.module.gift.service.trip.bo.TripChangeCommand;
@@ -62,7 +62,7 @@ public class AppTripChatMessageController {
     private static final int TEXT_DELTA_MAX_CODE_POINTS = 12;
 
     @Resource
-    private ItineraryConversationService conversationService;
+    private UserItineraryConversationService userItineraryConversationService;
     @Resource
     private TripAgentService tripAgentService;
     @Resource
@@ -72,7 +72,7 @@ public class AppTripChatMessageController {
     @Operation(summary = "获得旅行规划消息列表")
     @Parameter(name = "conversationId", required = true, description = "对话编号", example = "1024")
     public CommonResult<List<AppTripChatMessageRespVO>> getMessageList(@RequestParam("conversationId") Long conversationId) {
-        List<AppTripChatMessageRespVO> messages = conversationService.getEvents(conversationId, getLoginUserId())
+        List<AppTripChatMessageRespVO> messages = userItineraryConversationService.getEvents(conversationId, getLoginUserId())
                 .stream().map(AppTripChatMessageController::toMessage).toList();
         Collection<Long> messageIds = messages.stream().map(AppTripChatMessageRespVO::getId).toList();
         Map<Long, Map<String, Object>> itineraryMap = tripAgentService.getItineraryMapByMessageIds(messageIds);
@@ -93,7 +93,7 @@ public class AppTripChatMessageController {
             throw new IllegalArgumentException("旅行规划仅接受 user 消息");
         }
         Long memberId = getLoginUserId();
-        conversationService.getRequired(conversationId, memberId);
+        userItineraryConversationService.getRequired(conversationId, memberId);
         Long tenantId = TenantContextHolder.getRequiredTenantId();
         log.info("[runManagedAgUi][conversationId({}) runId({}) memberId({}) tenantId({}) 创建 AG-UI SSE 流]",
                 conversationId, reqVO.getRunId(), memberId, tenantId);
@@ -122,7 +122,7 @@ public class AppTripChatMessageController {
     public CommonResult<AppTripItinerarySlotResolveRespVO> resolveItinerarySlot(
             @Valid @RequestBody AppTripItinerarySlotResolveReqVO reqVO) {
         Long memberId = getLoginUserId();
-        conversationService.getRequired(reqVO.getConversationId(), memberId);
+        userItineraryConversationService.getRequired(reqVO.getConversationId(), memberId);
         TripItinerarySlotResult result = tripAgentService.resolveItinerarySlot(reqVO.getConversationId(), memberId,
                 reqVO.getMessageId(), reqVO.getDay(), reqVO.getSlot());
         AppTripItinerarySlotResolveRespVO response = new AppTripItinerarySlotResolveRespVO();
@@ -153,7 +153,7 @@ public class AppTripChatMessageController {
     public CommonResult<AppTripItineraryRouteResolveRespVO> resolveItineraryRoute(
             @Valid @RequestBody AppTripItineraryRouteResolveReqVO reqVO) {
         Long memberId = getLoginUserId();
-        conversationService.getRequired(reqVO.getConversationId(), memberId);
+        userItineraryConversationService.getRequired(reqVO.getConversationId(), memberId);
         TripItineraryRouteResult result = tripAgentService.resolveItineraryRoute(reqVO.getConversationId(), memberId,
                 reqVO.getMessageId(), reqVO.getDay());
         AppTripItineraryRouteResolveRespVO response = new AppTripItineraryRouteResolveRespVO();
@@ -169,7 +169,7 @@ public class AppTripChatMessageController {
     public CommonResult<AppTripItineraryChangeRespVO> changeItinerary(
             @Valid @RequestBody AppTripItineraryChangeReqVO reqVO) {
         Long memberId = getLoginUserId();
-        conversationService.getRequired(reqVO.getConversationId(), memberId);
+        userItineraryConversationService.getRequired(reqVO.getConversationId(), memberId);
         TripChangeCommand command = new TripChangeCommand(reqVO.getOperation(), reqVO.getItemId(), reqVO.getDay(),
                 reqVO.getTimePeriod(), reqVO.getSort(), reqVO.getValues());
         TripPlanEditorService.EditResult result = tripPlanEditorService.apply(

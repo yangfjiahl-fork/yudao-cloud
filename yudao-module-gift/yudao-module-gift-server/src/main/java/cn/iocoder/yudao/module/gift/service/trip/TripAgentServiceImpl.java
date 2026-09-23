@@ -13,7 +13,7 @@ import cn.iocoder.yudao.module.ai.api.chat.AiChatApi;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateReqDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateRespDTO;
 import cn.iocoder.yudao.module.ai.api.chat.dto.AiChatGenerateStreamRespDTO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
@@ -91,7 +91,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private AiChatApi aiChatApi;
     @Resource
-    private ItineraryConversationService conversationService;
+    private UserItineraryConversationService userItineraryConversationService;
     @Resource
     private GenAiTelemetryHandler genAiTelemetryHandler;
     @Resource
@@ -133,7 +133,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String createTrip(Long conversationId, Long memberId, Long provinceId, Long cityId, Long districtId) {
-        ItineraryConversationDO conversation = conversationService.getRequired(conversationId, memberId);
+        UserItineraryConversationDO conversation = userItineraryConversationService.getRequired(conversationId, memberId);
         Map<String, Object> existingState = TripAgentFormatUtils.parseMap(conversation.getStateJson());
         if (!existingState.isEmpty()) {
             return trimNullable(existingState.get("departure"));
@@ -145,7 +145,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
         conversation.setStateJson(JsonUtils.toJsonString(state));
         conversation.setMissingRequiredJson(JsonUtils.toJsonString(validateState(state)));
-        conversationService.updateState(conversationId, conversation.getStateJson(),
+        userItineraryConversationService.updateState(conversationId, conversation.getStateJson(),
                 conversation.getMissingRequiredJson());
         log.info("[createTrip][conversationId({}) memberId({}) 初始化成功]", conversationId, memberId);
         return defaultDeparture;
@@ -193,7 +193,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     private TripAgentResult doHandleManagedMessage(Long conversationId, Long memberId, String runId, String content,
                                                    Consumer<TripAgentEvent> eventConsumer) {
-        ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
+        UserItineraryConversationDO trip = userItineraryConversationService.getRequired(conversationId, memberId);
         log.info("[handleMessage][conversationId({}) memberId({}) 开始编排]", conversationId, memberId);
         UserItineraryConversationEventDO requestEvent = createTranscriptMessage(
                 conversationId, runId, null, content, false);
@@ -238,7 +238,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                 currentItinerary != null);
         trip.setStateJson(JsonUtils.toJsonString(state));
         trip.setMissingRequiredJson(JsonUtils.toJsonString(missingRequired));
-        conversationService.updateState(conversationId, trip.getStateJson(), trip.getMissingRequiredJson());
+        userItineraryConversationService.updateState(conversationId, trip.getStateJson(), trip.getMissingRequiredJson());
         log.info("[handleMessage][tripId({}) action({}) 状态字段({}) 缺失字段({})]",
                 trip.getId(), action, state.keySet(), missingRequired);
         int questionCount = getQuestionCount();
@@ -373,7 +373,7 @@ public class TripAgentServiceImpl implements TripAgentService {
 
     @Override
     public TripItineraryRouteResult resolveItineraryRoute(Long conversationId, Long memberId, Long messageId, Integer day) {
-        conversationService.getRequired(conversationId, memberId);
+        userItineraryConversationService.getRequired(conversationId, memberId);
         UserItineraryDO itinerary = userItineraryQueryService.getByResultEventId(messageId);
         if (itinerary == null || !conversationId.equals(itinerary.getConversationId())) {
             throw new IllegalArgumentException("行程路线不存在或不属于当前会话");
@@ -389,7 +389,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Override
     public TripItinerarySlotResult resolveItinerarySlot(Long conversationId, Long memberId, Long messageId,
                                                          Integer day, String slot) {
-        ItineraryConversationDO trip = conversationService.getRequired(conversationId, memberId);
+        UserItineraryConversationDO trip = userItineraryConversationService.getRequired(conversationId, memberId);
         UserItineraryDO itineraryDO = userItineraryQueryService.getByResultEventId(messageId);
         if (itineraryDO == null || !conversationId.equals(itineraryDO.getConversationId())) {
             throw new IllegalArgumentException("行程骨架不存在或不属于当前会话");
@@ -440,7 +440,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private TripItinerarySlotResult resolveItineraryOverviewSlot(Long conversationId, Long memberId, Long messageId,
-                                                                   ItineraryConversationDO trip,
+                                                                   UserItineraryConversationDO trip,
                                                                    UserItineraryDO itineraryDO,
                                                                    Map<String, Object> itinerary,
                                                                    Integer day, String slot) {
@@ -588,7 +588,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     }
 
     private Map<String, Object> buildPromptVariables(Long conversationId, Long memberId) {
-        ItineraryConversationDO conversation = conversationService.getRequired(conversationId, memberId);
+        UserItineraryConversationDO conversation = userItineraryConversationService.getRequired(conversationId, memberId);
         if (conversation == null) {
             throw new IllegalStateException("旅行会话不存在");
         }
@@ -625,24 +625,24 @@ public class TripAgentServiceImpl implements TripAgentService {
     private UserItineraryConversationEventDO createTranscriptMessage(Long conversationId, String runId,
                                                                      Long replyEventId, String content,
                                                                      boolean assistant) {
-        return conversationService.createEvent(conversationId, runId, replyEventId,
+        return userItineraryConversationService.createEvent(conversationId, runId, replyEventId,
                 assistant ? "ASSISTANT_MESSAGE" : "USER_MESSAGE", assistant ? "assistant" : "user",
                 assistant ? "FOLLOW_UP" : "INTAKE", content);
     }
 
-    private String executeManagedIntake(ItineraryConversationDO trip, Map<String, Object> state,
+    private String executeManagedIntake(UserItineraryConversationDO trip, Map<String, Object> state,
                                         TripItinerarySnapshot currentItinerary, String content) {
         String task = buildManagedIntakeTask(state, currentItinerary, content);
         return executeIntakeAgentTask(trip, state, task);
     }
 
-    private String executeManagedFollowUp(ItineraryConversationDO trip, Map<String, Object> state,
+    private String executeManagedFollowUp(UserItineraryConversationDO trip, Map<String, Object> state,
                                           List<String> missingRequired, int questionCount) {
         String task = buildManagedFollowUpTask(state, missingRequired, questionCount);
         return executeIntakeAgentTask(trip, state, task);
     }
 
-    private String executeIntakeAgentTask(ItineraryConversationDO trip, Map<String, Object> state, String task) {
+    private String executeIntakeAgentTask(UserItineraryConversationDO trip, Map<String, Object> state, String task) {
         ManagedTripAgentExecutor.Execution execution = managedTripAgentExecutor.execute(
                 trip, state, task, ManagedTripAgentStage.INTAKE);
         return execution.result().response();
@@ -716,7 +716,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         }
     }
 
-    private TripInteraction generateInteraction(ItineraryConversationDO trip, Map<String, Object> state,
+    private TripInteraction generateInteraction(UserItineraryConversationDO trip, Map<String, Object> state,
                                                 List<String> missingRequired, int questionCount) {
         List<Map<String, String>> fallbackSuggestions = buildInformationSuggestions(state, missingRequired);
         String fallbackQuestion = composeQuestions(buildFallbackQuestions(state, missingRequired, questionCount));

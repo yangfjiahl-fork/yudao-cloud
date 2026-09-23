@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.gift.service.trip;
 
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryconversation.ItineraryConversationDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -22,27 +22,27 @@ public class TripItinerarySaveService {
     @Resource
     private TripStructuredItineraryPersistenceService structuredItineraryPersistenceService;
     @Resource
-    private ItineraryConversationService conversationService;
+    private UserItineraryConversationService userItineraryConversationService;
 
     @Transactional(rollbackFor = Exception.class)
-    public SavedItinerary saveGeneratedItinerary(ItineraryConversationDO conversation, Long memberId,
+    public SavedItinerary saveGeneratedItinerary(UserItineraryConversationDO conversation, Long memberId,
                                                   Map<String, Object> state,
                                                   Map<String, Object> itinerary) {
         return saveGeneratedItinerary(conversation, memberId, null, null, state, itinerary);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public SavedItinerary saveGeneratedItinerary(ItineraryConversationDO conversation, Long memberId,
+    public SavedItinerary saveGeneratedItinerary(UserItineraryConversationDO conversation, Long memberId,
                                                   String runId, Long requestEventId,
                                                   Map<String, Object> state, Map<String, Object> itinerary) {
         normalizeItineraryItems(itinerary);
         String displayText = StrUtil.blankToDefault(text(itinerary.get("summary")), "已为你生成旅行方案。");
-        UserItineraryConversationEventDO assistant = conversationService.createEvent(conversation.getId(), runId, requestEventId,
+        UserItineraryConversationEventDO assistant = userItineraryConversationService.createEvent(conversation.getId(), runId, requestEventId,
                 "ITINERARY", "assistant", "ASSEMBLE", displayText);
         Long itineraryId = structuredItineraryPersistenceService.persist(
                 conversation, requestEventId, assistant.getId(), memberId, state, itinerary);
-        conversationService.linkItinerary(assistant.getId(), itineraryId);
-        conversationService.updateTitle(conversation.getId(), buildConversationTitle(state));
+        userItineraryConversationService.linkItinerary(assistant.getId(), itineraryId);
+        userItineraryConversationService.updateTitle(conversation.getId(), buildConversationTitle(state));
         return new SavedItinerary(itineraryId, assistant.getId(), displayText);
     }
 
