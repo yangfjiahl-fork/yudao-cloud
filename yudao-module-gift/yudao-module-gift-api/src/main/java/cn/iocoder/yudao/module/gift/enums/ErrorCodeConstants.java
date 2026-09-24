@@ -64,5 +64,6 @@ public interface ErrorCodeConstants {
     ErrorCode USER_ITINERARY_DAY_NOT_EXISTS = new ErrorCode(1_047_000_008, "用户行程每日安排不存在");
     ErrorCode USER_ITINERARY_DAY_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_009, "用户行程节点不存在");
     ErrorCode USER_ITINERARY_LIKED_NOT_EXISTS = new ErrorCode(1_047_000_010, "用户行程点赞不存在");
+    ErrorCode USER_FEEDBACK_NOT_EXISTS = new ErrorCode(1_047_000_011, "用户反馈不存在");
 
 }
