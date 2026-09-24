@@ -163,7 +163,7 @@ ALTER TABLE `gift_user_itinerary_day`
   MODIFY COLUMN `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   MODIFY COLUMN `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除';
 
-ALTER TABLE `gift_user_itinerary_item`
+ALTER TABLE `gift_user_itinerary_day_item`
   MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户行程节点记录ID',
   MODIFY COLUMN `user_itinerary_id` bigint NOT NULL COMMENT '用户行程ID',
   MODIFY COLUMN `user_itinerary_day_id` bigint NOT NULL COMMENT '用户行程日程ID',

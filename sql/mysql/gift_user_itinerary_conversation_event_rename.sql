@@ -32,8 +32,8 @@ ALTER TABLE `gift_user_itinerary_day`
   DROP COLUMN `route_data_status`,
   ADD UNIQUE KEY `uk_user_itinerary_day` (`user_itinerary_id`, `day`);
 
-ALTER TABLE `gift_user_itinerary_item`
-  DROP INDEX `uk_user_itinerary_item`,
+ALTER TABLE `gift_user_itinerary_day_item`
+  DROP INDEX `uk_user_itinerary_day_item`,
   DROP INDEX `idx_day_sort`,
   DROP COLUMN `previous_item_id`,
   DROP COLUMN `travel_mode_from_previous`,
@@ -42,7 +42,7 @@ ALTER TABLE `gift_user_itinerary_item`
   DROP COLUMN `travel_provider_from_previous`,
   DROP COLUMN `travel_status_from_previous`,
   DROP COLUMN `travel_route_points_json`,
-  ADD UNIQUE KEY `uk_user_itinerary_item` (`user_itinerary_id`, `item_id`),
+  ADD UNIQUE KEY `uk_user_itinerary_day_item` (`user_itinerary_id`, `item_id`),
   ADD KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`);
 
 ALTER TABLE `gift_itinerary_day`

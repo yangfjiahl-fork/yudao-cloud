@@ -11,11 +11,11 @@ import java.math.BigDecimal;
 import java.time.LocalTime;
 
 /** 用户行程节点，包括游玩、餐饮、住宿及到达/返程节点。 */
-@TableName("gift_user_itinerary_item")
-@KeySequence("gift_user_itinerary_item_seq")
+@TableName("gift_user_itinerary_day_item")
+@KeySequence("gift_user_itinerary_day_item_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class UserItineraryItemDO extends TenantBaseDO {
+public class UserItineraryDayItemDO extends TenantBaseDO {
 
     @TableId
     private Long id;

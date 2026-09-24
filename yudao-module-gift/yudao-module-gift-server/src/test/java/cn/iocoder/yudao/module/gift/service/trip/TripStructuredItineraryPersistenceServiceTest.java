@@ -5,9 +5,9 @@ import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayItemDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,17 +30,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest {
+class ItineraryStructuredPersistenceServiceTest extends BaseMockitoUnitTest {
 
     @InjectMocks
-    private TripStructuredItineraryPersistenceService service;
+    private ItineraryStructuredPersistenceService service;
 
     @Mock
     private UserItineraryMapper userItineraryMapper;
     @Mock
     private UserItineraryDayMapper userItineraryDayMapper;
     @Mock
-    private UserItineraryItemMapper userItineraryItemMapper;
+    private UserItineraryDayItemMapper userItineraryDayItemMapper;
     @Test
     void persist_shouldExpandHeaderDayAndItems() {
         UserItineraryConversationDO trip = new UserItineraryConversationDO().setId(2L).setMemberId(3L);
@@ -101,7 +101,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         itinerary.put("citation_ids", List.of("source-1"));
         itinerary.put("planner", Map.of("type", "MANAGED_MACRO_JAVA", "validation", "SERVER_PLANNED"));
 
-        List<UserItineraryItemDO> insertedItems = new ArrayList<>();
+        List<UserItineraryDayItemDO> insertedItems = new ArrayList<>();
         doAnswer(invocation -> {
             UserItineraryDO entity = invocation.getArgument(0);
             entity.setId(100L);
@@ -112,7 +112,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             entity.setId(101L);
             return 1;
         }).when(userItineraryDayMapper).insert(any(UserItineraryDayDO.class));
-        when(userItineraryItemMapper.insertBatch(any())).thenAnswer(invocation -> {
+        when(userItineraryDayItemMapper.insertBatch(any())).thenAnswer(invocation -> {
             insertedItems.addAll(invocation.getArgument(0));
             return true;
         });
@@ -138,7 +138,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
             assertEquals(20L, dayCaptor.getValue().getTenantId());
 
             assertEquals(2, insertedItems.size());
-            UserItineraryItemDO activity = insertedItems.stream()
+            UserItineraryDayItemDO activity = insertedItems.stream()
                     .filter(item -> "item-1".equals(item.getItemId())).findFirst().orElseThrow();
             assertEquals("MORNING", activity.getSlot());
             assertEquals(new BigDecimal("102.7000"), activity.getLongitude());
@@ -160,7 +160,7 @@ class TripStructuredItineraryPersistenceServiceTest extends BaseMockitoUnitTest 
         Long itineraryId = service.persist(conversation, 8L, 9L, 3L, Map.of(), Map.of());
 
         assertEquals(100L, itineraryId);
-        verify(userItineraryItemMapper).deletePhysicallyByUserItineraryId(100L);
+        verify(userItineraryDayItemMapper).deletePhysicallyByUserItineraryId(100L);
         verify(userItineraryDayMapper).deletePhysicallyByUserItineraryId(100L);
         verify(userItineraryMapper).update(isNull(), any());
         verify(userItineraryMapper, never()).insert(any(UserItineraryDO.class));

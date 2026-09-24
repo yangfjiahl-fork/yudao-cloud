@@ -6,9 +6,9 @@ import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayItemDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import jakarta.annotation.Resource;
@@ -26,7 +26,7 @@ import java.util.Map;
 
 /** 将当前行程 JSON 覆盖写入可查询、可编辑的用户行程结构。 */
 @Service
-public class TripStructuredItineraryPersistenceService {
+public class ItineraryStructuredPersistenceService {
 
     private static final int RESOLVE_STATUS_PENDING = 0;
     private static final int RESOLVE_STATUS_COMPLETED = 2;
@@ -37,7 +37,7 @@ public class TripStructuredItineraryPersistenceService {
     @Resource
     private UserItineraryDayMapper userItineraryDayMapper;
     @Resource
-    private UserItineraryItemMapper userItineraryItemMapper;
+    private UserItineraryDayItemMapper userItineraryDayItemMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public Long persist(UserItineraryConversationDO conversation, Long requestEventId, Long resultEventId, Long memberId,
@@ -52,7 +52,7 @@ public class TripStructuredItineraryPersistenceService {
             userItineraryMapper.insert(userItinerary);
         } else {
             userItinerary.setId(existing.getId());
-            userItineraryItemMapper.deletePhysicallyByUserItineraryId(existing.getId());
+            userItineraryDayItemMapper.deletePhysicallyByUserItineraryId(existing.getId());
             userItineraryDayMapper.deletePhysicallyByUserItineraryId(existing.getId());
             updateUserItinerary(userItinerary);
         }
@@ -182,7 +182,7 @@ public class TripStructuredItineraryPersistenceService {
 
     private void persistItems(Long userItineraryId, UserItineraryDayDO dayDO, Map<String, Object> day) {
         List<?> slots = list(day.get("slots"));
-        List<UserItineraryItemDO> items = new ArrayList<>();
+        List<UserItineraryDayItemDO> items = new ArrayList<>();
         for (int index = 0; index < slots.size(); index++) {
             Map<String, Object> slot = map(slots.get(index));
             if (!slot.isEmpty()) {
@@ -190,14 +190,14 @@ public class TripStructuredItineraryPersistenceService {
             }
         }
         if (!items.isEmpty()) {
-            userItineraryItemMapper.insertBatch(items);
+            userItineraryDayItemMapper.insertBatch(items);
         }
     }
 
-    private static UserItineraryItemDO buildItem(Long userItineraryId, Long userItineraryDayId, Integer day,
+    private static UserItineraryDayItemDO buildItem(Long userItineraryId, Long userItineraryDayId, Integer day,
                                                    Map<String, Object> slot, int index) {
         Map<String, Object> snapshot = map(slot.get("poiSnapshot"));
-        UserItineraryItemDO result = new UserItineraryItemDO();
+        UserItineraryDayItemDO result = new UserItineraryDayItemDO();
         result.setTenantId(TenantContextHolder.getRequiredTenantId());
         result.setUserItineraryId(userItineraryId);
         result.setUserItineraryDayId(userItineraryDayId);

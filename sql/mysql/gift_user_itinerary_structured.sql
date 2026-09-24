@@ -2,7 +2,7 @@
 -- 用户会话、会话事件和个人行程统一使用 user_itinerary 命名空间。
 
 DROP TABLE IF EXISTS `gift_user_itinerary_transport_segment`;
-DROP TABLE IF EXISTS `gift_user_itinerary_item`;
+DROP TABLE IF EXISTS `gift_user_itinerary_day_item`;
 DROP TABLE IF EXISTS `gift_user_itinerary_day`;
 DROP TABLE IF EXISTS `gift_user_itinerary`;
 DROP TABLE IF EXISTS `gift_user_itinerary_conversation_event`;
@@ -136,7 +136,7 @@ CREATE TABLE `gift_user_itinerary_day` (
   PRIMARY KEY (`id`), UNIQUE KEY `uk_user_itinerary_day` (`user_itinerary_id`, `day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程每日安排';
 
-CREATE TABLE `gift_user_itinerary_item` (
+CREATE TABLE `gift_user_itinerary_day_item` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户行程节点记录ID',
   `tenant_id` bigint NOT NULL COMMENT '租户ID',
   `user_itinerary_id` bigint NOT NULL COMMENT '用户行程ID',
@@ -186,7 +186,7 @@ CREATE TABLE `gift_user_itinerary_item` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_user_itinerary_item` (`user_itinerary_id`, `item_id`),
+  UNIQUE KEY `uk_user_itinerary_day_item` (`user_itinerary_id`, `item_id`),
   KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程节点';
 

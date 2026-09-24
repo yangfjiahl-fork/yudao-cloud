@@ -3,9 +3,9 @@ package cn.iocoder.yudao.module.gift.service.trip;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayItemDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -24,7 +24,7 @@ public class UserItineraryQueryService {
     @Resource
     private UserItineraryDayMapper userItineraryDayMapper;
     @Resource
-    private UserItineraryItemMapper userItineraryItemMapper;
+    private UserItineraryDayItemMapper userItineraryDayItemMapper;
 
     public UserItineraryDO getById(Long id, Long conversationId) {
         return userItineraryMapper.selectByIdAndConversationId(id, conversationId);
@@ -53,7 +53,7 @@ public class UserItineraryQueryService {
                 itinerary.getOverviewSkeleton(), "detail", itinerary.getOverviewDetail(), "slot", "TRIP_OVERVIEW"));
         result.put("planner", mapOf("type", itinerary.getPlannerType(), "validation", itinerary.getPlannerValidation()));
         List<UserItineraryDayDO> days = userItineraryDayMapper.selectListByUserItineraryId(itinerary.getId());
-        List<UserItineraryItemDO> items = userItineraryItemMapper.selectListByUserItineraryId(itinerary.getId());
+        List<UserItineraryDayItemDO> items = userItineraryDayItemMapper.selectListByUserItineraryId(itinerary.getId());
         List<Map<String, Object>> daily = new ArrayList<>();
         List<Map<String, Object>> macroDays = new ArrayList<>();
         for (UserItineraryDayDO day : days) {
@@ -80,7 +80,7 @@ public class UserItineraryQueryService {
         return result;
     }
 
-    private static Map<String, Object> toMap(UserItineraryItemDO item) {
+    private static Map<String, Object> toMap(UserItineraryDayItemDO item) {
         return mapOf("itemId", item.getItemId(), "day", item.getDay(), "type", item.getType(),
                 "slot", item.getSlot(), "label", item.getLabel(), "sort", item.getSort(),
                 "startTime", item.getStartTime(), "endTime", item.getEndTime(),

@@ -17,9 +17,9 @@ import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.Use
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayDO;
-import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryItemDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDayItemDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayMapper;
-import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryItemMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryDayItemMapper;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentExecutionTerminatedException;
 import cn.iocoder.yudao.module.gift.framework.trip.managed.ManagedAgentTerminationReason;
@@ -99,7 +99,7 @@ public class TripAgentServiceImpl implements TripAgentService {
     @Resource
     private UserItineraryDayMapper userItineraryDayMapper;
     @Resource
-    private UserItineraryItemMapper userItineraryItemMapper;
+    private UserItineraryDayItemMapper userItineraryDayItemMapper;
     @Resource
     private ConfigApi configApi;
     @Resource
@@ -405,7 +405,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                     itineraryDO, itinerary, day, slot), itinerary, day);
         }
         String normalizedSlot = StrUtil.trim(slot).toUpperCase(Locale.ROOT);
-        UserItineraryItemDO item = userItineraryItemMapper.selectByUserItineraryIdAndDayAndSlot(
+        UserItineraryDayItemDO item = userItineraryDayItemMapper.selectByUserItineraryIdAndDayAndSlot(
                 itineraryDO.getId(), day, normalizedSlot);
         if (item == null) {
             throw new IllegalArgumentException("行程节点不存在");
@@ -416,7 +416,7 @@ public class TripAgentServiceImpl implements TripAgentService {
                     resolveSlotCity(state, skeletonSlot)), itinerary, day);
         }
         item.setResolveStatus(SLOT_RESOLVE_STATUS_PROCESSING);
-        userItineraryItemMapper.updateById(item);
+        userItineraryDayItemMapper.updateById(item);
         try {
             TripResearchExecutor.SlotResearchResult researchResult = tripResearchExecutor.resolveSlot(trip.getId(), state, day, slot,
                     trimNullable(skeletonSlot.get("skeleton")), trimNullable(skeletonSlot.get("poiName")),
@@ -1235,7 +1235,7 @@ public class TripAgentServiceImpl implements TripAgentService {
         return "null".equalsIgnoreCase(text) ? "" : text;
     }
 
-    private static TripItinerarySlotState toTransientSlot(UserItineraryItemDO item) {
+    private static TripItinerarySlotState toTransientSlot(UserItineraryDayItemDO item) {
         TripItinerarySlotState slot = new TripItinerarySlotState();
         slot.setId(item.getId());
         slot.setItineraryId(item.getUserItineraryId());
@@ -1251,13 +1251,13 @@ public class TripAgentServiceImpl implements TripAgentService {
         return slot;
     }
 
-    private void updateItemFromSlot(UserItineraryItemDO item, TripItinerarySlotState slot) {
+    private void updateItemFromSlot(UserItineraryDayItemDO item, TripItinerarySlotState slot) {
         item.setStatus(slot.getStatus());
         item.setResolveStatus(slot.getResolveStatus());
         item.setDetail(slot.getDetail());
         item.setCandidatesJson(slot.getCandidatesJson());
         item.setCitationIdsJson(slot.getCitationIdsJson());
-        userItineraryItemMapper.updateById(item);
+        userItineraryDayItemMapper.updateById(item);
     }
 
     private TripItinerarySlotState overviewSlot(UserItineraryDO itinerary, Integer day, String slotName) {
