@@ -191,7 +191,7 @@ CREATE TABLE `gift_user_itinerary_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户行程节点';
 
 -- 通用行程按天拆分；当前通用行程表无数据，可直接重建节点表。
-DROP TABLE IF EXISTS `gift_itinerary_item`;
+DROP TABLE IF EXISTS `gift_itinerary_day_item`;
 DROP TABLE IF EXISTS `gift_itinerary_day`;
 
 CREATE TABLE `gift_itinerary_day` (
@@ -212,7 +212,7 @@ CREATE TABLE `gift_itinerary_day` (
   PRIMARY KEY (`id`), UNIQUE KEY `uk_itinerary_day` (`itinerary_id`, `day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通用行程每日安排';
 
-CREATE TABLE `gift_itinerary_item` (
+CREATE TABLE `gift_itinerary_day_item` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '通用行程节点ID',
   `tenant_id` bigint NOT NULL DEFAULT 1 COMMENT '租户ID',
   `itinerary_id` bigint NOT NULL COMMENT '通用行程ID',

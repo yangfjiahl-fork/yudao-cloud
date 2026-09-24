@@ -49,7 +49,7 @@ ALTER TABLE `gift_itinerary_day`
   DROP INDEX `uk_itinerary_day`,
   ADD UNIQUE KEY `uk_itinerary_day` (`itinerary_id`, `day`);
 
-ALTER TABLE `gift_itinerary_item`
+ALTER TABLE `gift_itinerary_day_item`
   DROP INDEX `idx_itinerary_day_sort`,
   DROP COLUMN `previous_item_id`,
   DROP COLUMN `travel_mode_from_previous`,

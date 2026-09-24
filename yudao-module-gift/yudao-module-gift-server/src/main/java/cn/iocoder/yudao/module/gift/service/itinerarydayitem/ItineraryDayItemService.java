@@ -1,9 +1,9 @@
-package cn.iocoder.yudao.module.gift.service.itineraryitem;
+package cn.iocoder.yudao.module.gift.service.itinerarydayitem;
 
 import java.util.*;
 import jakarta.validation.*;
-import cn.iocoder.yudao.module.gift.controller.admin.itineraryitem.vo.*;
-import cn.iocoder.yudao.module.gift.dal.dataobject.itineraryitem.ItineraryItemDO;
+import cn.iocoder.yudao.module.gift.controller.admin.itinerarydayitem.vo.*;
+import cn.iocoder.yudao.module.gift.dal.dataobject.itinerarydayitem.ItineraryDayItemDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 
@@ -12,7 +12,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
  *
  * @author 羔享科技
  */
-public interface ItineraryItemService {
+public interface ItineraryDayItemService {
 
     /**
      * 创建文章
@@ -20,28 +20,28 @@ public interface ItineraryItemService {
      * @param createReqVO 创建信息
      * @return 编号
      */
-    Long createItineraryItem(@Valid ItineraryItemSaveReqVO createReqVO);
+    Long createItineraryDayItem(@Valid ItineraryDayItemSaveReqVO createReqVO);
 
     /**
      * 更新文章
      *
      * @param updateReqVO 更新信息
      */
-    void updateItineraryItem(@Valid ItineraryItemSaveReqVO updateReqVO);
+    void updateItineraryDayItem(@Valid ItineraryDayItemSaveReqVO updateReqVO);
 
     /**
      * 删除文章
      *
      * @param id 编号
      */
-    void deleteItineraryItem(Long id);
+    void deleteItineraryDayItem(Long id);
 
     /**
     * 批量删除文章
     *
     * @param ids 编号
     */
-    void deleteItineraryItemListByIds(List<Long> ids);
+    void deleteItineraryDayItemListByIds(List<Long> ids);
 
     /**
      * 获得文章
@@ -49,7 +49,7 @@ public interface ItineraryItemService {
      * @param id 编号
      * @return 文章
      */
-    ItineraryItemDO getItineraryItem(Long id);
+    ItineraryDayItemDO getItineraryDayItem(Long id);
 
     /**
      * 获得文章分页
@@ -57,6 +57,6 @@ public interface ItineraryItemService {
      * @param pageReqVO 分页查询
      * @return 文章分页
      */
-    PageResult<ItineraryItemDO> getItineraryItemPage(ItineraryItemPageReqVO pageReqVO);
+    PageResult<ItineraryDayItemDO> getItineraryDayItemPage(ItineraryDayItemPageReqVO pageReqVO);
 
 }

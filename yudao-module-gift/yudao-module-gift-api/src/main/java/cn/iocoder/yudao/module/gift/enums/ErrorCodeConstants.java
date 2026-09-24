@@ -56,7 +56,7 @@ public interface ErrorCodeConstants {
     // ========== 线路与轮播管理 1-047-000-000 ==========
     ErrorCode ITINERARY_NOT_EXISTS = new ErrorCode(1_047_000_001, "线路不存在");
     ErrorCode ITINERARY_CATEGORY_NOT_EXISTS = new ErrorCode(1_047_000_002, "线路类别不存在");
-    ErrorCode ITINERARY_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_003, "线路内容不存在");
+    ErrorCode ITINERARY_DAY_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_003, "线路内容不存在");
     ErrorCode SLIDER_NOT_EXISTS = new ErrorCode(1_047_000_004, "轮播不存在");
     ErrorCode SLIDER_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_005, "轮播图不存在");
     ErrorCode USER_ITINERARY_NOT_EXISTS = new ErrorCode(1_047_000_006, "用户行程不存在");

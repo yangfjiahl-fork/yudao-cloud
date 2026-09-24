@@ -1,78 +1,81 @@
-package cn.iocoder.yudao.module.gift.controller.admin.itineraryitem.vo;
+package cn.iocoder.yudao.module.gift.controller.admin.itinerarydayitem.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.math.BigDecimal;
-import jakarta.validation.constraints.*;
+import cn.idev.excel.annotation.*;
 
-@Schema(description = "管理后台 - 文章新增/修改 Request VO")
+@Schema(description = "管理后台 - 文章 Response VO")
 @Data
-public class ItineraryItemSaveReqVO {
+@ExcelIgnoreUnannotated
+public class ItineraryDayItemRespVO {
 
     @Schema(description = "主键", requiredMode = Schema.RequiredMode.REQUIRED, example = "12291")
+    @ExcelProperty("主键")
     private Long id;
 
     @Schema(description = "线路ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
-    @NotNull(message = "线路ID不能为空")
+    @ExcelProperty("线路ID")
     private Long itineraryId;
 
-    @NotNull(message = "行程日ID不能为空")
     private Long itineraryDayId;
-
     private String type;
     private String slot;
 
     @Schema(description = "省ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "16725")
-    @NotNull(message = "省ID不能为空")
+    @ExcelProperty("省ID")
     private Integer provinceId;
 
     @Schema(description = "市ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "19048")
-    @NotNull(message = "市ID不能为空")
+    @ExcelProperty("市ID")
     private Integer cityId;
 
     @Schema(description = "区ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "20888")
-    @NotNull(message = "区ID不能为空")
+    @ExcelProperty("区ID")
     private Integer districtId;
 
     @Schema(description = "标题", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "标题不能为空")
+    @ExcelProperty("标题")
     private String title;
 
     @Schema(description = "副标题")
+    @ExcelProperty("副标题")
     private String subTitle;
 
     @Schema(description = "描述", requiredMode = Schema.RequiredMode.REQUIRED, example = "你说的对")
-    @NotEmpty(message = "描述不能为空")
+    @ExcelProperty("描述")
     private String description;
 
     @Schema(description = "封面图", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.iocoder.cn")
-    @NotEmpty(message = "封面图不能为空")
+    @ExcelProperty("封面图")
     private String coverUrl;
 
     @Schema(description = "宽度", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "宽度不能为空")
+    @ExcelProperty("宽度")
     private Integer coverWidth;
 
     @Schema(description = "高度", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "高度不能为空")
+    @ExcelProperty("高度")
     private Integer coverHeight;
 
     @Schema(description = "轮播图", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "轮播图不能为空")
+    @ExcelProperty("轮播图")
     private String picUrls;
 
     @Schema(description = "尺寸", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "尺寸不能为空")
+    @ExcelProperty("尺寸")
     private String picSizes;
 
     @Schema(description = "标签", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "标签不能为空")
+    @ExcelProperty("标签")
     private String tags;
 
     @Schema(description = "排序", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "排序不能为空")
+    @ExcelProperty("排序")
     private Integer sort;
 
     private LocalTime startTime;
@@ -82,16 +85,23 @@ public class ItineraryItemSaveReqVO {
     private BigDecimal latitude;
 
     @Schema(description = "位置", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "位置不能为空")
+    @ExcelProperty("位置")
     private String gdPosition;
 
     @Schema(description = "营业时间")
+    @ExcelProperty("营业时间")
     private String businessTime;
 
     @Schema(description = "详细地址")
+    @ExcelProperty("详细地址")
     private String addressDetail;
 
     @Schema(description = "电话")
+    @ExcelProperty("电话")
     private String phoneNo;
+
+    @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @ExcelProperty("创建时间")
+    private LocalDateTime createTime;
 
 }

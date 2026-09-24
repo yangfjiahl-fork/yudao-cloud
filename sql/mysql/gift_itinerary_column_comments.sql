@@ -33,7 +33,7 @@ ALTER TABLE `gift_itinerary_event`
   MODIFY COLUMN `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   MODIFY COLUMN `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除';
 
-ALTER TABLE `gift_itinerary_item`
+ALTER TABLE `gift_itinerary_day_item`
   MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '通用行程节点ID',
   MODIFY COLUMN `itinerary_id` bigint NOT NULL COMMENT '通用行程ID',
   MODIFY COLUMN `itinerary_day_id` bigint NOT NULL COMMENT '通用行程日程ID',

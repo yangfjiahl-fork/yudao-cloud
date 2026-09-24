@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.gift.controller.admin.itineraryitem.vo;
+package cn.iocoder.yudao.module.gift.controller.admin.itinerarydayitem.vo;
 
 import lombok.*;
 import java.util.*;
@@ -11,7 +11,7 @@ import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_
 
 @Schema(description = "管理后台 - 文章分页 Request VO")
 @Data
-public class ItineraryItemPageReqVO extends PageParam {
+public class ItineraryDayItemPageReqVO extends PageParam {
 
     @Schema(description = "线路ID", example = "4883")
     private Long itineraryId;
