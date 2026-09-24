@@ -16,7 +16,8 @@ ALTER TABLE `gift_user_itinerary_conversation_event`
   DROP INDEX `idx_user_itinerary_id`,
   ADD KEY `idx_conversation_event` (`conversation_id`, `id`),
   ADD KEY `idx_run_id` (`run_id`),
-  ADD KEY `idx_user_itinerary_id` (`user_itinerary_id`);
+  ADD KEY `idx_user_itinerary_id` (`user_itinerary_id`),
+  COMMENT = '用户行程会话 AG-UI 持久事件';
 
 ALTER TABLE `gift_user_itinerary`
   DROP INDEX `uk_conversation_version`,
@@ -25,7 +26,8 @@ ALTER TABLE `gift_user_itinerary`
   DROP COLUMN `version`,
   ADD UNIQUE KEY `uk_conversation_id` (`conversation_id`),
   ADD UNIQUE KEY `uk_result_event_id` (`result_event_id`),
-  ADD KEY `idx_member_start_date` (`member_id`, `start_date`);
+  ADD KEY `idx_member_start_date` (`member_id`, `start_date`),
+  COMMENT = '用户生成行程';
 
 ALTER TABLE `gift_user_itinerary_day`
   DROP INDEX `uk_user_itinerary_day`,
@@ -43,7 +45,8 @@ ALTER TABLE `gift_user_itinerary_day_item`
   DROP COLUMN `travel_status_from_previous`,
   DROP COLUMN `travel_route_points_json`,
   ADD UNIQUE KEY `uk_user_itinerary_day_item` (`user_itinerary_id`, `item_id`),
-  ADD KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`);
+  ADD KEY `idx_day_sort` (`user_itinerary_day_id`, `sort`),
+  COMMENT = '用户行程节点';
 
 ALTER TABLE `gift_itinerary_day`
   DROP INDEX `uk_itinerary_day`,
@@ -55,4 +58,5 @@ ALTER TABLE `gift_itinerary_day_item`
   DROP COLUMN `travel_mode_from_previous`,
   DROP COLUMN `travel_distance_meters_from_previous`,
   DROP COLUMN `travel_duration_minutes_from_previous`,
-  ADD KEY `idx_itinerary_day_sort` (`itinerary_day_id`, `sort`);
+  ADD KEY `idx_itinerary_day_sort` (`itinerary_day_id`, `sort`),
+  COMMENT = '通用行程节点';
