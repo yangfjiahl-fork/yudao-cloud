@@ -2,8 +2,8 @@ package cn.iocoder.yudao.module.gift.service.asr;
 
 import cn.hutool.core.io.file.FileNameUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.module.gift.framework.asr.config.AliyunAsrProperties;
-import cn.iocoder.yudao.module.gift.framework.asr.core.AliyunAsrClient;
+import cn.iocoder.yudao.module.gift.service.asr.provider.config.AliyunAsrProperties;
+import cn.iocoder.yudao.module.gift.service.asr.provider.core.AliyunAsrClient;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

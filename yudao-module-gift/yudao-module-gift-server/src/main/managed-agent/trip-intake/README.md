@@ -28,6 +28,6 @@
 }
 ```
 
-- `operation` 使用 `TripChangeCommand.Operation` 枚举值。
+- `operation` 使用 `ItineraryChangeCommand.Operation` 枚举值。
 - 单轮只接受一个命令；组合修改应拆成多轮。
 - Agent 只识别意图和目标，不直接写入 POI 编号、坐标或路线事实。

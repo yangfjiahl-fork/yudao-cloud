@@ -1,0 +1,315 @@
+package cn.iocoder.yudao.module.gift.controller.app.itinerary;
+
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryChatMessageRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryAgUiMessageReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryAgUiRunReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryChangeReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryChangeRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryRouteResolveReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryRouteResolveRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItinerarySlotResolveReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItinerarySlotResolveRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryWeatherRespVO;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryPlanningService;
+import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryAgentEvent;
+import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryChangeCommand;
+import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryRouteResult;
+import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItinerarySlotResult;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+
+@Tag(name = "用户 APP - 旅行规划消息")
+@RestController
+@RequestMapping("/ai/chat/message")
+@Validated
+@Slf4j
+public class AppItineraryChatMessageController {
+
+    private static final int TEXT_DELTA_MAX_CODE_POINTS = 12;
+
+    @Resource
+    private ItineraryPlanningService itineraryPlanningService;
+
+    @GetMapping("/list-by-conversation-id")
+    @Operation(summary = "获得旅行规划消息列表")
+    @Parameter(name = "conversationId", required = true, description = "对话编号", example = "1024")
+    public CommonResult<List<AppItineraryChatMessageRespVO>> getMessageList(@RequestParam("conversationId") Long conversationId) {
+        return success(itineraryPlanningService.getMessages(conversationId, getLoginUserId()).stream()
+                .map(AppItineraryChatMessageController::toMessage).toList());
+    }
+
+    /**
+     * AG-UI RunAgentInput 入口。旅行会话的持久化历史在服务端维护，当前仅接受一条 user text message，
+     * 以免客户端传入的历史消息越过既有成员与会话校验。
+     */
+    @PostMapping(value = "/managed/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "运行托管旅行规划 Agent（AG-UI）")
+    public Flux<CommonResult<Map<String, Object>>> runManagedAgUi(@Valid @RequestBody AppItineraryAgUiRunReqVO reqVO) {
+        Long conversationId = parseConversationId(reqVO.getThreadId());
+        AppItineraryAgUiMessageReqVO message = reqVO.getMessages().get(0);
+        if (!StrUtil.equalsIgnoreCase("user", message.getRole())) {
+            throw new IllegalArgumentException("旅行规划仅接受 user 消息");
+        }
+        Long memberId = getLoginUserId();
+        itineraryPlanningService.validateConversationAccess(conversationId, memberId);
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        log.info("[runManagedAgUi][conversationId({}) runId({}) memberId({}) tenantId({}) 创建 AG-UI SSE 流]",
+                conversationId, reqVO.getRunId(), memberId, tenantId);
+        Flux<Map<String, Object>> execution = executeItinerary(conversationId, memberId, tenantId, reqVO.getRunId(),
+                        message.getContent())
+                .concatMap(event -> Flux.fromIterable(toAgUiEvents(event, reqVO.getRunId())));
+        return MdcContextUtils.withReactorContext(Flux.concat(
+                        Flux.just(agUiRunStarted(reqVO.getThreadId(), reqVO.getRunId())), execution,
+                        Flux.just(agUiRunFinished(reqVO.getThreadId(), reqVO.getRunId(), conversationId)))
+                .map(event -> success(event))
+                .onErrorResume(e -> {
+                    log.error("[runManagedAgUi][conversationId({}) runId({}) 生成旅行方案失败]",
+                            conversationId, reqVO.getRunId(), e);
+                    return Flux.just(success(agUiRunError(reqVO.getThreadId(), reqVO.getRunId())));
+                })
+                .doOnSubscribe(subscription -> log.info("[runManagedAgUi][conversationId({}) runId({}) AG-UI SSE 已订阅]",
+                        conversationId, reqVO.getRunId()))
+                .doOnCancel(() -> log.info("[runManagedAgUi][conversationId({}) runId({}) 客户端取消 AG-UI SSE]",
+                        conversationId, reqVO.getRunId()))
+                .doOnComplete(() -> log.info("[runManagedAgUi][conversationId({}) runId({}) AG-UI SSE 完成]",
+                        conversationId, reqVO.getRunId())));
+    }
+
+    @PostMapping("/itinerary/slot/resolve")
+    @Operation(summary = "并行补充旅行行程骨架节点")
+    public CommonResult<AppItinerarySlotResolveRespVO> resolveItinerarySlot(
+            @Valid @RequestBody AppItinerarySlotResolveReqVO reqVO) {
+        Long memberId = getLoginUserId();
+        ItinerarySlotResult result = itineraryPlanningService.resolveItinerarySlot(
+                reqVO.getConversationId(), memberId, reqVO.getMessageId(), reqVO.getDay(), reqVO.getSlot());
+        AppItinerarySlotResolveRespVO response = new AppItinerarySlotResolveRespVO();
+        response.setMessageId(result.getMessageId());
+        response.setSlotId(result.getSlotId());
+        response.setDay(result.getDay());
+        response.setSlot(result.getSlot());
+        response.setStatus(result.getStatus());
+        response.setDetail(result.getDetail());
+        response.setCandidates(result.getCandidates());
+        response.setCitationIds(result.getCitationIds());
+        response.setTransportSegments(result.getTransportSegments());
+        if (result.getWeather() != null) {
+            response.setWeather(new AppItineraryWeatherRespVO()
+                    .setCity(result.getWeather().city())
+                    .setTemperature(result.getWeather().temperature())
+                    .setCondition(result.getWeather().condition())
+                    .setHumidity(result.getWeather().humidity())
+                    .setWindDirection(result.getWeather().windDirection())
+                    .setWindPower(result.getWeather().windPower())
+                    .setQueryTime(result.getWeather().queryTime()));
+        }
+        return success(response);
+    }
+
+    @PostMapping("/itinerary/route/resolve")
+    @Operation(summary = "按需解析某一天的交通路线")
+    public CommonResult<AppItineraryRouteResolveRespVO> resolveItineraryRoute(
+            @Valid @RequestBody AppItineraryRouteResolveReqVO reqVO) {
+        Long memberId = getLoginUserId();
+        ItineraryRouteResult result = itineraryPlanningService.resolveItineraryRoute(
+                reqVO.getConversationId(), memberId, reqVO.getMessageId(), reqVO.getDay());
+        AppItineraryRouteResolveRespVO response = new AppItineraryRouteResolveRespVO();
+        response.setMessageId(result.getMessageId());
+        response.setDay(result.getDay());
+        response.setStatus(result.getStatus());
+        response.setTransportSegments(result.getTransportSegments());
+        return success(response);
+    }
+
+    @PostMapping("/itinerary/change")
+    @Operation(summary = "使用统一命令编辑当前旅行行程")
+    public CommonResult<AppItineraryChangeRespVO> changeItinerary(
+            @Valid @RequestBody AppItineraryChangeReqVO reqVO) {
+        Long memberId = getLoginUserId();
+        ItineraryChangeCommand command = new ItineraryChangeCommand(reqVO.getOperation(), reqVO.getItemId(), reqVO.getDay(),
+                reqVO.getTimePeriod(), reqVO.getSort(), reqVO.getValues());
+        ItineraryPlanningService.ItineraryChange result = itineraryPlanningService.changeItinerary(
+                reqVO.getConversationId(), memberId, command);
+        AppItineraryChangeRespVO response = new AppItineraryChangeRespVO();
+        response.setItineraryId(result.itineraryId());
+        response.setMessageId(result.messageId());
+        response.setContent(result.content());
+        response.setAffectedDays(result.affectedDays());
+        response.setItinerary(result.itinerary());
+        return success(response);
+    }
+
+    private Flux<ItineraryAgentEvent> executeItinerary(Long conversationId, Long memberId, Long tenantId, String runId,
+                                             String content) {
+        // SSE 在 boundedElastic 线程执行，显式保留 HTTP 请求的 OTel 上下文，保证 Agent 和 LLM Span 归属同一条调用链。
+        Context parentOtelContext = Context.current();
+        return Flux.deferContextual(context -> {
+            @SuppressWarnings("unchecked")
+            Map<String, String> mdcContext = context.getOrDefault(MdcContextUtils.REACTOR_CONTEXT_MDC_KEY, Map.of());
+            return Flux.<ItineraryAgentEvent>create(sink -> {
+                try (Scope ignored = parentOtelContext.makeCurrent()) {
+                    MdcContextUtils.runWithContext(mdcContext, () -> {
+                        try {
+                            TenantUtils.execute(tenantId, () -> {
+                                Consumer<ItineraryAgentEvent> eventConsumer = sink::next;
+                                itineraryPlanningService.handleManagedMessage(conversationId, memberId, runId, content,
+                                        eventConsumer);
+                            });
+                            sink.complete();
+                        } catch (Exception e) {
+                            sink.error(e);
+                        }
+                    });
+                }
+            }).subscribeOn(Schedulers.boundedElastic());
+        });
+    }
+
+    private static Long parseConversationId(String threadId) {
+        try {
+            return Long.valueOf(threadId);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("threadId 必须是旅行会话编号");
+        }
+    }
+
+    private static List<Map<String, Object>> toAgUiEvents(ItineraryAgentEvent event, String runId) {
+        return switch (event.getEvent()) {
+            case "stage" -> List.of(agUiActivitySnapshot(event, runId), agUiProgressCard(event, runId, "active"));
+            // 模型增量是内部 JSON，不得作为用户可见文本或卡片数据透出。
+            case "model_delta" -> List.of();
+            case "question", "itinerary_skeleton" -> assistantMessageEvents(event, runId);
+            default -> List.of(agUiCustom("trip_" + event.getEvent(), itineraryEventValue(event)));
+        };
+    }
+
+    private static List<Map<String, Object>> assistantMessageEvents(ItineraryAgentEvent event, String runId) {
+        String messageId = event.getMessageId() == null ? "assistant-" + runId : String.valueOf(event.getMessageId());
+        List<Map<String, Object>> result = new ArrayList<>();
+        result.add(Map.of("type", "TEXT_MESSAGE_START", "messageId", messageId, "role", "assistant"));
+        splitTextDeltas(event.getContent()).forEach(delta ->
+                result.add(Map.of("type", "TEXT_MESSAGE_CONTENT", "messageId", messageId, "delta", delta)));
+        result.add(Map.of("type", "TEXT_MESSAGE_END", "messageId", messageId));
+        result.add(agUiCard(event, messageId));
+        result.add(agUiCustom("trip_" + event.getEvent(), itineraryEventValue(event)));
+        result.add(agUiProgressCard(event, runId, "completed"));
+        return result;
+    }
+
+    private static Map<String, Object> agUiActivitySnapshot(ItineraryAgentEvent event, String runId) {
+        return Map.of("type", "ACTIVITY_SNAPSHOT", "messageId", "trip-progress-" + runId,
+                "activityType", "TRIP_PROGRESS", "content", itineraryEventValue(event));
+    }
+
+    private static Map<String, Object> agUiProgressCard(ItineraryAgentEvent event, String runId, String state) {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("cardId", "trip-progress-" + runId);
+        value.put("messageId", "trip-progress-" + runId);
+        value.put("stage", event.getStage());
+        value.put("content", event.getContent());
+        value.put("state", state);
+        return agUiCustom("trip_progress_card", value);
+    }
+
+    private static Map<String, Object> agUiCard(ItineraryAgentEvent event, String messageId) {
+        Map<String, Object> value = new LinkedHashMap<>(itineraryEventValue(event));
+        String cardType = "question".equals(event.getEvent()) ? "trip_question_card" : "trip_itinerary_card";
+        String cardIdPrefix = "question".equals(event.getEvent()) ? "trip-question-" : "trip-itinerary-";
+        value.put("cardId", cardIdPrefix + messageId);
+        value.put("messageId", messageId);
+        return agUiCustom(cardType, value);
+    }
+
+    private static List<String> splitTextDeltas(String content) {
+        if (StrUtil.isBlank(content)) {
+            return List.of();
+        }
+        int[] codePoints = content.codePoints().toArray();
+        List<String> result = new ArrayList<>((codePoints.length + TEXT_DELTA_MAX_CODE_POINTS - 1)
+                / TEXT_DELTA_MAX_CODE_POINTS);
+        for (int start = 0; start < codePoints.length; start += TEXT_DELTA_MAX_CODE_POINTS) {
+            int length = Math.min(TEXT_DELTA_MAX_CODE_POINTS, codePoints.length - start);
+            result.add(new String(codePoints, start, length));
+        }
+        return result;
+    }
+
+    private static Map<String, Object> agUiCustom(String name, Map<String, Object> value) {
+        return Map.of("type", "CUSTOM", "name", name, "value", value);
+    }
+
+    private static Map<String, Object> itineraryEventValue(ItineraryAgentEvent event) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("stage", event.getStage());
+        putIfNotNull(result, "messageId", event.getMessageId());
+        putIfNotNull(result, "content", event.getContent());
+        putIfNotNull(result, "sequence", event.getSequence());
+        putIfNotNull(result, "itemType", event.getItemType());
+        putIfNotNull(result, "item", event.getItem());
+        putIfNotNull(result, "itinerary", event.getItinerary());
+        putIfNotNull(result, "missingRequired", event.getMissingRequired());
+        putIfNotNull(result, "inputCards", event.getInputCards());
+        return result;
+    }
+
+    private static void putIfNotNull(Map<String, Object> target, String key, Object value) {
+        if (value != null) {
+            target.put(key, value);
+        }
+    }
+
+    private static AppItineraryChatMessageRespVO toMessage(ItineraryPlanningService.Message message) {
+        AppItineraryChatMessageRespVO result = new AppItineraryChatMessageRespVO();
+        result.setId(message.id());
+        result.setReplyId(message.replyId());
+        result.setType(message.type());
+        result.setContent(message.content());
+        result.setItinerary(message.itinerary());
+        result.setCreateTime(message.createTime());
+        return result;
+    }
+
+    private static Map<String, Object> agUiRunStarted(String threadId, String runId) {
+        return Map.of("type", "RUN_STARTED", "threadId", threadId, "runId", runId);
+    }
+
+    private static Map<String, Object> agUiRunFinished(String threadId, String runId, Long conversationId) {
+        return Map.of("type", "RUN_FINISHED", "threadId", threadId, "runId", runId,
+                "outcome", Map.of("type", "success"), "result", Map.of("conversationId", String.valueOf(conversationId)));
+    }
+
+    private static Map<String, Object> agUiRunError(String threadId, String runId) {
+        return Map.of("type", "RUN_ERROR", "threadId", threadId, "runId", runId,
+                "code", "TRIP_GENERATION_FAILED", "message", "暂时无法生成旅行方案，请稍后重试。");
+    }
+
+}

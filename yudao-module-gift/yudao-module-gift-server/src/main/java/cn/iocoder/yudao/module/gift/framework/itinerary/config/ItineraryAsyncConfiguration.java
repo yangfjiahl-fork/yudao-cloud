@@ -1,0 +1,42 @@
+package cn.iocoder.yudao.module.gift.framework.itinerary.config;
+
+import cn.iocoder.yudao.framework.tracer.core.util.MdcContextUtils;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.ThreadPoolExecutor;
+
+/**
+ * 旅行规划异步任务配置。
+ */
+@Configuration(proxyBeanMethods = false)
+public class ItineraryAsyncConfiguration {
+
+    public static final String ITINERARY_TASK_EXECUTOR = "itineraryTaskExecutor";
+
+    @Bean(ITINERARY_TASK_EXECUTOR)
+    public ThreadPoolTaskExecutor itineraryTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(6);
+        executor.setMaxPoolSize(6);
+        executor.setQueueCapacity(30);
+        executor.setThreadNamePrefix("trip-itinerary-");
+        executor.setTaskDecorator(runnable -> {
+            Context parentContext = Context.current();
+            Runnable mdcRunnable = MdcContextUtils.wrap(runnable);
+            return () -> {
+                try (Scope ignored = parentContext.makeCurrent()) {
+                    mdcRunnable.run();
+                }
+            };
+        });
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        return executor;
+    }
+
+}

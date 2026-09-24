@@ -1,8 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.asr;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
-import cn.iocoder.yudao.module.gift.framework.asr.config.AliyunAsrProperties;
-import cn.iocoder.yudao.module.gift.framework.asr.core.AliyunAsrClient;
+import cn.iocoder.yudao.module.gift.service.asr.provider.config.AliyunAsrProperties;
+import cn.iocoder.yudao.module.gift.service.asr.provider.core.AliyunAsrClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
