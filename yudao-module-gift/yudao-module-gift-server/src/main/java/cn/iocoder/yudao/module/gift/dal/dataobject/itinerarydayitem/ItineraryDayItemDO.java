@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 
 /**
- * 文章 DO
+ * 通用行程节点 DO
  *
  * @author 羔享科技
  */
@@ -28,10 +28,10 @@ public class ItineraryDayItemDO extends BaseDO {
     @TableId
     private Long id;
     /**
-     * 线路ID
+     * 通用行程ID
      */
     private Long itineraryId;
-    /** 行程日ID */
+    /** 通用行程日程ID */
     private Long itineraryDayId;
     /** 节点类型 */
     private String type;

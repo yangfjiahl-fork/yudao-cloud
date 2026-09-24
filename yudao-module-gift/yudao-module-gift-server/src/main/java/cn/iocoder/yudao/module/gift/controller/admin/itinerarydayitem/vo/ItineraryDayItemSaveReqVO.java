@@ -7,18 +7,19 @@ import java.time.LocalTime;
 import java.math.BigDecimal;
 import jakarta.validation.constraints.*;
 
-@Schema(description = "管理后台 - 文章新增/修改 Request VO")
+@Schema(description = "管理后台 - 通用行程节点新增/修改 Request VO")
 @Data
 public class ItineraryDayItemSaveReqVO {
 
     @Schema(description = "主键", requiredMode = Schema.RequiredMode.REQUIRED, example = "12291")
     private Long id;
 
-    @Schema(description = "线路ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
-    @NotNull(message = "线路ID不能为空")
+    @Schema(description = "通用行程ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
+    @NotNull(message = "通用行程ID不能为空")
     private Long itineraryId;
 
-    @NotNull(message = "行程日ID不能为空")
+    @Schema(description = "通用行程日程ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
+    @NotNull(message = "通用行程日程ID不能为空")
     private Long itineraryDayId;
 
     private String type;

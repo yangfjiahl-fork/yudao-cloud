@@ -8,14 +8,14 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 
 /**
- * 文章 Service 接口
+ * 通用行程节点 Service 接口
  *
  * @author 羔享科技
  */
 public interface ItineraryDayItemService {
 
     /**
-     * 创建文章
+     * 创建通用行程节点
      *
      * @param createReqVO 创建信息
      * @return 编号
@@ -23,39 +23,39 @@ public interface ItineraryDayItemService {
     Long createItineraryDayItem(@Valid ItineraryDayItemSaveReqVO createReqVO);
 
     /**
-     * 更新文章
+     * 更新通用行程节点
      *
      * @param updateReqVO 更新信息
      */
     void updateItineraryDayItem(@Valid ItineraryDayItemSaveReqVO updateReqVO);
 
     /**
-     * 删除文章
+     * 删除通用行程节点
      *
      * @param id 编号
      */
     void deleteItineraryDayItem(Long id);
 
     /**
-    * 批量删除文章
+    * 批量删除通用行程节点
     *
     * @param ids 编号
     */
     void deleteItineraryDayItemListByIds(List<Long> ids);
 
     /**
-     * 获得文章
+     * 获得通用行程节点
      *
      * @param id 编号
-     * @return 文章
+     * @return 通用行程节点
      */
     ItineraryDayItemDO getItineraryDayItem(Long id);
 
     /**
-     * 获得文章分页
+     * 获得通用行程节点分页
      *
      * @param pageReqVO 分页查询
-     * @return 文章分页
+     * @return 通用行程节点分页
      */
     PageResult<ItineraryDayItemDO> getItineraryDayItemPage(ItineraryDayItemPageReqVO pageReqVO);
 

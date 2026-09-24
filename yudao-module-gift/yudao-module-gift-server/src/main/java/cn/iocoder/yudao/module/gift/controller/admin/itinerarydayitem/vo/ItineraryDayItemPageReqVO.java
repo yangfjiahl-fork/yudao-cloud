@@ -9,13 +9,14 @@ import java.time.LocalDateTime;
 
 import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
 
-@Schema(description = "管理后台 - 文章分页 Request VO")
+@Schema(description = "管理后台 - 通用行程节点分页 Request VO")
 @Data
 public class ItineraryDayItemPageReqVO extends PageParam {
 
-    @Schema(description = "线路ID", example = "4883")
+    @Schema(description = "通用行程ID", example = "4883")
     private Long itineraryId;
 
+    @Schema(description = "通用行程日程ID", example = "1024")
     private Long itineraryDayId;
     private String type;
     private String slot;

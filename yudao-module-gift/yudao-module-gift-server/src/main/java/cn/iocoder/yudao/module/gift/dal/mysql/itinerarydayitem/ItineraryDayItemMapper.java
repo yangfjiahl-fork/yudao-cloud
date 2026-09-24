@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Mapper;
 import cn.iocoder.yudao.module.gift.controller.admin.itinerarydayitem.vo.*;
 
 /**
- * 文章 Mapper
+ * 通用行程节点 Mapper
  *
  * @author 羔享科技
  */

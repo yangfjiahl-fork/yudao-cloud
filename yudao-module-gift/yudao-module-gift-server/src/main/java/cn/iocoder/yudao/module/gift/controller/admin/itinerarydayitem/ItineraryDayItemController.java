@@ -29,7 +29,7 @@ import cn.iocoder.yudao.module.gift.controller.admin.itinerarydayitem.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerarydayitem.ItineraryDayItemDO;
 import cn.iocoder.yudao.module.gift.service.itinerarydayitem.ItineraryDayItemService;
 
-@Tag(name = "管理后台 - 文章")
+@Tag(name = "管理后台 - 通用行程节点")
 @RestController
 @RequestMapping("/gift/itinerary-day-item")
 @Validated
@@ -39,14 +39,14 @@ public class ItineraryDayItemController {
     private ItineraryDayItemService itineraryDayItemService;
 
     @PostMapping("/create")
-    @Operation(summary = "创建文章")
+    @Operation(summary = "创建通用行程节点")
     @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:create')")
     public CommonResult<Long> createItineraryDayItem(@Valid @RequestBody ItineraryDayItemSaveReqVO createReqVO) {
         return success(itineraryDayItemService.createItineraryDayItem(createReqVO));
     }
 
     @PutMapping("/update")
-    @Operation(summary = "更新文章")
+    @Operation(summary = "更新通用行程节点")
     @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:update')")
     public CommonResult<Boolean> updateItineraryDayItem(@Valid @RequestBody ItineraryDayItemSaveReqVO updateReqVO) {
         itineraryDayItemService.updateItineraryDayItem(updateReqVO);
@@ -54,7 +54,7 @@ public class ItineraryDayItemController {
     }
 
     @DeleteMapping("/delete")
-    @Operation(summary = "删除文章")
+    @Operation(summary = "删除通用行程节点")
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:delete')")
     public CommonResult<Boolean> deleteItineraryDayItem(@RequestParam("id") Long id) {
@@ -64,7 +64,7 @@ public class ItineraryDayItemController {
 
     @DeleteMapping("/delete-list")
     @Parameter(name = "ids", description = "编号", required = true)
-    @Operation(summary = "批量删除文章")
+    @Operation(summary = "批量删除通用行程节点")
                 @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:delete')")
     public CommonResult<Boolean> deleteItineraryDayItemList(@RequestParam("ids") List<Long> ids) {
         itineraryDayItemService.deleteItineraryDayItemListByIds(ids);
@@ -72,7 +72,7 @@ public class ItineraryDayItemController {
     }
 
     @GetMapping("/get")
-    @Operation(summary = "获得文章")
+    @Operation(summary = "获得通用行程节点")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:query')")
     public CommonResult<ItineraryDayItemRespVO> getItineraryDayItem(@RequestParam("id") Long id) {
@@ -81,7 +81,7 @@ public class ItineraryDayItemController {
     }
 
     @GetMapping("/page")
-    @Operation(summary = "获得文章分页")
+    @Operation(summary = "获得通用行程节点分页")
     @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:query')")
     public CommonResult<PageResult<ItineraryDayItemRespVO>> getItineraryDayItemPage(@Valid ItineraryDayItemPageReqVO pageReqVO) {
         PageResult<ItineraryDayItemDO> pageResult = itineraryDayItemService.getItineraryDayItemPage(pageReqVO);
@@ -89,7 +89,7 @@ public class ItineraryDayItemController {
     }
 
     @GetMapping("/export-excel")
-    @Operation(summary = "导出文章 Excel")
+    @Operation(summary = "导出通用行程节点 Excel")
     @PreAuthorize("@ss.hasPermission('gift:itinerary-day-item:export')")
     @ApiAccessLog(operateType = EXPORT)
     public void exportItineraryDayItemExcel(@Valid ItineraryDayItemPageReqVO pageReqVO,
@@ -97,7 +97,7 @@ public class ItineraryDayItemController {
         pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
         List<ItineraryDayItemDO> list = itineraryDayItemService.getItineraryDayItemPage(pageReqVO).getList();
         // 导出 Excel
-        ExcelUtils.write(response, "文章.xls", "数据", ItineraryDayItemRespVO.class,
+        ExcelUtils.write(response, "通用行程节点.xls", "数据", ItineraryDayItemRespVO.class,
                         BeanUtils.toBean(list, ItineraryDayItemRespVO.class));
     }
 

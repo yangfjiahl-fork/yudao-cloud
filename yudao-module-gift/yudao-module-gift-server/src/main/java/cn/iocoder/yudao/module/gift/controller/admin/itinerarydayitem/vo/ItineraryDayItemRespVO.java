@@ -9,7 +9,7 @@ import java.time.LocalTime;
 import java.math.BigDecimal;
 import cn.idev.excel.annotation.*;
 
-@Schema(description = "管理后台 - 文章 Response VO")
+@Schema(description = "管理后台 - 通用行程节点 Response VO")
 @Data
 @ExcelIgnoreUnannotated
 public class ItineraryDayItemRespVO {
@@ -18,10 +18,12 @@ public class ItineraryDayItemRespVO {
     @ExcelProperty("主键")
     private Long id;
 
-    @Schema(description = "线路ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
-    @ExcelProperty("线路ID")
+    @Schema(description = "通用行程ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "4883")
+    @ExcelProperty("通用行程ID")
     private Long itineraryId;
 
+    @Schema(description = "通用行程日程ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
+    @ExcelProperty("通用行程日程ID")
     private Long itineraryDayId;
     private String type;
     private String slot;
