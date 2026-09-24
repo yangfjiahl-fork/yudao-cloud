@@ -17,7 +17,7 @@ ALTER TABLE `gift_itinerary_day`
   MODIFY COLUMN `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   MODIFY COLUMN `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除';
 
-ALTER TABLE `gift_itinerary_event`
+ALTER TABLE `gift_user_itinerary_conversation_event`
   MODIFY COLUMN `tenant_id` bigint NOT NULL COMMENT '租户ID',
   MODIFY COLUMN `conversation_id` bigint NOT NULL COMMENT '用户行程会话ID',
   MODIFY COLUMN `reply_event_id` bigint DEFAULT NULL COMMENT '回复的事件ID',
