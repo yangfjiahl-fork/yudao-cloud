@@ -21,7 +21,7 @@ import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.
 import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.*;
 
 /**
- * 线路类别 Service 实现类
+ * 行程类别 Service 实现类
  *
  * @author 羔享科技
  */

@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Mapper;
 import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
 
 /**
- * 线路 Mapper
+ * 行程 Mapper
  *
  * @author 羔享科技
  */

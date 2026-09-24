@@ -5,7 +5,7 @@ import lombok.*;
 import java.util.*;
 import jakarta.validation.constraints.*;
 
-@Schema(description = "管理后台 - 线路类别新增/修改 Request VO")
+@Schema(description = "管理后台 - 行程类别新增/修改 Request VO")
 @Data
 public class ItineraryCategorySaveReqVO {
 

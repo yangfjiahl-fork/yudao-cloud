@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 
 /**
- * 线路类别 DO
+ * 行程类别 DO
  *
  * @author 羔享科技
  */

@@ -29,7 +29,7 @@ import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryService;
 
-@Tag(name = "管理后台 - 线路")
+@Tag(name = "管理后台 - 行程")
 @RestController
 @RequestMapping("/gift/itinerary")
 @Validated
@@ -39,14 +39,14 @@ public class ItineraryController {
     private ItineraryService itineraryService;
 
     @PostMapping("/create")
-    @Operation(summary = "创建线路")
+    @Operation(summary = "创建行程")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:create')")
     public CommonResult<Long> createItinerary(@Valid @RequestBody ItinerarySaveReqVO createReqVO) {
         return success(itineraryService.createItinerary(createReqVO));
     }
 
     @PutMapping("/update")
-    @Operation(summary = "更新线路")
+    @Operation(summary = "更新行程")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:update')")
     public CommonResult<Boolean> updateItinerary(@Valid @RequestBody ItinerarySaveReqVO updateReqVO) {
         itineraryService.updateItinerary(updateReqVO);
@@ -54,7 +54,7 @@ public class ItineraryController {
     }
 
     @DeleteMapping("/delete")
-    @Operation(summary = "删除线路")
+    @Operation(summary = "删除行程")
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('gift:itinerary:delete')")
     public CommonResult<Boolean> deleteItinerary(@RequestParam("id") Long id) {
@@ -64,7 +64,7 @@ public class ItineraryController {
 
     @DeleteMapping("/delete-list")
     @Parameter(name = "ids", description = "编号", required = true)
-    @Operation(summary = "批量删除线路")
+    @Operation(summary = "批量删除行程")
                 @PreAuthorize("@ss.hasPermission('gift:itinerary:delete')")
     public CommonResult<Boolean> deleteItineraryList(@RequestParam("ids") List<Long> ids) {
         itineraryService.deleteItineraryListByIds(ids);
@@ -72,7 +72,7 @@ public class ItineraryController {
     }
 
     @GetMapping("/get")
-    @Operation(summary = "获得线路")
+    @Operation(summary = "获得行程")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:query')")
     public CommonResult<ItineraryRespVO> getItinerary(@RequestParam("id") Long id) {
@@ -81,7 +81,7 @@ public class ItineraryController {
     }
 
     @GetMapping("/page")
-    @Operation(summary = "获得线路分页")
+    @Operation(summary = "获得行程分页")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:query')")
     public CommonResult<PageResult<ItineraryRespVO>> getItineraryPage(@Valid ItineraryPageReqVO pageReqVO) {
         PageResult<ItineraryDO> pageResult = itineraryService.getItineraryPage(pageReqVO);
@@ -89,7 +89,7 @@ public class ItineraryController {
     }
 
     @GetMapping("/export-excel")
-    @Operation(summary = "导出线路 Excel")
+    @Operation(summary = "导出行程 Excel")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:export')")
     @ApiAccessLog(operateType = EXPORT)
     public void exportItineraryExcel(@Valid ItineraryPageReqVO pageReqVO,
@@ -97,7 +97,7 @@ public class ItineraryController {
         pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
         List<ItineraryDO> list = itineraryService.getItineraryPage(pageReqVO).getList();
         // 导出 Excel
-        ExcelUtils.write(response, "线路.xls", "数据", ItineraryRespVO.class,
+        ExcelUtils.write(response, "行程.xls", "数据", ItineraryRespVO.class,
                         BeanUtils.toBean(list, ItineraryRespVO.class));
     }
 

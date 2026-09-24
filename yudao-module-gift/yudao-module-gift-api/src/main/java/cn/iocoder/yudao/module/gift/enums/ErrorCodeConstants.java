@@ -53,10 +53,10 @@ public interface ErrorCodeConstants {
     ErrorCode ASR_SERVICE_ERROR = new ErrorCode(1_046_000_005, "语音识别失败，请稍后重试");
     ErrorCode ASR_RESULT_EMPTY = new ErrorCode(1_046_000_006, "未识别到有效语音");
 
-    // ========== 线路与轮播管理 1-047-000-000 ==========
-    ErrorCode ITINERARY_NOT_EXISTS = new ErrorCode(1_047_000_001, "线路不存在");
-    ErrorCode ITINERARY_CATEGORY_NOT_EXISTS = new ErrorCode(1_047_000_002, "线路类别不存在");
-    ErrorCode ITINERARY_DAY_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_003, "线路内容不存在");
+    // ========== 行程与轮播管理 1-047-000-000 ==========
+    ErrorCode ITINERARY_NOT_EXISTS = new ErrorCode(1_047_000_001, "行程不存在");
+    ErrorCode ITINERARY_CATEGORY_NOT_EXISTS = new ErrorCode(1_047_000_002, "行程类别不存在");
+    ErrorCode ITINERARY_DAY_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_003, "行程内容不存在");
     ErrorCode SLIDER_NOT_EXISTS = new ErrorCode(1_047_000_004, "轮播不存在");
     ErrorCode SLIDER_ITEM_NOT_EXISTS = new ErrorCode(1_047_000_005, "轮播图不存在");
     ErrorCode USER_ITINERARY_NOT_EXISTS = new ErrorCode(1_047_000_006, "用户行程不存在");
