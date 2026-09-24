@@ -10,6 +10,8 @@ public interface ItineraryLocationService {
 
     PlaceSearchResult searchNearbyPlaces(PlaceSearchRequest request);
 
+    Weather getCurrentWeather(String cityCode);
+
     record Location(String province, String city, String district, String adcode, String formattedAddress) {
     }
 
@@ -23,6 +25,10 @@ public interface ItineraryLocationService {
     record Place(String poiId, String name, String address, BigDecimal longitude, BigDecimal latitude,
                  String type, String typeCode, String province, String city, String district, String adcode,
                  Long distanceMeters, String telephone, String photoUrl) {
+    }
+
+    record Weather(String city, Integer temperature, String condition, Integer humidity,
+                   String windDirection, String windPower, String queryTime) {
     }
 
 }

@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.slider;
 
+import cn.iocoder.yudao.module.gift.enums.DictTypeConstants;
+import cn.iocoder.yudao.module.gift.enums.SliderPositionEnum;
 import lombok.*;
 import java.util.*;
 import java.time.LocalDateTime;
@@ -29,10 +31,13 @@ public class SliderDO extends BaseDO {
     private Long id;
     /**
      * 轮播位置
+     *
+     * 枚举 {@link SliderPositionEnum}
+     * 字典 {@link DictTypeConstants#SLIDER_POSITION}
      */
     private String positionCode;
     /**
-     * 城市ID
+     * 城市ID（可选）
      */
     private Long cityId;
 

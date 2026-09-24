@@ -8,6 +8,7 @@ import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryLocationRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPlaceSearchReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPlaceSearchRespVO;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryWeatherRespVO;
 import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,6 +20,8 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,6 +54,16 @@ public class AppItineraryLocationController {
                 new ItineraryLocationService.PlaceSearchRequest(reqVO.getKeyword(), reqVO.getCategory(), reqVO.getLongitude(),
                         reqVO.getLatitude(), reqVO.getRadius(), reqVO.getPageNo(), reqVO.getPageSize()));
         return success(AppItineraryPlaceSearchRespVO.from(result, reqVO.getPageNo(), reqVO.getPageSize()));
+    }
+
+    @GetMapping("/weather")
+    @Operation(summary = "根据城市编码查询当前天气", description = "使用高德天气服务查询实况天气")
+    @Parameter(name = "cityCode", description = "高德行政区划编码", required = true, example = "330100")
+    public CommonResult<AppItineraryWeatherRespVO> getCurrentWeather(
+            @RequestParam("cityCode")
+            @NotBlank(message = "城市编码不能为空")
+            @Pattern(regexp = "\\d{6}", message = "城市编码必须为 6 位数字") String cityCode) {
+        return success(AppItineraryWeatherRespVO.from(itineraryLocationService.getCurrentWeather(cityCode)));
     }
 
     @GetMapping("/reverse-geocode")

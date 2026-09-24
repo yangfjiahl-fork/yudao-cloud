@@ -1,5 +1,8 @@
 package cn.iocoder.yudao.module.gift.controller.admin.slideritem.vo;
 
+import cn.iocoder.yudao.framework.excel.core.annotations.DictFormat;
+import cn.iocoder.yudao.framework.excel.core.convert.DictConvert;
+import cn.iocoder.yudao.module.gift.enums.DictTypeConstants;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
@@ -36,8 +39,10 @@ public class SliderItemRespVO {
     @ExcelProperty("顺序")
     private Integer sort;
 
-    @Schema(description = "跳转页面", requiredMode = Schema.RequiredMode.REQUIRED)
-    @ExcelProperty("跳转页面")
+    @Schema(description = "跳转页面", requiredMode = Schema.RequiredMode.REQUIRED,
+            allowableValues = "SHARE", example = "SHARE")
+    @ExcelProperty(value = "跳转页面", converter = DictConvert.class)
+    @DictFormat(DictTypeConstants.SLIDER_ITEM_JUMP_PAGE)
     private String jumpPage;
 
     @Schema(description = "跳转页面ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "32220")

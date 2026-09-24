@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.slideritem;
 
+import cn.iocoder.yudao.module.gift.enums.SliderItemJumpPageEnum;
 import lombok.*;
 import java.util.*;
 import java.time.LocalDateTime;
@@ -49,6 +50,8 @@ public class SliderItemDO extends BaseDO {
     private Integer sort;
     /**
      * 跳转页面
+     *
+     * 枚举 {@link SliderItemJumpPageEnum}
      */
     private String jumpPage;
     /**

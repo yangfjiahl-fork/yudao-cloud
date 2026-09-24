@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.gift.service.itinerary;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapGeocodingClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapPlaceSearchClient;
+import cn.iocoder.yudao.module.gift.service.itinerary.provider.weather.WeatherClient;
+import cn.iocoder.yudao.module.gift.service.itinerary.provider.weather.amap.AmapWeatherClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -22,6 +24,8 @@ class ItineraryLocationServiceImplTest extends BaseMockitoUnitTest {
     private AmapGeocodingClient amapGeocodingClient;
     @Mock
     private AmapPlaceSearchClient amapPlaceSearchClient;
+    @Mock
+    private AmapWeatherClient amapWeatherClient;
     @InjectMocks
     private ItineraryLocationServiceImpl service;
 
@@ -57,6 +61,19 @@ class ItineraryLocationServiceImplTest extends BaseMockitoUnitTest {
         assertEquals("050000", captor.getValue().typeCode());
         assertEquals("poi-1", result.places().get(0).poiId());
         assertEquals(328L, result.places().get(0).distanceMeters());
+    }
+
+    @Test
+    void getCurrentWeatherUsesAmapClient() {
+        when(amapWeatherClient.getCurrentWeather("330100")).thenReturn(new WeatherClient.CurrentWeather(
+                "杭州市", 31, "多云", 72, "东南风", "3", "2026-08-29 11:35:33"));
+
+        ItineraryLocationService.Weather result = service.getCurrentWeather("330100");
+
+        verify(amapWeatherClient).getCurrentWeather("330100");
+        assertEquals("杭州市", result.city());
+        assertEquals(31, result.temperature());
+        assertEquals("多云", result.condition());
     }
 
 }

@@ -4,6 +4,8 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapGeocodingClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapPlaceSearchClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.place.AmapPoiTypeEnum;
+import cn.iocoder.yudao.module.gift.service.itinerary.provider.weather.WeatherClient;
+import cn.iocoder.yudao.module.gift.service.itinerary.provider.weather.amap.AmapWeatherClient;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,8 @@ public class ItineraryLocationServiceImpl implements ItineraryLocationService {
     private AmapGeocodingClient amapGeocodingClient;
     @Resource
     private AmapPlaceSearchClient amapPlaceSearchClient;
+    @Resource
+    private AmapWeatherClient amapWeatherClient;
 
     @Override
     public Location reverseGeocode(BigDecimal longitude, BigDecimal latitude) {
@@ -34,6 +38,13 @@ public class ItineraryLocationServiceImpl implements ItineraryLocationService {
                         request.latitude(), request.radius(), request.pageNo(), request.pageSize()));
         return new PlaceSearchResult(result.total(),
                 result.places().stream().map(ItineraryLocationServiceImpl::convert).toList());
+    }
+
+    @Override
+    public Weather getCurrentWeather(String cityCode) {
+        WeatherClient.CurrentWeather weather = amapWeatherClient.getCurrentWeather(cityCode);
+        return new Weather(weather.city(), weather.temperature(), weather.condition(), weather.humidity(),
+                weather.windDirection(), weather.windPower(), weather.queryTime());
     }
 
     private static Place convert(AmapPlaceSearchClient.Place source) {

@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.gift.controller.admin.slideritem.vo;
 
+import cn.iocoder.yudao.framework.common.validation.InEnum;
+import cn.iocoder.yudao.module.gift.enums.SliderItemJumpPageEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
@@ -32,8 +34,10 @@ public class SliderItemSaveReqVO {
     @NotNull(message = "顺序不能为空")
     private Integer sort;
 
-    @Schema(description = "跳转页面", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "跳转页面", requiredMode = Schema.RequiredMode.REQUIRED,
+            allowableValues = "SHARE", example = "SHARE")
     @NotEmpty(message = "跳转页面不能为空")
+    @InEnum(value = SliderItemJumpPageEnum.class, message = "跳转页面必须是 {value}")
     private String jumpPage;
 
     @Schema(description = "跳转页面ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "32220")

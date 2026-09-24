@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.controller.app.itinerary.vo;
 
+import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryLocationService;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -27,4 +28,15 @@ public class AppItineraryWeatherRespVO {
 
     @Schema(description = "天气数据更新时间", example = "2026-08-29 11:35:33")
     private String queryTime;
+
+    public static AppItineraryWeatherRespVO from(ItineraryLocationService.Weather weather) {
+        return new AppItineraryWeatherRespVO()
+                .setCity(weather.city())
+                .setTemperature(weather.temperature())
+                .setCondition(weather.condition())
+                .setHumidity(weather.humidity())
+                .setWindDirection(weather.windDirection())
+                .setWindPower(weather.windPower())
+                .setQueryTime(weather.queryTime());
+    }
 }
