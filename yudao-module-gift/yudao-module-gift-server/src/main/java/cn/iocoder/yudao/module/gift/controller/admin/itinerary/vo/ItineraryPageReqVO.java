@@ -49,15 +49,6 @@ public class ItineraryPageReqVO extends PageParam {
     @Schema(description = "封面高度")
     private Integer coverHeight;
 
-    @Schema(description = "首图封面", example = "https://www.iocoder.cn")
-    private String firstCoverUrl;
-
-    @Schema(description = "首图高度")
-    private Integer firstCoverHeight;
-
-    @Schema(description = "首图宽度")
-    private Integer firstCoverWidth;
-
     @Schema(description = "城市ID", example = "23770")
     private Integer nextCityId;
 

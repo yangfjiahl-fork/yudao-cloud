@@ -76,18 +76,6 @@ public class ItineraryDO extends BaseDO {
      */
     private Integer coverHeight;
     /**
-     * 首图封面
-     */
-    private String firstCoverUrl;
-    /**
-     * 首图高度
-     */
-    private Integer firstCoverHeight;
-    /**
-     * 首图宽度
-     */
-    private Integer firstCoverWidth;
-    /**
      * 城市ID
      */
     private Integer nextCityId;

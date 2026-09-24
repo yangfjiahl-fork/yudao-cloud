@@ -1,7 +1,12 @@
 package cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo;
 
+import cn.iocoder.yudao.module.gift.dal.dataobject.itinerarycategory.ItineraryCategoryDO;
+import cn.iocoder.yudao.module.system.api.area.AreaApi;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
+import org.dromara.core.trans.anno.Trans;
+import org.dromara.core.trans.constant.TransType;
+import org.dromara.core.trans.vo.VO;
 import java.util.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDateTime;
@@ -10,7 +15,7 @@ import cn.idev.excel.annotation.*;
 @Schema(description = "管理后台 - 行程 Response VO")
 @Data
 @ExcelIgnoreUnannotated
-public class ItineraryRespVO {
+public class ItineraryRespVO implements VO {
 
     @Schema(description = "主键", requiredMode = Schema.RequiredMode.REQUIRED, example = "10691")
     @ExcelProperty("主键")
@@ -18,11 +23,24 @@ public class ItineraryRespVO {
 
     @Schema(description = "城市ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "7848")
     @ExcelProperty("城市ID")
+    @Trans(type = TransType.AUTO_TRANS, key = AreaApi.PREFIX,
+            fields = {"cityName", "provinceName"}, refs = {"cityName", "provinceName"})
     private Integer cityId;
+
+    @Schema(description = "城市名称", example = "杭州市")
+    private String cityName;
+
+    @Schema(description = "省份名称", example = "浙江省")
+    private String provinceName;
 
     @Schema(description = "类别ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "1668")
     @ExcelProperty("类别ID")
+    @Trans(type = TransType.SIMPLE, target = ItineraryCategoryDO.class,
+            fields = "title", ref = "categoryName")
     private Long categoryId;
+
+    @Schema(description = "行程类别名称", example = "亲子游")
+    private String categoryName;
 
     @Schema(description = "标题", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("标题")
@@ -63,18 +81,6 @@ public class ItineraryRespVO {
     @Schema(description = "封面高度", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("封面高度")
     private Integer coverHeight;
-
-    @Schema(description = "首图封面", example = "https://www.iocoder.cn")
-    @ExcelProperty("首图封面")
-    private String firstCoverUrl;
-
-    @Schema(description = "首图高度", requiredMode = Schema.RequiredMode.REQUIRED)
-    @ExcelProperty("首图高度")
-    private Integer firstCoverHeight;
-
-    @Schema(description = "首图宽度", requiredMode = Schema.RequiredMode.REQUIRED)
-    @ExcelProperty("首图宽度")
-    private Integer firstCoverWidth;
 
     @Schema(description = "城市ID", example = "23770")
     @ExcelProperty("城市ID")

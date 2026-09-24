@@ -46,15 +46,6 @@ public class AppItineraryRespVO {
     @Schema(description = "封面高度")
     private Integer coverHeight;
 
-    @Schema(description = "首图封面")
-    private String firstCoverUrl;
-
-    @Schema(description = "首图高度")
-    private Integer firstCoverHeight;
-
-    @Schema(description = "首图宽度")
-    private Integer firstCoverWidth;
-
     @Schema(description = "下一城市编号", example = "320100")
     private Integer nextCityId;
 

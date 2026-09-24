@@ -21,6 +21,13 @@ This is a Java 17, Spring Boot 3.5 multi-module Maven repository. Root `pom.xml`
 
 Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast.
 
+## API Documentation & Apifox
+
+- The project's Apifox workspace is [app-api](https://app.apifox.com/project/8882743) (project ID `8882743`).
+- Use the long-lived Apifox `dev` branch for interface changes; do not create an Apifox AI branch unless the user explicitly changes this policy.
+- Treat the backend-generated OpenAPI document as the source of truth when creating or updating interfaces in Apifox.
+- Never store Apifox access tokens in the repository, generated API documents, logs, or command output.
+
 ## Workspace and Branch Policy
 
 Always work in the user's current shared checkout and its current branch. Do not create, switch to, or rely on a separate task branch or Git worktree unless the user explicitly asks for one. Before making changes, confirm the repository root and current branch so the work is based on the latest shared code.

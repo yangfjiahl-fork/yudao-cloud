@@ -28,6 +28,7 @@ import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.*;
 import cn.iocoder.yudao.module.gift.controller.admin.slider.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.slider.SliderDO;
 import cn.iocoder.yudao.module.gift.service.slider.SliderService;
+import org.dromara.core.trans.anno.TransMethodResult;
 
 @Tag(name = "管理后台 - 轮播")
 @RestController
@@ -75,6 +76,7 @@ public class SliderController {
     @Operation(summary = "获得轮播")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('gift:slider:query')")
+    @TransMethodResult
     public CommonResult<SliderRespVO> getSlider(@RequestParam("id") Long id) {
         SliderDO slider = sliderService.getSlider(id);
         return success(BeanUtils.toBean(slider, SliderRespVO.class));
@@ -83,6 +85,7 @@ public class SliderController {
     @GetMapping("/page")
     @Operation(summary = "获得轮播分页")
     @PreAuthorize("@ss.hasPermission('gift:slider:query')")
+    @TransMethodResult
     public CommonResult<PageResult<SliderRespVO>> getSliderPage(@Valid SliderPageReqVO pageReqVO) {
         PageResult<SliderDO> pageResult = sliderService.getSliderPage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, SliderRespVO.class));

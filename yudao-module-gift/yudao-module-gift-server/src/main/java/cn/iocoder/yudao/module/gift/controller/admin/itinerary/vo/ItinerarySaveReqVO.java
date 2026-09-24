@@ -57,17 +57,6 @@ public class ItinerarySaveReqVO {
     @NotNull(message = "封面高度不能为空")
     private Integer coverHeight;
 
-    @Schema(description = "首图封面", example = "https://www.iocoder.cn")
-    private String firstCoverUrl;
-
-    @Schema(description = "首图高度", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "首图高度不能为空")
-    private Integer firstCoverHeight;
-
-    @Schema(description = "首图宽度", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "首图宽度不能为空")
-    private Integer firstCoverWidth;
-
     @Schema(description = "城市ID", example = "23770")
     private Integer nextCityId;
 

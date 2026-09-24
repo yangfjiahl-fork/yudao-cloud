@@ -28,6 +28,7 @@ import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.*;
 import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryService;
+import org.dromara.core.trans.anno.TransMethodResult;
 
 @Tag(name = "管理后台 - 行程")
 @RestController
@@ -75,6 +76,7 @@ public class ItineraryController {
     @Operation(summary = "获得行程")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:query')")
+    @TransMethodResult
     public CommonResult<ItineraryRespVO> getItinerary(@RequestParam("id") Long id) {
         ItineraryDO itinerary = itineraryService.getItinerary(id);
         return success(BeanUtils.toBean(itinerary, ItineraryRespVO.class));
@@ -83,6 +85,7 @@ public class ItineraryController {
     @GetMapping("/page")
     @Operation(summary = "获得行程分页")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:query')")
+    @TransMethodResult
     public CommonResult<PageResult<ItineraryRespVO>> getItineraryPage(@Valid ItineraryPageReqVO pageReqVO) {
         PageResult<ItineraryDO> pageResult = itineraryService.getItineraryPage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, ItineraryRespVO.class));
