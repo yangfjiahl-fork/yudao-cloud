@@ -44,6 +44,16 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
     }
 
     @Override
+    public void processUserFeedback(Long id, String processRemark) {
+        validateUserFeedbackExists(id);
+        userFeedbackMapper.updateById(UserFeedbackDO.builder()
+                .id(id)
+                .status(UserFeedbackStatusEnum.PROCESSED.getStatus())
+                .processRemark(processRemark)
+                .build());
+    }
+
+    @Override
     public void deleteUserFeedback(Long id) {
         validateUserFeedbackExists(id);
         userFeedbackMapper.deleteById(id);

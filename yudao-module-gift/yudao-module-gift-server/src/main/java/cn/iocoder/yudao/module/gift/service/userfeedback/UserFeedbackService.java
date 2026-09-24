@@ -31,6 +31,14 @@ public interface UserFeedbackService {
     void updateUserFeedback(@Valid UserFeedbackSaveReqVO updateReqVO);
 
     /**
+     * 处理用户反馈
+     *
+     * @param id 用户反馈ID
+     * @param processRemark 处理说明
+     */
+    void processUserFeedback(Long id, String processRemark);
+
+    /**
      * 删除用户反馈
      *
      * @param id 编号

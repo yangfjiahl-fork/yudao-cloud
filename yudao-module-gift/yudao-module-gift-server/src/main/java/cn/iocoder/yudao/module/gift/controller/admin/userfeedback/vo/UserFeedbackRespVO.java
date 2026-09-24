@@ -36,6 +36,10 @@ public class UserFeedbackRespVO {
     @ExcelProperty("反馈问题与建议")
     private String content;
 
+    @Schema(description = "处理说明")
+    @ExcelProperty("处理说明")
+    private String processRemark;
+
     @Schema(description = "POI供应商地点ID", example = "20346")
     @ExcelProperty("POI供应商地点ID")
     private String poiId;

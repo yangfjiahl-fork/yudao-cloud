@@ -7,6 +7,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackPageReqVO;
+import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackProcessReqVO;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackRespVO;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackSaveReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.userfeedback.UserFeedbackDO;
@@ -55,6 +56,14 @@ public class UserFeedbackController {
     @PreAuthorize("@ss.hasPermission('gift:user-feedback:update')")
     public CommonResult<Boolean> updateUserFeedback(@Valid @RequestBody UserFeedbackSaveReqVO updateReqVO) {
         userFeedbackService.updateUserFeedback(updateReqVO);
+        return success(true);
+    }
+
+    @PutMapping("/process")
+    @Operation(summary = "处理用户反馈")
+    @PreAuthorize("@ss.hasPermission('gift:user-feedback:update')")
+    public CommonResult<Boolean> processUserFeedback(@Valid @RequestBody UserFeedbackProcessReqVO processReqVO) {
+        userFeedbackService.processUserFeedback(processReqVO.getId(), processReqVO.getProcessRemark());
         return success(true);
     }
 

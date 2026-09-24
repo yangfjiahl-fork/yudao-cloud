@@ -51,6 +51,10 @@ public class UserFeedbackDO extends BaseDO {
      */
     private String content;
     /**
+     * 处理说明
+     */
+    private String processRemark;
+    /**
      * POI供应商地点ID
      */
     private String poiId;
