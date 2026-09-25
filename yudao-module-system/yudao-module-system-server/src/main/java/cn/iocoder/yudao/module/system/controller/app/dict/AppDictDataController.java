@@ -5,11 +5,13 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.system.controller.app.dict.vo.AppDictDataRespVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dict.DictDataDO;
+import cn.iocoder.yudao.module.system.enums.dict.AppDictTypeEnum;
 import cn.iocoder.yudao.module.system.service.dict.DictDataService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.security.PermitAll;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,9 +34,13 @@ public class AppDictDataController {
 
     @GetMapping("/type")
     @Operation(summary = "根据字典类型查询字典数据信息")
-    @Parameter(name = "type", description = "字典类型", required = true, example = "common_status")
+    @Parameter(name = "type", description = "字典类型", required = true, example = "gift_user_feedback_category")
     @PermitAll
-    public CommonResult<List<AppDictDataRespVO>> getDictDataListByType(@RequestParam("type") String type) {
+    public CommonResult<List<AppDictDataRespVO>> getDictDataListByType(
+            @RequestParam("type") @NotBlank(message = "字典类型不能为空") String type) {
+        if (!AppDictTypeEnum.contains(type)) {
+            return success(List.of());
+        }
         List<DictDataDO> list = dictDataService.getDictDataList(
                 CommonStatusEnum.ENABLE.getStatus(), type);
         return success(BeanUtils.toBean(list, AppDictDataRespVO.class));

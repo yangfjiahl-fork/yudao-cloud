@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackSaveReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.userfeedback.vo.AppUserFeedbackCreateReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.userfeedback.UserFeedbackDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.userfeedback.UserFeedbackMapper;
 import cn.iocoder.yudao.module.gift.enums.UserFeedbackStatusEnum;
@@ -25,12 +26,26 @@ import static cn.iocoder.yudao.module.gift.enums.ErrorCodeConstants.USER_FEEDBAC
 @Validated
 public class UserFeedbackServiceImpl implements UserFeedbackService {
 
+    private static final String DEFAULT_POI_PROVIDER = "gaode";
+
     @Resource
     private UserFeedbackMapper userFeedbackMapper;
 
     @Override
     public Long createUserFeedback(UserFeedbackSaveReqVO createReqVO) {
         UserFeedbackDO userFeedback = BeanUtils.toBean(createReqVO, UserFeedbackDO.class);
+        return createUserFeedback(userFeedback);
+    }
+
+    @Override
+    public Long createUserFeedback(Long memberId, AppUserFeedbackCreateReqVO createReqVO) {
+        UserFeedbackDO userFeedback = BeanUtils.toBean(createReqVO, UserFeedbackDO.class);
+        userFeedback.setMemberId(memberId);
+        userFeedback.setPoiProvider(DEFAULT_POI_PROVIDER);
+        return createUserFeedback(userFeedback);
+    }
+
+    private Long createUserFeedback(UserFeedbackDO userFeedback) {
         userFeedback.setStatus(UserFeedbackStatusEnum.UNPROCESSED.getStatus());
         userFeedbackMapper.insert(userFeedback);
         return userFeedback.getId();

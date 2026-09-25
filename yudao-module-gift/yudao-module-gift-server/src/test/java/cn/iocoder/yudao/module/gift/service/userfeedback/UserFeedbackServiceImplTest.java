@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.userfeedback;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.module.gift.controller.app.userfeedback.vo.AppUserFeedbackCreateReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.userfeedback.UserFeedbackDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.userfeedback.UserFeedbackMapper;
 import cn.iocoder.yudao.module.gift.enums.UserFeedbackStatusEnum;
@@ -21,6 +22,29 @@ class UserFeedbackServiceImplTest extends BaseMockitoUnitTest {
     private UserFeedbackServiceImpl userFeedbackService;
     @Mock
     private UserFeedbackMapper userFeedbackMapper;
+
+    @Test
+    void testCreateUserFeedbackByMember() {
+        Long memberId = 288L;
+        AppUserFeedbackCreateReqVO createReqVO = new AppUserFeedbackCreateReqVO();
+        createReqVO.setCategory(40);
+        createReqVO.setContent("营业时间有误");
+        createReqVO.setPoiId("B0FFG2M8Q4");
+        createReqVO.setPoiName("西湖风景名胜区");
+
+        userFeedbackService.createUserFeedback(memberId, createReqVO);
+
+        ArgumentCaptor<UserFeedbackDO> captor = ArgumentCaptor.forClass(UserFeedbackDO.class);
+        verify(userFeedbackMapper).insert(captor.capture());
+        UserFeedbackDO userFeedback = captor.getValue();
+        assertEquals(memberId, userFeedback.getMemberId());
+        assertEquals(createReqVO.getCategory(), userFeedback.getCategory());
+        assertEquals(createReqVO.getContent(), userFeedback.getContent());
+        assertEquals(createReqVO.getPoiId(), userFeedback.getPoiId());
+        assertEquals(createReqVO.getPoiName(), userFeedback.getPoiName());
+        assertEquals("gaode", userFeedback.getPoiProvider());
+        assertEquals(UserFeedbackStatusEnum.UNPROCESSED.getStatus(), userFeedback.getStatus());
+    }
 
     @Test
     void testProcessUserFeedback() {

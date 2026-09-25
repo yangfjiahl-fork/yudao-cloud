@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.userfeedback;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.admin.userfeedback.vo.UserFeedbackSaveReqVO;
+import cn.iocoder.yudao.module.gift.controller.app.userfeedback.vo.AppUserFeedbackCreateReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.userfeedback.UserFeedbackDO;
 import jakarta.validation.Valid;
 
@@ -22,6 +23,15 @@ public interface UserFeedbackService {
      * @return 编号
      */
     Long createUserFeedback(@Valid UserFeedbackSaveReqVO createReqVO);
+
+    /**
+     * 创建用户反馈
+     *
+     * @param memberId 会员编号
+     * @param createReqVO 创建信息
+     * @return 编号
+     */
+    Long createUserFeedback(Long memberId, @Valid AppUserFeedbackCreateReqVO createReqVO);
 
     /**
      * 更新用户反馈
