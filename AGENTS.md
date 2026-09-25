@@ -26,6 +26,8 @@ Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast
 - The project's Apifox workspace is [app-api](https://app.apifox.com/project/8882743) (project ID `8882743`).
 - Use the long-lived Apifox `dev` branch for interface changes; do not create an Apifox AI branch unless the user explicitly changes this policy.
 - Treat the backend-generated OpenAPI document as the source of truth when creating or updating interfaces in Apifox.
+- Organize every Apifox endpoint into the appropriate functional folder; do not leave endpoints at the project root unless the user explicitly requests it.
+- API documentation and test cases must describe only the endpoint's externally observable capability, authentication requirements, inputs, outputs, and constraints. Do not expose backend implementation details such as internal defaulting, persistence behavior, enum or whitelist mechanisms, service orchestration, or internal field derivation.
 - Never store Apifox access tokens in the repository, generated API documents, logs, or command output.
 
 ## Workspace and Branch Policy

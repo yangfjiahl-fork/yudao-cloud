@@ -30,4 +30,11 @@ public interface SliderItemMapper extends BaseMapperX<SliderItemDO> {
                 .orderByDesc(SliderItemDO::getId));
     }
 
+    default List<SliderItemDO> selectListBySliderId(Long sliderId) {
+        return selectList(new LambdaQueryWrapperX<SliderItemDO>()
+                .eq(SliderItemDO::getSliderId, sliderId)
+                .orderByAsc(SliderItemDO::getSort)
+                .orderByAsc(SliderItemDO::getId));
+    }
+
 }

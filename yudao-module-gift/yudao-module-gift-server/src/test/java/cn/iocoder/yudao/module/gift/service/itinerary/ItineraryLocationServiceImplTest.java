@@ -16,6 +16,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class ItineraryLocationServiceImplTest extends BaseMockitoUnitTest {
@@ -40,6 +41,33 @@ class ItineraryLocationServiceImplTest extends BaseMockitoUnitTest {
 
         assertEquals("杭州市", result.city());
         assertEquals("330106", result.adcode());
+    }
+
+    @Test
+    void identifyCurrentCityUsesCoordinates() {
+        BigDecimal longitude = new BigDecimal("120.155070");
+        BigDecimal latitude = new BigDecimal("30.274084");
+        when(amapGeocodingClient.reverseGeocode(longitude, latitude)).thenReturn(new AmapGeocodingClient.Location(
+                "浙江省", "杭州市", "西湖区", "330106", "浙江省杭州市西湖区西湖街道"));
+
+        ItineraryLocationService.Location result = service.identifyCurrentCity(
+                longitude, latitude, "114.114.114.114");
+
+        assertEquals("杭州市", result.city());
+        verify(amapGeocodingClient, never()).locateByIp(any());
+    }
+
+    @Test
+    void identifyCurrentCityFallsBackToAmapIpWhenCoordinateMissing() {
+        when(amapGeocodingClient.locateByIp("114.114.114.114")).thenReturn(new AmapGeocodingClient.Location(
+                "江苏省", "南京市", "", "320100", "江苏省南京市"));
+
+        ItineraryLocationService.Location result = service.identifyCurrentCity(
+                null, new BigDecimal("30.274084"), "114.114.114.114");
+
+        assertEquals("南京市", result.city());
+        verify(amapGeocodingClient).locateByIp("114.114.114.114");
+        verify(amapGeocodingClient, never()).reverseGeocode(any(), any());
     }
 
     @Test

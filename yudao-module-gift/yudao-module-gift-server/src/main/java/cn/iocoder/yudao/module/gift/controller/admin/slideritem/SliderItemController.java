@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.controller.admin.slideritem;
 
+import cn.hutool.core.collection.CollUtil;
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
@@ -26,8 +27,15 @@ import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.*;
 
 import cn.iocoder.yudao.module.gift.controller.admin.slideritem.vo.*;
+import cn.iocoder.yudao.module.gift.dal.dataobject.slider.SliderDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.slideritem.SliderItemDO;
+import cn.iocoder.yudao.module.gift.service.slider.SliderService;
 import cn.iocoder.yudao.module.gift.service.slideritem.SliderItemService;
+import cn.iocoder.yudao.module.system.api.area.AreaApi;
+import cn.iocoder.yudao.module.system.api.area.dto.AreaRespDTO;
+
+import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertMap;
+import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
 
 @Tag(name = "管理后台 - 轮播图")
 @RestController
@@ -37,6 +45,10 @@ public class SliderItemController {
 
     @Resource
     private SliderItemService sliderItemService;
+    @Resource
+    private SliderService sliderService;
+    @Resource
+    private AreaApi areaApi;
 
     @PostMapping("/create")
     @Operation(summary = "创建轮播图")
@@ -77,7 +89,10 @@ public class SliderItemController {
     @PreAuthorize("@ss.hasPermission('gift:slider-item:query')")
     public CommonResult<SliderItemRespVO> getSliderItem(@RequestParam("id") Long id) {
         SliderItemDO sliderItem = sliderItemService.getSliderItem(id);
-        return success(BeanUtils.toBean(sliderItem, SliderItemRespVO.class));
+        if (sliderItem == null) {
+            return success(null);
+        }
+        return success(CollUtil.getFirst(buildSliderItemRespVOList(Collections.singletonList(sliderItem))));
     }
 
     @GetMapping("/page")
@@ -85,7 +100,7 @@ public class SliderItemController {
     @PreAuthorize("@ss.hasPermission('gift:slider-item:query')")
     public CommonResult<PageResult<SliderItemRespVO>> getSliderItemPage(@Valid SliderItemPageReqVO pageReqVO) {
         PageResult<SliderItemDO> pageResult = sliderItemService.getSliderItemPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, SliderItemRespVO.class));
+        return success(new PageResult<>(buildSliderItemRespVOList(pageResult.getList()), pageResult.getTotal()));
     }
 
     @GetMapping("/export-excel")
@@ -98,7 +113,31 @@ public class SliderItemController {
         List<SliderItemDO> list = sliderItemService.getSliderItemPage(pageReqVO).getList();
         // 导出 Excel
         ExcelUtils.write(response, "轮播图.xls", "数据", SliderItemRespVO.class,
-                        BeanUtils.toBean(list, SliderItemRespVO.class));
+                        buildSliderItemRespVOList(list));
+    }
+
+    private List<SliderItemRespVO> buildSliderItemRespVOList(List<SliderItemDO> sliderItems) {
+        if (CollUtil.isEmpty(sliderItems)) {
+            return Collections.emptyList();
+        }
+        Map<Long, SliderDO> sliderMap = convertMap(sliderService.getSliderList(
+                convertSet(sliderItems, SliderItemDO::getSliderId)), SliderDO::getId);
+        Set<Long> cityIds = convertSet(sliderMap.values(), SliderDO::getCityId);
+        Map<Long, AreaRespDTO> areaMap = CollUtil.isEmpty(cityIds) ? Collections.emptyMap()
+                : convertMap(areaApi.getAreaList(cityIds).getCheckedData(), AreaRespDTO::getId);
+        return BeanUtils.toBean(sliderItems, SliderItemRespVO.class, item -> {
+            SliderDO slider = sliderMap.get(item.getSliderId());
+            if (slider == null) {
+                return;
+            }
+            item.setPositionCode(slider.getPositionCode());
+            item.setCityId(slider.getCityId());
+            AreaRespDTO area = areaMap.get(slider.getCityId());
+            if (area != null) {
+                item.setProvinceName(area.getProvinceName());
+                item.setCityName(area.getCityName());
+            }
+        });
     }
 
 }

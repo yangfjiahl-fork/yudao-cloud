@@ -60,6 +60,35 @@ public class AmapGeocodingClient {
     }
 
     /**
+     * 将客户端 IPv4 转换为城市信息。
+     */
+    public Location locateByIp(String ip) {
+        validateIpConfig(ip);
+        URI uri = UriComponentsBuilder.fromUriString(properties.getIpLocationUrl())
+                .queryParam("key", properties.getKey())
+                .queryParam("ip", ip)
+                .queryParam("output", "JSON")
+                .build().encode().toUri();
+        long startTime = System.currentTimeMillis();
+        try {
+            String responseBody = restTemplate.getForObject(uri, String.class);
+            Location location = convertIpResponse(StrUtil.isBlank(responseBody) ? null : JsonUtils.parseTree(responseBody));
+            log.info("[locateByIp][高德 IP 定位成功，city({}) adcode({}) duration({}ms)]",
+                    location.city(), location.adcode(), System.currentTimeMillis() - startTime);
+            return location;
+        } catch (RestClientException ex) {
+            // RestClientException 可能包含带 Key 和用户 IP 的完整 URL，避免将异常内容写入日志或向上透传。
+            log.error("[locateByIp][调用高德 IP 定位接口异常，errorType({}) duration({}ms)]",
+                    ex.getClass().getSimpleName(), System.currentTimeMillis() - startTime);
+            throw new IllegalStateException("调用高德 IP 定位接口失败");
+        } catch (IllegalStateException ex) {
+            log.warn("[locateByIp][高德 IP 定位业务失败，duration({}ms) reason({})]",
+                    System.currentTimeMillis() - startTime, ex.getMessage());
+            throw ex;
+        }
+    }
+
+    /**
      * 将城市名称转换为高德 GCJ-02 坐标，用作无定位授权时的地图视口中心。
      */
     @Cacheable(cacheNames = "giftGeoAmap#1h", key = "'city:' + #city")
@@ -112,6 +141,23 @@ public class AmapGeocodingClient {
         return new Location(province, city, district, adcode, textValue(regeocode.path("formatted_address")));
     }
 
+    private Location convertIpResponse(JsonNode response) {
+        if (response == null || !SUCCESS_STATUS.equals(response.path("status").asText())) {
+            String info = response == null ? "接口无响应" : response.path("info").asText("未知错误");
+            String infoCode = response == null ? "" : response.path("infocode").asText("");
+            log.warn("[convertIpResponse][高德 IP 定位业务失败，info({}) infocode({})]", info, infoCode);
+            throw new IllegalStateException("高德 IP 定位失败：" + info);
+        }
+        String province = textValue(response.path("province"));
+        String city = textValue(response.path("city"));
+        String adcode = textValue(response.path("adcode"));
+        if (StrUtil.isBlank(city) || StrUtil.isBlank(adcode)) {
+            throw new IllegalStateException("高德 IP 定位失败：未识别到国内城市");
+        }
+        String formattedAddress = province.equals(city) ? city : province + city;
+        return new Location(province, city, "", adcode, formattedAddress);
+    }
+
     private void validateConfig() {
         if (properties == null || StrUtil.isBlank(properties.getKey())) {
             log.error("[validateConfig][高德 Web 服务 API Key 未配置]");
@@ -120,6 +166,20 @@ public class AmapGeocodingClient {
         if (StrUtil.isBlank(properties.getReverseGeocodingUrl())) {
             log.error("[validateConfig][高德逆地理编码接口地址未配置]");
             throw new IllegalStateException("高德逆地理编码接口地址未配置");
+        }
+    }
+
+    private void validateIpConfig(String ip) {
+        if (properties == null || StrUtil.isBlank(properties.getKey())) {
+            log.error("[validateIpConfig][高德 Web 服务 API Key 未配置]");
+            throw new IllegalStateException("高德 Web 服务 API Key 未配置");
+        }
+        if (StrUtil.isBlank(properties.getIpLocationUrl())) {
+            log.error("[validateIpConfig][高德 IP 定位接口地址未配置]");
+            throw new IllegalStateException("高德 IP 定位接口地址未配置");
+        }
+        if (StrUtil.isBlank(ip)) {
+            throw new IllegalArgumentException("客户端 IP 不能为空");
         }
     }
 

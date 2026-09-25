@@ -25,4 +25,15 @@ public interface SliderMapper extends BaseMapperX<SliderDO> {
                 .orderByDesc(SliderDO::getId));
     }
 
+    default SliderDO selectByPositionCodeAndCityId(String positionCode, Long cityId) {
+        LambdaQueryWrapperX<SliderDO> query = new LambdaQueryWrapperX<SliderDO>()
+                .eq(SliderDO::getPositionCode, positionCode);
+        if (cityId == null) {
+            query.isNull(SliderDO::getCityId);
+        } else {
+            query.eq(SliderDO::getCityId, cityId);
+        }
+        return selectOne(query);
+    }
+
 }

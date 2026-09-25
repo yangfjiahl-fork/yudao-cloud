@@ -16,6 +16,9 @@ public class AmapProperties {
     /** 高德地理编码接口地址。 */
     private String geocodingUrl = "https://restapi.amap.com/v3/geocode/geo";
 
+    /** 高德 IP 定位接口地址；仅支持国内 IPv4，定位不到城市时调用失败。 */
+    private String ipLocationUrl = "https://restapi.amap.com/v3/ip";
+
     /** 高德地点关键字搜索接口地址。 */
     private String placeSearchUrl = "https://restapi.amap.com/v5/place/text";
 

@@ -21,6 +21,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class AmapGeocodingClientTest {
 
     private static final String URL = "https://example.com/v3/geocode/regeo";
+    private static final String IP_URL = "https://example.com/v3/ip";
 
     private MockRestServiceServer server;
     private AmapGeocodingClient client;
@@ -31,7 +32,8 @@ class AmapGeocodingClientTest {
         server = MockRestServiceServer.createServer(restTemplate);
         client = new AmapGeocodingClient(restTemplate, new AmapProperties()
                 .setKey("test-key")
-                .setReverseGeocodingUrl(URL));
+                .setReverseGeocodingUrl(URL)
+                .setIpLocationUrl(IP_URL));
     }
 
     @AfterEach
@@ -144,6 +146,46 @@ class AmapGeocodingClientTest {
                 () -> client.reverseGeocode(new BigDecimal("120.155070"), new BigDecimal("30.274084")));
 
         assertEquals("高德 Web 服务 API Key 未配置", exception.getMessage());
+    }
+
+    @Test
+    void testLocateByIp() {
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith(IP_URL)))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(queryParam("key", "test-key"))
+                .andExpect(queryParam("ip", "114.114.114.114"))
+                .andExpect(queryParam("output", "JSON"))
+                .andRespond(withSuccess("""
+                        {
+                          "status": "1",
+                          "info": "OK",
+                          "province": "江苏省",
+                          "city": "南京市",
+                          "adcode": "320100",
+                          "rectangle": "118.4253323,31.918244;119.244211,32.394013"
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        AmapGeocodingClient.Location result = client.locateByIp("114.114.114.114");
+
+        assertEquals("江苏省", result.province());
+        assertEquals("南京市", result.city());
+        assertEquals("", result.district());
+        assertEquals("320100", result.adcode());
+        assertEquals("江苏省南京市", result.formattedAddress());
+    }
+
+    @Test
+    void testLocateByIpWithoutCity() {
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith(IP_URL)))
+                .andRespond(withSuccess("""
+                        {"status": "1", "info": "OK", "province": [], "city": [], "adcode": []}
+                        """, MediaType.APPLICATION_JSON));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> client.locateByIp("127.0.0.1"));
+
+        assertEquals("高德 IP 定位失败：未识别到国内城市", exception.getMessage());
     }
 
 }

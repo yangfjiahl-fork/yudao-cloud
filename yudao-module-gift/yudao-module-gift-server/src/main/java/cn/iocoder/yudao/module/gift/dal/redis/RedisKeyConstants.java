@@ -16,4 +16,12 @@ public interface RedisKeyConstants {
      */
     String ARTICLE_LIKE = "gift:article:like:%d";
 
+    /**
+     * 会员当前城市
+     * <p>
+     * KEY 格式：gift:user:current-city:{memberId}
+     * VALUE：城市编号与名称 JSON
+     */
+    String USER_CURRENT_CITY = "gift:user:current-city:%d";
+
 }

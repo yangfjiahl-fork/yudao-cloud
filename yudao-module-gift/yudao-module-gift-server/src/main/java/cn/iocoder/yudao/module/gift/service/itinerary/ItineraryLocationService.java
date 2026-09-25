@@ -8,6 +8,8 @@ public interface ItineraryLocationService {
 
     Location reverseGeocode(BigDecimal longitude, BigDecimal latitude);
 
+    Location identifyCurrentCity(BigDecimal longitude, BigDecimal latitude, String clientIp);
+
     PlaceSearchResult searchNearbyPlaces(PlaceSearchRequest request);
 
     Weather getCurrentWeather(String cityCode);

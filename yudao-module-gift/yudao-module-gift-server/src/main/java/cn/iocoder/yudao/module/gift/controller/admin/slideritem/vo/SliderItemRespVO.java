@@ -23,6 +23,23 @@ public class SliderItemRespVO {
     @ExcelProperty("轮播ID")
     private Long sliderId;
 
+    @Schema(description = "轮播位置", example = "HOME_TOP")
+    @ExcelProperty(value = "轮播位置", converter = DictConvert.class)
+    @DictFormat(DictTypeConstants.SLIDER_POSITION)
+    private String positionCode;
+
+    @Schema(description = "城市ID", example = "330100")
+    @ExcelProperty("城市ID")
+    private Long cityId;
+
+    @Schema(description = "省份名称", example = "浙江省")
+    @ExcelProperty("省份名称")
+    private String provinceName;
+
+    @Schema(description = "城市名称", example = "杭州市")
+    @ExcelProperty("城市名称")
+    private String cityName;
+
     @Schema(description = "图片地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.iocoder.cn")
     @ExcelProperty("图片地址")
     private String imageUrl;

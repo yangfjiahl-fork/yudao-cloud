@@ -9,11 +9,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import cn.iocoder.yudao.module.gift.controller.admin.slider.vo.*;
 import cn.iocoder.yudao.module.gift.dal.dataobject.slider.SliderDO;
+import cn.iocoder.yudao.module.gift.dal.dataobject.slideritem.SliderItemDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 
 import cn.iocoder.yudao.module.gift.dal.mysql.slider.SliderMapper;
+import cn.iocoder.yudao.module.gift.dal.mysql.slideritem.SliderItemMapper;
+import cn.iocoder.yudao.module.gift.service.usercity.UserCityService;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertList;
@@ -31,6 +34,10 @@ public class SliderServiceImpl implements SliderService {
 
     @Resource
     private SliderMapper sliderMapper;
+    @Resource
+    private SliderItemMapper sliderItemMapper;
+    @Resource
+    private UserCityService userCityService;
 
     @Override
     public Long createSlider(SliderSaveReqVO createReqVO) {
@@ -78,8 +85,33 @@ public class SliderServiceImpl implements SliderService {
     }
 
     @Override
+    public List<SliderDO> getSliderList(Collection<Long> ids) {
+        return sliderMapper.selectByIds(ids);
+    }
+
+    @Override
     public PageResult<SliderDO> getSliderPage(SliderPageReqVO pageReqVO) {
         return sliderMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public List<SliderItemDO> getSliderItemList(Long memberId, String positionCode) {
+        UserCityService.UserCity userCity = userCityService.getUserCity(memberId);
+        if (userCity != null && userCity.cityId() != null) {
+            List<SliderItemDO> citySliderItems = getSliderItemList(positionCode, userCity.cityId());
+            if (CollUtil.isNotEmpty(citySliderItems)) {
+                return citySliderItems;
+            }
+        }
+        return getSliderItemList(positionCode, null);
+    }
+
+    private List<SliderItemDO> getSliderItemList(String positionCode, Long cityId) {
+        SliderDO slider = sliderMapper.selectByPositionCodeAndCityId(positionCode, cityId);
+        if (slider == null) {
+            return Collections.emptyList();
+        }
+        return sliderItemMapper.selectListBySliderId(slider.getId());
     }
 
 }

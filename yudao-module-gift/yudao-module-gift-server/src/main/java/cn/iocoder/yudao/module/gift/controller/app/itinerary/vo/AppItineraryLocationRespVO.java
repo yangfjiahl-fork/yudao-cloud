@@ -7,7 +7,7 @@ import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryLocationService;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-@Schema(description = "用户 APP - 经纬度定位 Response VO")
+@Schema(description = "用户 APP - 城市识别 Response VO")
 @Data
 public class AppItineraryLocationRespVO {
 
@@ -37,53 +37,33 @@ public class AppItineraryLocationRespVO {
 
     public static AppItineraryLocationRespVO from(ItineraryLocationService.Location location) {
         long districtId = Long.parseLong(location.adcode());
-        // 省直辖县在高德响应中 city 为空，归一化后 city 与 district 相同，adcode 本身即城市编号。
-        long cityId = location.city().equals(location.district()) ? districtId : districtId / 100 * 100;
+        Long cityId = resolveCityId(location, districtId);
+        Long resolvedDistrictId = isBlank(location.district()) ? null : districtId;
         return new AppItineraryLocationRespVO()
                 .setProvinceId(districtId / 10000 * 10000)
                 .setCityId(cityId)
-                .setDistrictId(districtId)
+                .setDistrictId(resolvedDistrictId)
                 .setProvince(location.province())
                 .setCity(location.city())
-                .setDistrict(location.district())
+                .setDistrict(isBlank(location.district()) ? null : location.district())
                 .setAdcode(location.adcode())
                 .setFormattedAddress(location.formattedAddress());
     }
 
-    /**
-     * 基于本地 IP 库的城市级定位结果构建响应。
-     *
-     * IP 库通常只能精确到城市，因此 district 相关字段会保持为空。
-     */
-    public static AppItineraryLocationRespVO fromIpArea(Area area) {
-        if (area == null) {
-            return new AppItineraryLocationRespVO();
+    private static Long resolveCityId(ItineraryLocationService.Location location, long adcode) {
+        // 省直辖县没有单独的市级节点，直接使用区县编码。
+        if (location.city().equals(location.district())) {
+            return adcode;
         }
-        Area province = findAncestor(area, AreaTypeEnum.PROVINCE);
-        Area city = findAncestor(area, AreaTypeEnum.CITY);
-        Area district = findAncestor(area, AreaTypeEnum.DISTRICT);
-        return new AppItineraryLocationRespVO()
-                .setProvinceId(toLong(province))
-                .setCityId(toLong(city))
-                .setDistrictId(toLong(district))
-                .setProvince(province == null ? null : province.getName())
-                .setCity(city == null ? null : city.getName())
-                .setDistrict(district == null ? null : district.getName())
-                .setAdcode(String.valueOf(area.getId()))
-                .setFormattedAddress(AreaUtils.format(area.getId(), ""));
+        Area city = AreaUtils.getArea(location.city());
+        if (city != null && city.getId() != null && AreaTypeEnum.CITY.getType().equals(city.getType())) {
+            return city.getId().longValue();
+        }
+        return adcode / 100 * 100;
     }
 
-    private static Area findAncestor(Area area, AreaTypeEnum type) {
-        for (Area current = area; current != null; current = current.getParent()) {
-            if (type.getType().equals(current.getType())) {
-                return current;
-            }
-        }
-        return null;
-    }
-
-    private static Long toLong(Area area) {
-        return area == null ? null : area.getId().longValue();
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
 }

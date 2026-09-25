@@ -364,6 +364,7 @@ yudao:
       key: ${AMAP_WEB_SERVICE_KEY:}
       reverse-geocoding-url: ${AMAP_REVERSE_GEOCODING_URL:https://restapi.amap.com/v3/geocode/regeo}
       geocoding-url: ${AMAP_GEOCODE_URL:https://restapi.amap.com/v3/geocode/geo}
+      ip-location-url: ${AMAP_IP_LOCATION_URL:https://restapi.amap.com/v3/ip}
       place-search-url: ${AMAP_PLACE_SEARCH_URL:${AMAP_TRAVEL_PLACE_URL:${AMAP_SCENIC_SPOT_URL:https://restapi.amap.com/v5/place/text}}}
       place-around-search-url: ${AMAP_PLACE_AROUND_SEARCH_URL:${AMAP_TRAVEL_PLACE_AROUND_URL:https://restapi.amap.com/v5/place/around}}
       place-detail-url: ${AMAP_PLACE_DETAIL_URL:${AMAP_TRAVEL_PLACE_DETAIL_URL:https://restapi.amap.com/v5/place/detail}}

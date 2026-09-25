@@ -1,6 +1,5 @@
 package cn.iocoder.yudao.module.gift.controller.app.itinerary.vo;
 
-import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryLocationService;
 import org.junit.jupiter.api.Test;
 
@@ -34,8 +33,11 @@ class AppItineraryLocationRespVOTest {
     }
 
     @Test
-    void testFromIpArea() {
-        AppItineraryLocationRespVO result = AppItineraryLocationRespVO.fromIpArea(AreaUtils.getArea(420600));
+    void testFromIpLocation() {
+        ItineraryLocationService.Location location = new ItineraryLocationService.Location(
+                "湖北省", "襄阳市", "", "420600", "湖北省襄阳市");
+
+        AppItineraryLocationRespVO result = AppItineraryLocationRespVO.from(location);
 
         assertEquals(420000L, result.getProvinceId());
         assertEquals(420600L, result.getCityId());
@@ -43,18 +45,6 @@ class AppItineraryLocationRespVOTest {
         assertEquals("襄阳市", result.getCity());
         assertEquals(null, result.getDistrictId());
         assertEquals(null, result.getDistrict());
-    }
-
-    @Test
-    void testFromIpArea_defaultPudong() {
-        AppItineraryLocationRespVO result = AppItineraryLocationRespVO.fromIpArea(AreaUtils.getArea(310115));
-
-        assertEquals(310000L, result.getProvinceId());
-        assertEquals(310100L, result.getCityId());
-        assertEquals(310115L, result.getDistrictId());
-        assertEquals("上海市", result.getProvince());
-        assertEquals("上海市", result.getCity());
-        assertEquals("浦东新区", result.getDistrict());
     }
 
 }
