@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.gift.controller.admin.itinerarycategory.vo;
 
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.yudao.framework.common.validation.InEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.util.*;
@@ -23,5 +25,11 @@ public class ItineraryCategorySaveReqVO {
     @Schema(description = "排序", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "排序不能为空")
     private Integer sort;
+
+    @Schema(description = "状态，参见 CommonStatusEnum 枚举类", requiredMode = Schema.RequiredMode.REQUIRED,
+            example = "0")
+    @NotNull(message = "状态不能为空")
+    @InEnum(CommonStatusEnum.class)
+    private Integer status;
 
 }

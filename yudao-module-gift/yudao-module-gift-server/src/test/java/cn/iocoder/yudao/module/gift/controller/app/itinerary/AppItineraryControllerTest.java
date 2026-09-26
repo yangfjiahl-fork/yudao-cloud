@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.controller.app.itinerary;
 
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
@@ -41,7 +42,8 @@ class AppItineraryControllerTest extends BaseMockitoUnitTest {
     @Test
     void getItineraryCategoryList_shouldReturnCategories() {
         ItineraryCategoryDO category = ItineraryCategoryDO.builder()
-                .id(1L).title("亲子游").icon("family").sort(10).build();
+                .id(1L).title("亲子游").icon("family").sort(10)
+                .status(CommonStatusEnum.ENABLE.getStatus()).build();
         when(itineraryCategoryService.getItineraryCategoryList()).thenReturn(List.of(category));
 
         CommonResult<List<AppItineraryCategoryRespVO>> result =

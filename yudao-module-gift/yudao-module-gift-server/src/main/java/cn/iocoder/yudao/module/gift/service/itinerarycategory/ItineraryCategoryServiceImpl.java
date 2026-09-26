@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.itinerarycategory;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import org.springframework.stereotype.Service;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
@@ -84,7 +85,7 @@ public class ItineraryCategoryServiceImpl implements ItineraryCategoryService {
 
     @Override
     public List<ItineraryCategoryDO> getItineraryCategoryList() {
-        return itineraryCategoryMapper.selectListForApp();
+        return itineraryCategoryMapper.selectListByStatus(CommonStatusEnum.ENABLE.getStatus());
     }
 
 }

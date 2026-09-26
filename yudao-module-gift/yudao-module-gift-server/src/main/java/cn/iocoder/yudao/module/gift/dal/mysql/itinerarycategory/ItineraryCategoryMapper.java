@@ -19,15 +19,17 @@ public interface ItineraryCategoryMapper extends BaseMapperX<ItineraryCategoryDO
 
     default PageResult<ItineraryCategoryDO> selectPage(ItineraryCategoryPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<ItineraryCategoryDO>()
-                .eqIfPresent(ItineraryCategoryDO::getTitle, reqVO.getTitle())
+                .likeIfPresent(ItineraryCategoryDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(ItineraryCategoryDO::getIcon, reqVO.getIcon())
                 .eqIfPresent(ItineraryCategoryDO::getSort, reqVO.getSort())
+                .eqIfPresent(ItineraryCategoryDO::getStatus, reqVO.getStatus())
                 .betweenIfPresent(ItineraryCategoryDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(ItineraryCategoryDO::getId));
     }
 
-    default List<ItineraryCategoryDO> selectListForApp() {
+    default List<ItineraryCategoryDO> selectListByStatus(Integer status) {
         return selectList(new LambdaQueryWrapperX<ItineraryCategoryDO>()
+                .eq(ItineraryCategoryDO::getStatus, status)
                 .orderByDesc(ItineraryCategoryDO::getSort)
                 .orderByDesc(ItineraryCategoryDO::getId));
     }

@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.gift.dal.dataobject.itinerarycategory;
 
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import lombok.*;
 import java.util.*;
 import java.time.LocalDateTime;
@@ -39,6 +40,12 @@ public class ItineraryCategoryDO extends BaseDO {
      * 排序
      */
     private Integer sort;
+    /**
+     * 状态
+     *
+     * 枚举 {@link CommonStatusEnum}
+     */
+    private Integer status;
 
 
 }
