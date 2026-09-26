@@ -23,7 +23,7 @@ public interface ItineraryDayMapper extends BaseMapperX<ItineraryDayDO> {
                 .eqIfPresent(ItineraryDayDO::getDay, reqVO.getDay())
                 .eqIfPresent(ItineraryDayDO::getCityId, reqVO.getCityId())
                 .eqIfPresent(ItineraryDayDO::getDistrictId, reqVO.getDistrictId())
-                .eqIfPresent(ItineraryDayDO::getTitle, reqVO.getTitle())
+                .likeIfPresent(ItineraryDayDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(ItineraryDayDO::getDescription, reqVO.getDescription())
                 .eqIfPresent(ItineraryDayDO::getSort, reqVO.getSort())
                 .betweenIfPresent(ItineraryDayDO::getCreateTime, reqVO.getCreateTime())

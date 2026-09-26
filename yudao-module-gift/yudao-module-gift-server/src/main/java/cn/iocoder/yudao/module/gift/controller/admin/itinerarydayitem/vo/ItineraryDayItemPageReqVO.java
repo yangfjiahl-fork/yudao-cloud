@@ -27,7 +27,7 @@ public class ItineraryDayItemPageReqVO extends PageParam {
     @Schema(description = "节点时段")
     private String slot;
 
-    @Schema(description = "节点标题")
+    @Schema(description = "节点标题，支持模糊匹配")
     private String title;
 
     @Schema(description = "节点副标题")

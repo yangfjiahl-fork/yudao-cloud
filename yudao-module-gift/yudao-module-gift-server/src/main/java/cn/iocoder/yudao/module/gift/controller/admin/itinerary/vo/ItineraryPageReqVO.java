@@ -19,7 +19,7 @@ public class ItineraryPageReqVO extends PageParam {
     @Schema(description = "类别ID", example = "1668")
     private Long categoryId;
 
-    @Schema(description = "标题")
+    @Schema(description = "标题，支持模糊匹配")
     private String title;
 
     @Schema(description = "副标题")

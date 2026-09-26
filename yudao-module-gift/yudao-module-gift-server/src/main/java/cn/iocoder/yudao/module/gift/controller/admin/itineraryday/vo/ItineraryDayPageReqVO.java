@@ -25,7 +25,7 @@ public class ItineraryDayPageReqVO extends PageParam {
     @Schema(description = "当日区县ID", example = "24164")
     private Integer districtId;
 
-    @Schema(description = "当日标题")
+    @Schema(description = "当日标题，支持模糊匹配")
     private String title;
 
     @Schema(description = "当日描述", example = "你猜")

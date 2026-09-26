@@ -1,8 +1,10 @@
 package cn.iocoder.yudao.module.member.api.user;
 
+import cn.hutool.core.convert.Convert;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.member.api.user.dto.MemberUserRespDTO;
 import cn.iocoder.yudao.module.member.enums.ApiConstants;
+import feign.FeignIgnore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,7 +23,8 @@ import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.
 
 @FeignClient(name = ApiConstants.NAME) // TODO 芋艿：fallbackFactory =
 @Tag(name = "RPC 服务 - 会员用户")
-public interface MemberUserApi {
+@AutoTrans(namespace = MemberUserApi.PREFIX, fields = {"nickname"})
+public interface MemberUserApi extends AutoTransable<MemberUserRespDTO> {
 
     String PREFIX = ApiConstants.PREFIX + "/user";
 
@@ -60,5 +63,17 @@ public interface MemberUserApi {
     @Operation(summary = "校验用户是否存在")
     @Parameter(name = "id", description = "用户编号", required = true, example = "1")
     CommonResult<Boolean> validateUser(@RequestParam("id") Long id);
+
+    @Override
+    @FeignIgnore
+    default List<MemberUserRespDTO> selectByIds(List<?> ids) {
+        return getUserList(Convert.toList(Long.class, ids)).getCheckedData();
+    }
+
+    @Override
+    @FeignIgnore
+    default MemberUserRespDTO selectById(Object id) {
+        return getUser(Convert.toLong(id)).getCheckedData();
+    }
 
 }

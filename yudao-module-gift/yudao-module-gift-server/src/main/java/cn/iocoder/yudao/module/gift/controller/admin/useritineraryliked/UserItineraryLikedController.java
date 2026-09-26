@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
+import org.dromara.core.trans.anno.TransMethodResult;
 
 import jakarta.validation.constraints.*;
 import jakarta.validation.*;
@@ -83,6 +84,7 @@ public class UserItineraryLikedController {
     @GetMapping("/page")
     @Operation(summary = "获得收藏行程分页")
     @PreAuthorize("@ss.hasPermission('gift:user-itinerary-liked:query')")
+    @TransMethodResult
     public CommonResult<PageResult<UserItineraryLikedRespVO>> getUserItineraryLikedPage(@Valid UserItineraryLikedPageReqVO pageReqVO) {
         PageResult<UserItineraryLikedDO> pageResult = userItineraryLikedService.getUserItineraryLikedPage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, UserItineraryLikedRespVO.class));

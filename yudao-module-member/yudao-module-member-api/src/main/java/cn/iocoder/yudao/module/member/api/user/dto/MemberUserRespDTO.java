@@ -2,12 +2,13 @@ package cn.iocoder.yudao.module.member.api.user.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.dromara.core.trans.vo.VO;
 
 import java.time.LocalDateTime;
 
 @Schema(description = "RPC 服务 - 用户信息 Response DTO")
 @Data
-public class MemberUserRespDTO {
+public class MemberUserRespDTO implements VO {
 
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;

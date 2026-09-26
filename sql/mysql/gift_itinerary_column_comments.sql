@@ -109,6 +109,9 @@ ALTER TABLE `gift_user_itinerary`
   MODIFY COLUMN `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除';
 
 ALTER TABLE `gift_user_itinerary_conversation`
+  MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '会话ID，同时作为 AG-UI threadId',
+  MODIFY COLUMN `tenant_id` bigint NOT NULL COMMENT '租户ID',
+  MODIFY COLUMN `member_id` bigint NOT NULL COMMENT '会员ID',
   MODIFY COLUMN `title` varchar(128) NOT NULL DEFAULT '新旅行计划' COMMENT '会话标题',
   MODIFY COLUMN `pinned` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否置顶',
   MODIFY COLUMN `province_id` bigint DEFAULT NULL COMMENT '目的地省级区域ID',
@@ -124,6 +127,17 @@ ALTER TABLE `gift_user_itinerary_conversation`
   MODIFY COLUMN `updater` varchar(64) NOT NULL DEFAULT '' COMMENT '更新者',
   MODIFY COLUMN `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   MODIFY COLUMN `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除';
+
+ALTER TABLE `gift_user_itinerary_liked`
+  MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  MODIFY COLUMN `itinerary_id` bigint NOT NULL COMMENT '行程ID',
+  MODIFY COLUMN `member_id` bigint NOT NULL COMMENT '会员ID',
+  MODIFY COLUMN `creator` varchar(64) NOT NULL DEFAULT '' COMMENT '创建人编号',
+  MODIFY COLUMN `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  MODIFY COLUMN `updater` varchar(64) NOT NULL DEFAULT '' COMMENT '更新人编号',
+  MODIFY COLUMN `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  MODIFY COLUMN `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  MODIFY COLUMN `tenant_id` int NOT NULL DEFAULT 1 COMMENT '租户ID';
 
 ALTER TABLE `gift_user_itinerary_day`
   MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户行程日程ID',

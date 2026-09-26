@@ -22,7 +22,7 @@ public interface ItineraryMapper extends BaseMapperX<ItineraryDO> {
         return selectPage(reqVO, new LambdaQueryWrapperX<ItineraryDO>()
                 .eqIfPresent(ItineraryDO::getCityId, reqVO.getCityId())
                 .eqIfPresent(ItineraryDO::getCategoryId, reqVO.getCategoryId())
-                .eqIfPresent(ItineraryDO::getTitle, reqVO.getTitle())
+                .likeIfPresent(ItineraryDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(ItineraryDO::getSubTitle, reqVO.getSubTitle())
                 .eqIfPresent(ItineraryDO::getDescription, reqVO.getDescription())
                 .eqIfPresent(ItineraryDO::getIcon, reqVO.getIcon())

@@ -22,7 +22,7 @@ public class UserItineraryPageReqVO extends PageParam {
 
     private Integer status;
 
-    @Schema(description = "标题")
+    @Schema(description = "标题，支持模糊匹配")
     private String title;
 
     @Schema(description = "封面图", example = "https://www.iocoder.cn")

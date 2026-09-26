@@ -40,7 +40,7 @@ public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
                 .eqIfPresent(UserItineraryDO::getConversationId, reqVO.getConversationId())
                 .eqIfPresent(UserItineraryDO::getMemberId, reqVO.getMemberId())
                 .eqIfPresent(UserItineraryDO::getStatus, reqVO.getStatus())
-                .eqIfPresent(UserItineraryDO::getTitle, reqVO.getTitle())
+                .likeIfPresent(UserItineraryDO::getTitle, reqVO.getTitle())
                 .eqIfPresent(UserItineraryDO::getCoverUrl, reqVO.getCoverUrl())
                 .eqIfPresent(UserItineraryDO::getCoverWidth, reqVO.getCoverWidth())
                 .eqIfPresent(UserItineraryDO::getCoverHeight, reqVO.getCoverHeight())

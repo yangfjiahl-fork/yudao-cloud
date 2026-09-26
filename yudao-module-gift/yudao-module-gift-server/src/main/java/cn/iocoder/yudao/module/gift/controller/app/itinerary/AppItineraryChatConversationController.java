@@ -41,8 +41,8 @@ public class AppItineraryChatConversationController {
     @Operation(summary = "创建旅行规划会话并流式返回引导语")
     public Flux<CommonResult<AppItineraryChatCreateStreamRespVO>> createConversation(
             @Valid @RequestBody(required = false) AppItineraryChatConversationCreateReqVO reqVO) {
-        Long userId = getLoginUserId();
-        ItineraryPlanningService.ConversationCreated created = itineraryPlanningService.createConversation(userId,
+        Long memberId = getLoginUserId();
+        ItineraryPlanningService.ConversationCreated created = itineraryPlanningService.createConversation(memberId,
                 reqVO != null ? reqVO.getProvinceId() : null, reqVO != null ? reqVO.getCityId() : null,
                 reqVO != null ? reqVO.getDistrictId() : null);
         return Flux.just(success(new AppItineraryChatCreateStreamRespVO().setEvent("created")
