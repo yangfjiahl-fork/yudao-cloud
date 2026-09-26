@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.gift.service.itinerary;
 
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritineraryconversation.UserItineraryConversationMapper;
@@ -21,6 +22,8 @@ public class UserItineraryConversationService {
     private UserItineraryConversationMapper userItineraryConversationMapper;
     @Resource
     private UserItineraryConversationEventMapper userItineraryConversationEventMapper;
+    @Resource
+    private UserItineraryMapper userItineraryMapper;
 
     public UserItineraryConversationDO getRequired(Long id, Long memberId) {
         UserItineraryConversationDO conversation = userItineraryConversationMapper.selectByIdAndMemberId(id, memberId);
@@ -54,8 +57,10 @@ public class UserItineraryConversationService {
         userItineraryConversationMapper.updateById(new UserItineraryConversationDO().setId(id).setTitle(title).setPinned(pinned));
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, Long memberId) {
         getRequired(id, memberId);
+        userItineraryMapper.clearConversationId(id, memberId);
         userItineraryConversationMapper.deleteById(id);
     }
 

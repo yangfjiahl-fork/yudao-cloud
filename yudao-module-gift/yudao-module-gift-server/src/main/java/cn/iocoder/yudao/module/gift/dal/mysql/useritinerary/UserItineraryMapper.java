@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.gift.dal.mysql.useritinerary;
 
 import java.util.*;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
@@ -50,6 +52,25 @@ public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
                 .eqIfPresent(UserItineraryDO::getDestination, reqVO.getDestination())
                 .betweenIfPresent(UserItineraryDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(UserItineraryDO::getId));
+    }
+
+    default PageResult<UserItineraryDO> selectPageByMemberId(PageParam pageParam, Long memberId) {
+        return selectPage(pageParam, new LambdaQueryWrapperX<UserItineraryDO>()
+                .eq(UserItineraryDO::getMemberId, memberId)
+                .orderByDesc(UserItineraryDO::getId));
+    }
+
+    default int deleteByIdAndMemberId(Long id, Long memberId) {
+        return delete(new LambdaQueryWrapperX<UserItineraryDO>()
+                .eq(UserItineraryDO::getId, id)
+                .eq(UserItineraryDO::getMemberId, memberId));
+    }
+
+    default int clearConversationId(Long conversationId, Long memberId) {
+        return update(null, new LambdaUpdateWrapper<UserItineraryDO>()
+                .eq(UserItineraryDO::getConversationId, conversationId)
+                .eq(UserItineraryDO::getMemberId, memberId)
+                .set(UserItineraryDO::getConversationId, null));
     }
 
 }

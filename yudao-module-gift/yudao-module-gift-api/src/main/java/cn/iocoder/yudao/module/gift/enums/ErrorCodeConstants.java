@@ -42,8 +42,6 @@ public interface ErrorCodeConstants {
 
     ErrorCode ARTICLE_SUFFIX_NOT_EXISTS = new ErrorCode(1_044_001_001, "文章后缀不存在");
 
-    ErrorCode TRIP_ITINERARY_NOT_EXISTS = new ErrorCode(1_045_000_001, "旅行行程不存在");
-
     // ========== 语音识别相关 1-046-000-000 ==========
     ErrorCode ASR_AUDIO_EMPTY = new ErrorCode(1_046_000_000, "语音文件不能为空");
     ErrorCode ASR_AUDIO_TOO_LARGE = new ErrorCode(1_046_000_001, "语音文件不能超过 {} MB");

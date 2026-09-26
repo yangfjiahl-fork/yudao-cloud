@@ -60,7 +60,7 @@ CREATE TABLE `gift_user_itinerary_conversation_event` (
 CREATE TABLE `gift_user_itinerary` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户行程ID',
   `tenant_id` bigint NOT NULL COMMENT '租户ID',
-  `conversation_id` bigint NOT NULL COMMENT '用户行程会话ID',
+  `conversation_id` bigint DEFAULT NULL COMMENT '用户行程会话ID',
   `member_id` bigint NOT NULL COMMENT '会员ID',
   `request_event_id` bigint DEFAULT NULL COMMENT '触发行程生成的请求事件ID',
   `result_event_id` bigint DEFAULT NULL COMMENT '行程生成结果事件ID',

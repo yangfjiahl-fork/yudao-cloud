@@ -26,9 +26,17 @@ Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast
 - The project's Apifox workspace is [app-api](https://app.apifox.com/project/8882743) (project ID `8882743`).
 - Use the long-lived Apifox `dev` branch for interface changes; do not create an Apifox AI branch unless the user explicitly changes this policy.
 - Treat the backend-generated OpenAPI document as the source of truth when creating or updating interfaces in Apifox.
-- Organize every Apifox endpoint into the appropriate functional folder; do not leave endpoints at the project root unless the user explicitly requests it.
+- Organize every Apifox endpoint under exactly one of these five top-level product folders; keep the existing functional folders as second-level folders and do not create additional top-level product folders unless the user changes this taxonomy:
+  - `发现`: homepage and recommended content, carousels, itinerary categories, and reusable itinerary content.
+  - `助手`: AI assistant, speech recognition, location resolution, nearby-place search, and itinerary-planning capabilities.
+  - `探索`: regions, destinations, maps, and discovery filters used for browsing or exploration.
+  - `我的`: authentication, member profile, favorites, feedback, and other account-owned data or actions.
+  - `通用`: cross-domain application infrastructure and shared system capabilities, such as file upload, system dictionaries, and other reusable platform APIs.
+- Do not leave endpoints or functional folders at the Apifox project root unless the user explicitly requests it. When a capability could fit more than one category, choose the category matching the primary user journey and keep related endpoints together.
+- Name Apifox second-level functional folders and endpoint tags by capability only, such as `认证` or `旅行定位`. Never add the `用户 APP -` / `用户 App -` prefix or casing variants in the documentation layer. Do not modify backend annotations solely to enforce this documentation naming rule; normalize names when writing to Apifox.
 - Every new or changed Apifox endpoint must have at least one executable API test case on the same `dev` branch, covering the primary success path with meaningful response assertions. Creating or updating only the endpoint definition is incomplete.
 - Validate the test-case payload before writing it, use runtime authentication variables instead of fixed tokens, and run the test case when the target environment is available. If it cannot be run or does not pass, report that explicitly before handoff.
+- Use literal sample values for ordinary business request parameters in Apifox endpoint examples and test cases. Do not turn business inputs into environment variables; reserve environment variables for runtime credentials or credential-chain values such as `accessToken` and `refreshToken`.
 - API documentation and test cases must describe only the endpoint's externally observable capability, authentication requirements, inputs, outputs, and constraints. Do not expose backend implementation details such as internal defaulting, persistence behavior, enum or whitelist mechanisms, service orchestration, or internal field derivation.
 - Never store Apifox access tokens in the repository, generated API documents, logs, or command output.
 

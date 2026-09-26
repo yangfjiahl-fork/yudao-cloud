@@ -72,7 +72,7 @@ ALTER TABLE `gift_itinerary_day_item`
 
 ALTER TABLE `gift_user_itinerary`
   MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户行程ID',
-  MODIFY COLUMN `conversation_id` bigint NOT NULL COMMENT '用户行程会话ID',
+  MODIFY COLUMN `conversation_id` bigint DEFAULT NULL COMMENT '用户行程会话ID',
   MODIFY COLUMN `member_id` bigint NOT NULL COMMENT '会员ID',
   MODIFY COLUMN `request_event_id` bigint DEFAULT NULL COMMENT '触发行程生成的请求事件ID',
   MODIFY COLUMN `result_event_id` bigint DEFAULT NULL COMMENT '行程生成结果事件ID',

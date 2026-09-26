@@ -60,6 +60,13 @@ public class UserItineraryServiceImpl implements UserItineraryService {
     }
 
     @Override
+    public void deleteUserItinerary(Long memberId, Long id) {
+        if (userItineraryMapper.deleteByIdAndMemberId(id, memberId) == 0) {
+            throw exception(USER_ITINERARY_NOT_EXISTS);
+        }
+    }
+
+    @Override
         public void deleteUserItineraryListByIds(List<Long> ids) {
         // 删除
         userItineraryMapper.deleteByIds(ids);
@@ -80,6 +87,11 @@ public class UserItineraryServiceImpl implements UserItineraryService {
     @Override
     public PageResult<UserItineraryDO> getUserItineraryPage(UserItineraryPageReqVO pageReqVO) {
         return userItineraryMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public PageResult<UserItineraryDO> getUserItineraryPage(Long memberId, PageParam pageReqVO) {
+        return userItineraryMapper.selectPageByMemberId(pageReqVO, memberId);
     }
 
 }

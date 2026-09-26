@@ -37,6 +37,14 @@ public interface UserItineraryService {
     void deleteUserItinerary(Long id);
 
     /**
+     * 删除指定会员的用户行程
+     *
+     * @param memberId 会员编号
+     * @param id 编号
+     */
+    void deleteUserItinerary(Long memberId, Long id);
+
+    /**
     * 批量删除用户行程
     *
     * @param ids 编号
@@ -58,5 +66,14 @@ public interface UserItineraryService {
      * @return 用户行程分页
      */
     PageResult<UserItineraryDO> getUserItineraryPage(UserItineraryPageReqVO pageReqVO);
+
+    /**
+     * 获得指定会员的用户行程分页
+     *
+     * @param memberId 会员编号
+     * @param pageReqVO 分页查询
+     * @return 用户行程分页
+     */
+    PageResult<UserItineraryDO> getUserItineraryPage(Long memberId, PageParam pageReqVO);
 
 }
