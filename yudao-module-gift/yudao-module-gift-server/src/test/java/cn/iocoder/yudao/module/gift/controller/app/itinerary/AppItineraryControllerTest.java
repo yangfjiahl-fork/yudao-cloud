@@ -3,7 +3,9 @@ package cn.iocoder.yudao.module.gift.controller.app.itinerary;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryCityPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerarycategory.AppItineraryCategoryController;
@@ -16,6 +18,7 @@ import jakarta.annotation.security.PermitAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -24,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,15 +81,43 @@ class AppItineraryControllerTest extends BaseMockitoUnitTest {
     }
 
     @Test
+    void getItineraryCityPage_shouldUseCurrentMember() {
+        Long memberId = 288L;
+        AppItineraryCityPageReqVO reqVO = new AppItineraryCityPageReqVO();
+        reqVO.setCityId(310100);
+        reqVO.setCategoryId(1L);
+        reqVO.setPageNo(1);
+        reqVO.setPageSize(10);
+        ItineraryDO itinerary = ItineraryDO.builder()
+                .id(11L).cityId(310100).categoryId(1L).title("上海亲子游").sort(20).build();
+        when(itineraryService.getItineraryCityPage(memberId, reqVO))
+                .thenReturn(new PageResult<>(List.of(itinerary), 1L));
+
+        try (MockedStatic<SecurityFrameworkUtils> securityMock = mockStatic(SecurityFrameworkUtils.class)) {
+            securityMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
+
+            CommonResult<PageResult<AppItineraryRespVO>> result = itineraryController.getItineraryCityPage(reqVO);
+
+            assertEquals(0, result.getCode());
+            assertEquals(1L, result.getData().getTotal());
+            assertEquals(310100, result.getData().getList().get(0).getCityId());
+            verify(itineraryService).getItineraryCityPage(memberId, reqVO);
+        }
+    }
+
+    @Test
     void endpointAuthentication_shouldMatchContract() throws NoSuchMethodException {
         Method categoryListMethod = AppItineraryCategoryController.class
                 .getMethod("getItineraryCategoryList");
         Method itineraryPageMethod = AppItineraryController.class
                 .getMethod("getItineraryPage", AppItineraryPageReqVO.class);
+        Method itineraryCityPageMethod = AppItineraryController.class
+                .getMethod("getItineraryCityPage", AppItineraryCityPageReqVO.class);
 
         assertNotNull(categoryListMethod.getAnnotation(PermitAll.class));
         assertTrue(categoryListMethod.isAnnotationPresent(PermitAll.class));
         assertFalse(itineraryPageMethod.isAnnotationPresent(PermitAll.class));
+        assertFalse(itineraryCityPageMethod.isAnnotationPresent(PermitAll.class));
     }
 
 }

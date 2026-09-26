@@ -88,11 +88,32 @@ class UserCityServiceImplTest extends BaseMockitoUnitTest {
 
         assertEquals(330100L, result.cityId());
         assertEquals("杭州市", result.cityName());
+        verify(memberLocationHistoryMapper, never()).selectLatestByMemberId(288L);
     }
 
     @Test
-    void getUserCityReturnsNullWhenCacheMissing() {
-        assertNull(userCityService.getUserCity(288L));
+    void getUserCityReturnsLatestHistoryAndRefreshesCacheWhenCacheMissing() {
+        when(memberLocationHistoryMapper.selectLatestByMemberId(288L)).thenReturn(MemberLocationHistoryDO.builder()
+                .memberId(288L)
+                .cityId(330100L)
+                .cityName("杭州市")
+                .build());
+
+        UserCityService.UserCity result = userCityService.getUserCity(288L);
+
+        assertEquals(330100L, result.cityId());
+        assertEquals("杭州市", result.cityName());
+        verify(userCityRedisDAO).set(288L, new UserCityRedisDAO.UserCity(330100L, "杭州市"));
+    }
+
+    @Test
+    void getUserCityReturnsDefaultCityWhenCacheAndHistoryMissing() {
+        UserCityService.UserCity result = userCityService.getUserCity(288L);
+
+        assertEquals(310100L, result.cityId());
+        assertEquals("上海市", result.cityName());
+        verify(memberLocationHistoryMapper).selectLatestByMemberId(288L);
+        verify(userCityRedisDAO).set(288L, new UserCityRedisDAO.UserCity(310100L, "上海市"));
     }
 
 }

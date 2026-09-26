@@ -16,6 +16,8 @@ public class UserCityServiceImpl implements UserCityService {
 
     private static final String SOURCE_TYPE_COORDINATE = "COORDINATE";
     private static final String SOURCE_TYPE_IP = "IP";
+    private static final Long DEFAULT_CITY_ID = 310100L;
+    private static final String DEFAULT_CITY_NAME = "上海市";
 
     @Resource
     private UserCityRedisDAO userCityRedisDAO;
@@ -49,7 +51,15 @@ public class UserCityServiceImpl implements UserCityService {
     @Override
     public UserCity getUserCity(Long memberId) {
         UserCityRedisDAO.UserCity city = userCityRedisDAO.get(memberId);
-        return city == null ? null : new UserCity(city.cityId(), city.cityName());
+        if (city != null) {
+            return new UserCity(city.cityId(), city.cityName());
+        }
+        MemberLocationHistoryDO latest = memberLocationHistoryMapper.selectLatestByMemberId(memberId);
+        city = latest != null
+                ? new UserCityRedisDAO.UserCity(latest.getCityId(), latest.getCityName())
+                : new UserCityRedisDAO.UserCity(DEFAULT_CITY_ID, DEFAULT_CITY_NAME);
+        userCityRedisDAO.set(memberId, city);
+        return new UserCity(city.cityId(), city.cityName());
     }
 
     private static boolean hasLocationChanged(MemberLocationHistoryDO latest, String sourceType,

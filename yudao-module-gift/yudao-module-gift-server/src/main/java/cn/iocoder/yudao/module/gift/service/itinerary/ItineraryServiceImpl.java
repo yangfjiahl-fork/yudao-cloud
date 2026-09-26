@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryCityPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
@@ -15,6 +16,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 
 import cn.iocoder.yudao.module.gift.dal.mysql.itinerary.ItineraryMapper;
+import cn.iocoder.yudao.module.gift.service.usercity.UserCityService;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertList;
@@ -32,6 +34,8 @@ public class ItineraryServiceImpl implements ItineraryService {
 
     @Resource
     private ItineraryMapper itineraryMapper;
+    @Resource
+    private UserCityService userCityService;
 
     @Override
     public Long createItinerary(ItinerarySaveReqVO createReqVO) {
@@ -85,7 +89,24 @@ public class ItineraryServiceImpl implements ItineraryService {
 
     @Override
     public PageResult<ItineraryDO> getItineraryPage(AppItineraryPageReqVO pageReqVO) {
-        return itineraryMapper.selectPage(pageReqVO);
+        return getAppItineraryPage(pageReqVO, null, pageReqVO.getCategoryId());
+    }
+
+    @Override
+    public PageResult<ItineraryDO> getItineraryCityPage(Long memberId, AppItineraryCityPageReqVO pageReqVO) {
+        Integer cityId = pageReqVO.getCityId();
+        if (cityId == null) {
+            UserCityService.UserCity userCity = userCityService.getUserCity(memberId);
+            if (userCity == null || userCity.cityId() == null) {
+                return PageResult.empty();
+            }
+            cityId = Math.toIntExact(userCity.cityId());
+        }
+        return getAppItineraryPage(pageReqVO, cityId, pageReqVO.getCategoryId());
+    }
+
+    private PageResult<ItineraryDO> getAppItineraryPage(PageParam pageParam, Integer cityId, Long categoryId) {
+        return itineraryMapper.selectPage(pageParam, cityId, categoryId);
     }
 
 }

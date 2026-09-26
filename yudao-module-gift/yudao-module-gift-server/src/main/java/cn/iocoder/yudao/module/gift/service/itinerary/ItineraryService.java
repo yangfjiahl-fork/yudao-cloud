@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.itinerary;
 import java.util.*;
 import jakarta.validation.*;
 import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
+import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryCityPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
@@ -67,5 +68,14 @@ public interface ItineraryService {
      * @return 通用行程分页
      */
     PageResult<ItineraryDO> getItineraryPage(AppItineraryPageReqVO pageReqVO);
+
+    /**
+     * 按城市获得 C 端通用行程分页
+     *
+     * @param memberId 会员编号
+     * @param pageReqVO 分页查询
+     * @return 通用行程分页
+     */
+    PageResult<ItineraryDO> getItineraryCityPage(Long memberId, AppItineraryCityPageReqVO pageReqVO);
 
 }
