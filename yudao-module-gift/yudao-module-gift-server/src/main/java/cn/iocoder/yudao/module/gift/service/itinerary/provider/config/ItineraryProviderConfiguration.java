@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.itinerary.provider.config;
 
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.config.AmapProperties;
+import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapPlaceSearchClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.place.TravelPlaceQueryClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.place.TravelPlaceQueryClientFacade;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.place.gaode.GaodeTravelPlaceQueryClient;
@@ -48,9 +49,8 @@ public class ItineraryProviderConfiguration {
     }
 
     @Bean
-    public GaodeScenicSpotQueryClient gaodeScenicSpotQueryClient(RestTemplate restTemplate,
-                                                                  AmapProperties amapProperties) {
-        return new GaodeScenicSpotQueryClient(restTemplate, amapProperties);
+    public GaodeScenicSpotQueryClient gaodeScenicSpotQueryClient(AmapPlaceSearchClient amapPlaceSearchClient) {
+        return new GaodeScenicSpotQueryClient(amapPlaceSearchClient);
     }
 
     @Bean
@@ -60,9 +60,8 @@ public class ItineraryProviderConfiguration {
     }
 
     @Bean
-    public GaodeTravelPlaceQueryClient gaodeTravelPlaceQueryClient(RestTemplate restTemplate,
-            AmapProperties amapProperties) {
-        return new GaodeTravelPlaceQueryClient(restTemplate, amapProperties);
+    public GaodeTravelPlaceQueryClient gaodeTravelPlaceQueryClient(AmapPlaceSearchClient amapPlaceSearchClient) {
+        return new GaodeTravelPlaceQueryClient(amapPlaceSearchClient);
     }
 
     @Bean

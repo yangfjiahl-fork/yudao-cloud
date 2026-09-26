@@ -42,11 +42,11 @@ public class AppItineraryLocationController {
     private UserCityService userCityService;
 
     @GetMapping("/places")
-    @Operation(summary = "搜索周边地点", description = "根据高德 GCJ-02 中心点搜索周边地点，可按业务 POI 分类和关键词过滤")
+    @Operation(summary = "搜索地点", description = "优先根据高德 GCJ-02 中心点搜索周边地点，否则根据城市编号搜索城市内地点")
     public CommonResult<AppItineraryPlaceSearchRespVO> searchPlaces(@Valid AppItineraryPlaceSearchReqVO reqVO) {
-        ItineraryLocationService.PlaceSearchResult result = itineraryLocationService.searchNearbyPlaces(
-                new ItineraryLocationService.PlaceSearchRequest(reqVO.getKeyword(), reqVO.getCategory(), reqVO.getLongitude(),
-                        reqVO.getLatitude(), reqVO.getRadius(), reqVO.getPageNo(), reqVO.getPageSize()));
+        ItineraryLocationService.PlaceSearchResult result = itineraryLocationService.searchPlaces(
+                new ItineraryLocationService.PlaceSearchRequest(reqVO.getKeyword(), reqVO.getCategory(), reqVO.getCityId(),
+                        reqVO.getLongitude(), reqVO.getLatitude(), reqVO.getRadius(), reqVO.getPageNo(), reqVO.getPageSize()));
         return success(AppItineraryPlaceSearchRespVO.from(result, reqVO.getPageNo(), reqVO.getPageSize()));
     }
 

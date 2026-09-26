@@ -7,7 +7,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -25,23 +25,23 @@ public class AppItineraryPlaceSearchReqVO {
     @Size(max = 20, message = "POI 分类不能超过 20 个字符")
     private String category;
 
-    @Schema(description = "中心点经度（高德 GCJ-02）", requiredMode = Schema.RequiredMode.REQUIRED,
-            example = "120.155070")
-    @NotNull(message = "经度不能为空")
+    @Schema(description = "城市行政区编号；未提供经纬度时必填", example = "330100")
+    @Positive(message = "城市编号必须大于 0")
+    private Long cityId;
+
+    @Schema(description = "中心点经度（高德 GCJ-02）；需与纬度同时提供", example = "120.155070")
     @DecimalMin(value = "-180", message = "经度必须在 -180 到 180 之间")
     @DecimalMax(value = "180", message = "经度必须在 -180 到 180 之间")
     @Digits(integer = 3, fraction = 6, message = "经度最多保留 6 位小数")
     private BigDecimal longitude;
 
-    @Schema(description = "中心点纬度（高德 GCJ-02）", requiredMode = Schema.RequiredMode.REQUIRED,
-            example = "30.274084")
-    @NotNull(message = "纬度不能为空")
+    @Schema(description = "中心点纬度（高德 GCJ-02）；需与经度同时提供", example = "30.274084")
     @DecimalMin(value = "-90", message = "纬度必须在 -90 到 90 之间")
     @DecimalMax(value = "90", message = "纬度必须在 -90 到 90 之间")
     @Digits(integer = 2, fraction = 6, message = "纬度最多保留 6 位小数")
     private BigDecimal latitude;
 
-    @Schema(description = "周边搜索半径（米）", example = "5000", defaultValue = "5000")
+    @Schema(description = "周边搜索半径（米）；按城市搜索时忽略", example = "5000", defaultValue = "5000")
     @Min(value = 1, message = "搜索半径不能小于 1 米")
     @Max(value = 50000, message = "搜索半径不能超过 50000 米")
     private Integer radius = 5000;
@@ -60,6 +60,18 @@ public class AppItineraryPlaceSearchReqVO {
     @Schema(hidden = true)
     public boolean isSearchConditionPresent() {
         return !isBlank(keyword) || !isBlank(category);
+    }
+
+    @AssertTrue(message = "经纬度必须同时提供")
+    @Schema(hidden = true)
+    public boolean isCoordinateComplete() {
+        return (longitude == null) == (latitude == null);
+    }
+
+    @AssertTrue(message = "经纬度和城市编号至少提供一个")
+    @Schema(hidden = true)
+    public boolean isSearchScopePresent() {
+        return cityId != null || longitude != null && latitude != null;
     }
 
     private static boolean isBlank(String value) {

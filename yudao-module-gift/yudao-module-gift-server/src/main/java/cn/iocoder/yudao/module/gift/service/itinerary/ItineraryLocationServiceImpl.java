@@ -1,6 +1,9 @@
 package cn.iocoder.yudao.module.gift.service.itinerary;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.ip.core.Area;
+import cn.iocoder.yudao.framework.ip.core.enums.AreaTypeEnum;
+import cn.iocoder.yudao.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapGeocodingClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.geo.core.AmapPlaceSearchClient;
 import cn.iocoder.yudao.module.gift.service.itinerary.provider.place.AmapPoiTypeEnum;
@@ -37,11 +40,12 @@ public class ItineraryLocationServiceImpl implements ItineraryLocationService {
     }
 
     @Override
-    public PlaceSearchResult searchNearbyPlaces(PlaceSearchRequest request) {
+    public PlaceSearchResult searchPlaces(PlaceSearchRequest request) {
         String typeCode = StrUtil.isBlank(request.category()) ? null
                 : AmapPoiTypeEnum.fromCategory(request.category()).getAmapTypeCode();
+        String region = request.longitude() == null ? resolveCityName(request.cityId()) : null;
         AmapPlaceSearchClient.SearchResult result = amapPlaceSearchClient.search(
-                new AmapPlaceSearchClient.SearchRequest(request.keyword(), typeCode, request.longitude(),
+                new AmapPlaceSearchClient.SearchRequest(request.keyword(), typeCode, region, request.longitude(),
                         request.latitude(), request.radius(), request.pageNo(), request.pageSize()));
         return new PlaceSearchResult(result.total(),
                 result.places().stream().map(ItineraryLocationServiceImpl::convert).toList());
@@ -63,6 +67,27 @@ public class ItineraryLocationServiceImpl implements ItineraryLocationService {
     private static Location convert(AmapGeocodingClient.Location source) {
         return new Location(source.province(), source.city(), source.district(), source.adcode(),
                 source.formattedAddress());
+    }
+
+    private static String resolveCityName(Long cityId) {
+        if (cityId == null) {
+            return null;
+        }
+        Area area = AreaUtils.getArea(cityId.intValue());
+        if (area == null) {
+            throw new IllegalArgumentException("城市编号不存在");
+        }
+        Area city = findAncestor(area, AreaTypeEnum.CITY);
+        return city == null ? area.getName() : city.getName();
+    }
+
+    private static Area findAncestor(Area area, AreaTypeEnum type) {
+        for (Area current = area; current != null; current = current.getParent()) {
+            if (type.getType().equals(current.getType())) {
+                return current;
+            }
+        }
+        return null;
     }
 
 }

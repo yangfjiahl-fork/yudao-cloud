@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
@@ -71,24 +72,41 @@ class ItineraryLocationServiceImplTest extends BaseMockitoUnitTest {
     }
 
     @Test
-    void searchNearbyPlacesReusesPoiCategoryMapping() {
+    void searchPlacesWithCoordinatesReusesPoiCategoryMapping() {
         AmapPlaceSearchClient.Place providerPlace = new AmapPlaceSearchClient.Place(
                 "poi-1", "示例餐厅", "西湖区", new BigDecimal("120.1"), new BigDecimal("30.2"),
                 "餐饮服务", "050100", "浙江省", "杭州市", "西湖区", "330106", 328L,
-                "0571-12345678", "https://example.com/food.jpg");
+                "0571-12345678", "https://example.com/food.jpg", "4.6", "88", "杭帮菜", "10:00-22:00");
         when(amapPlaceSearchClient.search(any()))
                 .thenReturn(new AmapPlaceSearchClient.SearchResult(1L, List.of(providerPlace)));
 
-        ItineraryLocationService.PlaceSearchResult result = service.searchNearbyPlaces(
-                new ItineraryLocationService.PlaceSearchRequest("咖啡", "food", new BigDecimal("120.1"),
+        ItineraryLocationService.PlaceSearchResult result = service.searchPlaces(
+                new ItineraryLocationService.PlaceSearchRequest("咖啡", "food", null, new BigDecimal("120.1"),
                         new BigDecimal("30.2"), 3000, 1, 20));
 
         ArgumentCaptor<AmapPlaceSearchClient.SearchRequest> captor =
                 ArgumentCaptor.forClass(AmapPlaceSearchClient.SearchRequest.class);
         verify(amapPlaceSearchClient).search(captor.capture());
         assertEquals("050000", captor.getValue().typeCode());
+        assertNull(captor.getValue().region());
         assertEquals("poi-1", result.places().get(0).poiId());
         assertEquals(328L, result.places().get(0).distanceMeters());
+    }
+
+    @Test
+    void searchPlacesWithCityIdUsesCityName() {
+        when(amapPlaceSearchClient.search(any()))
+                .thenReturn(new AmapPlaceSearchClient.SearchResult(0L, List.of()));
+
+        service.searchPlaces(new ItineraryLocationService.PlaceSearchRequest(
+                "西湖", "sightseeing", 330100L, null, null, 5000, 1, 20));
+
+        ArgumentCaptor<AmapPlaceSearchClient.SearchRequest> captor =
+                ArgumentCaptor.forClass(AmapPlaceSearchClient.SearchRequest.class);
+        verify(amapPlaceSearchClient).search(captor.capture());
+        assertEquals("杭州市", captor.getValue().region());
+        assertEquals("110000", captor.getValue().typeCode());
+        assertNull(captor.getValue().longitude());
     }
 
     @Test
