@@ -76,7 +76,7 @@ public class ItineraryDO extends BaseDO {
      */
     private Integer coverHeight;
     /**
-     * 城市ID
+     * 第二城市ID
      */
     private Integer nextCityId;
     /**

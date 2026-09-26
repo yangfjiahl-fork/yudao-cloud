@@ -1,6 +1,9 @@
 -- 已部署行程表字段备注补齐脚本，供数据库代码生成读取字段描述。
 -- 仅修改字段定义中的 COMMENT，不调整索引，不迁移或删除业务数据。
 
+ALTER TABLE `gift_itinerary`
+  MODIFY COLUMN `next_city_id` int DEFAULT NULL COMMENT '第二城市ID';
+
 ALTER TABLE `gift_itinerary_day`
   MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT COMMENT '通用行程日程ID',
   MODIFY COLUMN `itinerary_id` bigint NOT NULL COMMENT '通用行程ID',

@@ -46,7 +46,7 @@ public class AppItineraryRespVO {
     @Schema(description = "封面高度")
     private Integer coverHeight;
 
-    @Schema(description = "下一城市编号", example = "320100")
+    @Schema(description = "第二城市ID", example = "320100")
     private Integer nextCityId;
 
     @Schema(description = "浏览数", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")

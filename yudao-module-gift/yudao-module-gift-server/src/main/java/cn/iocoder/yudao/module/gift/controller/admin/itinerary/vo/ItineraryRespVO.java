@@ -82,8 +82,8 @@ public class ItineraryRespVO implements VO {
     @ExcelProperty("封面高度")
     private Integer coverHeight;
 
-    @Schema(description = "城市ID", example = "23770")
-    @ExcelProperty("城市ID")
+    @Schema(description = "第二城市ID", example = "23770")
+    @ExcelProperty("第二城市ID")
     private Integer nextCityId;
 
     @Schema(description = "浏览数", requiredMode = Schema.RequiredMode.REQUIRED)

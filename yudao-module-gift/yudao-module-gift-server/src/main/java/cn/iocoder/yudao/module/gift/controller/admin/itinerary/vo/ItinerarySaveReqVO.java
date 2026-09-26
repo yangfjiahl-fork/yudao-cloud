@@ -57,7 +57,7 @@ public class ItinerarySaveReqVO {
     @NotNull(message = "封面高度不能为空")
     private Integer coverHeight;
 
-    @Schema(description = "城市ID", example = "23770")
+    @Schema(description = "第二城市ID", example = "23770")
     private Integer nextCityId;
 
     @Schema(description = "浏览数", requiredMode = Schema.RequiredMode.REQUIRED)
