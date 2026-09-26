@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.gift.service.itinerary;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryAgentEvent;
@@ -52,9 +54,11 @@ public class ItineraryPlanningServiceImpl implements ItineraryPlanningService {
     }
 
     @Override
-    public List<Conversation> getConversations(Long memberId) {
-        return userItineraryConversationService.getList(memberId).stream()
-                .map(ItineraryPlanningServiceImpl::convertConversation).toList();
+    public PageResult<Conversation> getConversations(Long memberId, PageParam pageReqVO) {
+        PageResult<UserItineraryConversationDO> pageResult =
+                userItineraryConversationService.getPage(memberId, pageReqVO);
+        return new PageResult<>(pageResult.getList().stream()
+                .map(ItineraryPlanningServiceImpl::convertConversation).toList(), pageResult.getTotal());
     }
 
     @Override

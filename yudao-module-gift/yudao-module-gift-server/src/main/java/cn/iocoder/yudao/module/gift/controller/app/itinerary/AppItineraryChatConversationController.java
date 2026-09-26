@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.gift.controller.app.itinerary;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryChatConversationCreateReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryChatConversationRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryChatConversationUpdateReqVO;
@@ -22,8 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
-
-import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -59,10 +59,13 @@ public class AppItineraryChatConversationController {
     }
 
     @GetMapping("/list")
-    @Operation(summary = "获得我的旅行规划会话列表")
-    public CommonResult<List<AppItineraryChatConversationRespVO>> getConversationList() {
-        return success(itineraryPlanningService.getConversations(getLoginUserId()).stream()
-                .map(AppItineraryChatConversationController::toConversation).toList());
+    @Operation(summary = "获得我的旅行规划会话分页")
+    public CommonResult<PageResult<AppItineraryChatConversationRespVO>> getConversationList(
+            @Valid PageParam pageReqVO) {
+        PageResult<ItineraryPlanningService.Conversation> pageResult =
+                itineraryPlanningService.getConversations(getLoginUserId(), pageReqVO);
+        return success(new PageResult<>(pageResult.getList().stream()
+                .map(AppItineraryChatConversationController::toConversation).toList(), pageResult.getTotal()));
     }
 
     @DeleteMapping("/delete")

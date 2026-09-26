@@ -1,6 +1,9 @@
 package cn.iocoder.yudao.module.gift.service.itinerary;
 
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryChangeCommand;
 import org.junit.jupiter.api.Test;
@@ -63,6 +66,22 @@ class ItineraryPlanningServiceImplTest extends BaseMockitoUnitTest {
         assertEquals(9L, result.get(0).replyId());
         assertEquals("云南行程", result.get(0).itinerary().get("summary"));
         assertEquals(createTime, result.get(0).createTime());
+    }
+
+    @Test
+    void getConversationsReturnsStandardPage() {
+        PageParam pageReqVO = new PageParam().setPageNo(1).setPageSize(10);
+        UserItineraryConversationDO conversation = new UserItineraryConversationDO()
+                .setId(10L).setTitle("云南亲子游").setPinned(true);
+        when(userItineraryConversationService.getPage(2L, pageReqVO))
+                .thenReturn(new PageResult<>(List.of(conversation), 1L));
+
+        PageResult<ItineraryPlanningService.Conversation> result = service.getConversations(2L, pageReqVO);
+
+        assertEquals(1L, result.getTotal());
+        assertEquals(10L, result.getList().get(0).id());
+        assertEquals("云南亲子游", result.getList().get(0).title());
+        verify(userItineraryConversationService).getPage(2L, pageReqVO);
     }
 
     @Test

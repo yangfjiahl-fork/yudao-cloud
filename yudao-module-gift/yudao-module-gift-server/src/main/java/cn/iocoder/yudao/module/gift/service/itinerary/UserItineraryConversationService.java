@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.itinerary;
 
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversation.UserItineraryConversationDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritineraryconversationevent.UserItineraryConversationEventDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritineraryconversation.UserItineraryConversationMapper;
@@ -28,8 +30,8 @@ public class UserItineraryConversationService {
         return conversation;
     }
 
-    public List<UserItineraryConversationDO> getList(Long memberId) {
-        return userItineraryConversationMapper.selectListByMemberId(memberId);
+    public PageResult<UserItineraryConversationDO> getPage(Long memberId, PageParam pageReqVO) {
+        return userItineraryConversationMapper.selectPageByMemberId(pageReqVO, memberId);
     }
 
     public Long create(Long memberId, Long provinceId, Long cityId, Long districtId) {

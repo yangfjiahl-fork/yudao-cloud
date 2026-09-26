@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.gift.service.itinerary;
 
+import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryAgentEvent;
 import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryChangeCommand;
 import cn.iocoder.yudao.module.gift.service.itinerary.bo.ItineraryRouteResult;
@@ -17,7 +19,7 @@ public interface ItineraryPlanningService {
 
     void updateConversation(Long conversationId, Long memberId, String title, Boolean pinned);
 
-    List<Conversation> getConversations(Long memberId);
+    PageResult<Conversation> getConversations(Long memberId, PageParam pageReqVO);
 
     void deleteConversation(Long conversationId, Long memberId);
 
