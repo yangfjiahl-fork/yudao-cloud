@@ -19,9 +19,9 @@ public interface RedisKeyConstants {
     /**
      * 会员当前城市
      * <p>
-     * KEY 格式：gift:user:current-city:{memberId}
+     * KEY 格式：gift:member:current-city:{memberId}
      * VALUE：城市编号与名称 JSON
      */
-    String USER_CURRENT_CITY = "gift:user:current-city:%d";
+    String MEMBER_CURRENT_CITY = "gift:member:current-city:%d";
 
 }

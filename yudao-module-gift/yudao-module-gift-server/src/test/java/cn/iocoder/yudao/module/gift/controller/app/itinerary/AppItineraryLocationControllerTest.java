@@ -45,7 +45,7 @@ class AppItineraryLocationControllerTest extends BaseMockitoUnitTest {
 
             assertEquals("杭州市", result.getData().getCity());
             verify(itineraryLocationService).identifyCurrentCity(longitude, latitude, clientIp);
-            verify(userCityService).setUserCity(memberId, 330100L, "杭州市");
+            verify(userCityService).setUserCity(memberId, 330100L, "杭州市", longitude, latitude, clientIp);
         }
     }
 

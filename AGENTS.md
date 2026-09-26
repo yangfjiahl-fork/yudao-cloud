@@ -27,6 +27,8 @@ Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast
 - Use the long-lived Apifox `dev` branch for interface changes; do not create an Apifox AI branch unless the user explicitly changes this policy.
 - Treat the backend-generated OpenAPI document as the source of truth when creating or updating interfaces in Apifox.
 - Organize every Apifox endpoint into the appropriate functional folder; do not leave endpoints at the project root unless the user explicitly requests it.
+- Every new or changed Apifox endpoint must have at least one executable API test case on the same `dev` branch, covering the primary success path with meaningful response assertions. Creating or updating only the endpoint definition is incomplete.
+- Validate the test-case payload before writing it, use runtime authentication variables instead of fixed tokens, and run the test case when the target environment is available. If it cannot be run or does not pass, report that explicitly before handoff.
 - API documentation and test cases must describe only the endpoint's externally observable capability, authentication requirements, inputs, outputs, and constraints. Do not expose backend implementation details such as internal defaulting, persistence behavior, enum or whitelist mechanisms, service orchestration, or internal field derivation.
 - Never store Apifox access tokens in the repository, generated API documents, logs, or command output.
 

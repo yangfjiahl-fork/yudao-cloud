@@ -5,11 +5,13 @@ import cn.iocoder.yudao.module.gift.service.itinerary.provider.weather.WeatherCl
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -72,6 +74,14 @@ class AmapWeatherClientTest {
         WeatherClient.CurrentWeather result = client.getCurrentWeather("110105");
 
         assertEquals("朝阳区", result.city());
+    }
+
+    @Test
+    void testGetCurrentWeather_cacheExpiresAfter15Minutes() throws NoSuchMethodException {
+        Cacheable cacheable = AmapWeatherClient.class.getMethod("getCurrentWeather", String.class)
+                .getAnnotation(Cacheable.class);
+
+        assertArrayEquals(new String[]{"tripWeatherGaode#15m"}, cacheable.cacheNames());
     }
 
     @Test

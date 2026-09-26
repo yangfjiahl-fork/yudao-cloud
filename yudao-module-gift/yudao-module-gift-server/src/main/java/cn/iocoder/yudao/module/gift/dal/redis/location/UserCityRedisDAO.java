@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.concurrent.TimeUnit;
 
-import static cn.iocoder.yudao.module.gift.dal.redis.RedisKeyConstants.USER_CURRENT_CITY;
+import static cn.iocoder.yudao.module.gift.dal.redis.RedisKeyConstants.MEMBER_CURRENT_CITY;
 
 /** 会员当前城市 Redis DAO。 */
 @Repository
@@ -28,7 +28,7 @@ public class UserCityRedisDAO {
     }
 
     private static String getKey(Long memberId) {
-        return USER_CURRENT_CITY.formatted(memberId);
+        return MEMBER_CURRENT_CITY.formatted(memberId);
     }
 
     public record UserCity(Long cityId, String cityName) {

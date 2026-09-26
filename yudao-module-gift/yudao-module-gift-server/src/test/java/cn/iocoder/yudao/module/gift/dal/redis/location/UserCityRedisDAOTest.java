@@ -30,13 +30,13 @@ class UserCityRedisDAOTest extends BaseMockitoUnitTest {
 
         userCityRedisDAO.set(288L, city);
 
-        verify(valueOperations).set("gift:user:current-city:288", JsonUtils.toJsonString(city), 30, TimeUnit.DAYS);
+        verify(valueOperations).set("gift:member:current-city:288", JsonUtils.toJsonString(city), 30, TimeUnit.DAYS);
     }
 
     @Test
     void getReturnsCachedCurrentCity() {
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("gift:user:current-city:288"))
+        when(valueOperations.get("gift:member:current-city:288"))
                 .thenReturn("{\"cityId\":330100,\"cityName\":\"杭州市\"}");
 
         UserCityRedisDAO.UserCity result = userCityRedisDAO.get(288L);

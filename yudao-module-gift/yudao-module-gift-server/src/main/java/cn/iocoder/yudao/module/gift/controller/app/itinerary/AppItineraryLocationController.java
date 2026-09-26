@@ -75,10 +75,12 @@ public class AppItineraryLocationController {
             @DecimalMin(value = "-90", message = "纬度必须在 -90 到 90 之间")
             @DecimalMax(value = "90", message = "纬度必须在 -90 到 90 之间")
             @Digits(integer = 2, fraction = 6, message = "纬度最多保留 6 位小数") BigDecimal latitude) {
+        String clientIp = ServletUtils.getClientIP();
         ItineraryLocationService.Location location = itineraryLocationService.identifyCurrentCity(
-                longitude, latitude, ServletUtils.getClientIP());
+                longitude, latitude, clientIp);
         AppItineraryLocationRespVO result = AppItineraryLocationRespVO.from(location);
-        userCityService.setUserCity(getLoginUserId(), result.getCityId(), result.getCity());
+        userCityService.setUserCity(getLoginUserId(), result.getCityId(), result.getCity(),
+                longitude, latitude, clientIp);
         return success(result);
     }
 

@@ -43,7 +43,7 @@ public class AmapWeatherClient implements WeatherClient {
     }
 
     @Override
-    @Cacheable(cacheNames = "tripWeatherGaode#10m",
+    @Cacheable(cacheNames = "tripWeatherGaode#15m",
             key = "#city == null ? '' : #city.trim().toLowerCase()",
             unless = "#result == null")
     public CurrentWeather getCurrentWeather(String city) {
