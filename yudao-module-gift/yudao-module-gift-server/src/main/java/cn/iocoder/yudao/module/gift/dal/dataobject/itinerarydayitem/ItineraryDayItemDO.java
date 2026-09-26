@@ -116,10 +116,6 @@ public class ItineraryDayItemDO extends BaseDO {
      */
     private String tags;
     /**
-     * 高德地图坐标
-     */
-    private String gdPosition;
-    /**
      * 营业时间
      */
     private String businessTime;

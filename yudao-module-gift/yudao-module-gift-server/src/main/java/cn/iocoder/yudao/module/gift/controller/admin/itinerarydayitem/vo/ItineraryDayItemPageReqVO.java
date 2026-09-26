@@ -82,9 +82,6 @@ public class ItineraryDayItemPageReqVO extends PageParam {
     @Schema(description = "标签集合")
     private String tags;
 
-    @Schema(description = "高德地图坐标")
-    private String gdPosition;
-
     @Schema(description = "营业时间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private String[] businessTime;

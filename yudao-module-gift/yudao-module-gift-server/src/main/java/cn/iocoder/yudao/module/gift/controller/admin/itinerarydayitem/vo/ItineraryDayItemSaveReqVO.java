@@ -86,9 +86,6 @@ public class ItineraryDayItemSaveReqVO {
     @Schema(description = "标签集合")
     private String tags;
 
-    @Schema(description = "高德地图坐标")
-    private String gdPosition;
-
     @Schema(description = "营业时间")
     private String businessTime;
 

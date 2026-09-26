@@ -237,7 +237,6 @@ CREATE TABLE `gift_itinerary_day_item` (
   `pic_urls` text DEFAULT NULL COMMENT '图片地址集合',
   `pic_sizes` text DEFAULT NULL COMMENT '图片尺寸集合',
   `tags` text DEFAULT NULL COMMENT '标签集合',
-  `gd_position` varchar(128) DEFAULT NULL COMMENT '高德地图坐标',
   `business_time` varchar(128) DEFAULT NULL COMMENT '营业时间',
   `address_detail` varchar(512) DEFAULT NULL COMMENT '详细地址',
   `phone_no` varchar(64) DEFAULT NULL COMMENT '联系电话',

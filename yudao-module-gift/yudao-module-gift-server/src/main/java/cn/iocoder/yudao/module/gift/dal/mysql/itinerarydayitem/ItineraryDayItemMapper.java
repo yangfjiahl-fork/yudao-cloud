@@ -41,7 +41,6 @@ public interface ItineraryDayItemMapper extends BaseMapperX<ItineraryDayItemDO> 
                 .eqIfPresent(ItineraryDayItemDO::getPicUrls, reqVO.getPicUrls())
                 .eqIfPresent(ItineraryDayItemDO::getPicSizes, reqVO.getPicSizes())
                 .eqIfPresent(ItineraryDayItemDO::getTags, reqVO.getTags())
-                .eqIfPresent(ItineraryDayItemDO::getGdPosition, reqVO.getGdPosition())
                 .betweenIfPresent(ItineraryDayItemDO::getBusinessTime, reqVO.getBusinessTime())
                 .eqIfPresent(ItineraryDayItemDO::getAddressDetail, reqVO.getAddressDetail())
                 .eqIfPresent(ItineraryDayItemDO::getPhoneNo, reqVO.getPhoneNo())

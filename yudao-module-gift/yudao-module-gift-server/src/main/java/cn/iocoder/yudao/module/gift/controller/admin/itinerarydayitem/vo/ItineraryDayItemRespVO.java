@@ -106,10 +106,6 @@ public class ItineraryDayItemRespVO {
     @ExcelProperty("标签集合")
     private String tags;
 
-    @Schema(description = "高德地图坐标")
-    @ExcelProperty("高德地图坐标")
-    private String gdPosition;
-
     @Schema(description = "营业时间")
     @ExcelProperty("营业时间")
     private String businessTime;
