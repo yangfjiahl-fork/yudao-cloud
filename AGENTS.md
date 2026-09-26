@@ -24,6 +24,7 @@ Prefer targeted `-pl ... -am` commands during feature work to keep feedback fast
 ## API Documentation & Apifox
 
 - The project's Apifox workspace is [app-api](https://app.apifox.com/project/8882743) (project ID `8882743`).
+- Only synchronize App-side APIs (`/app-api/**`) to Apifox. Management-side APIs (`/admin-api/**`) do not need to be created, updated, or tested in Apifox.
 - Use the long-lived Apifox `dev` branch for interface changes; do not create an Apifox AI branch unless the user explicitly changes this policy.
 - Treat the backend-generated OpenAPI document as the source of truth when creating or updating interfaces in Apifox.
 - Organize every Apifox endpoint under exactly one of these five top-level product folders; keep the existing functional folders as second-level folders and do not create additional top-level product folders unless the user changes this taxonomy:

@@ -60,12 +60,29 @@ public interface UserItineraryService {
     UserItineraryDO getUserItinerary(Long id);
 
     /**
+     * 获得指定会员的用户行程
+     *
+     * @param memberId 会员编号
+     * @param id 编号
+     * @return 用户行程
+     */
+    UserItineraryDO getUserItinerary(Long memberId, Long id);
+
+    /**
      * 获得用户行程分页
      *
      * @param pageReqVO 分页查询
      * @return 用户行程分页
      */
     PageResult<UserItineraryDO> getUserItineraryPage(UserItineraryPageReqVO pageReqVO);
+
+    /**
+     * 获得用户行程导出分页
+     *
+     * @param pageReqVO 分页查询
+     * @return 完整字段的用户行程分页
+     */
+    PageResult<UserItineraryDO> getUserItineraryExportPage(UserItineraryPageReqVO pageReqVO);
 
     /**
      * 获得指定会员的用户行程分页

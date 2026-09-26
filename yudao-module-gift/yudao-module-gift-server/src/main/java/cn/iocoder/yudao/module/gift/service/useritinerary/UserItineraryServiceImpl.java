@@ -85,8 +85,22 @@ public class UserItineraryServiceImpl implements UserItineraryService {
     }
 
     @Override
+    public UserItineraryDO getUserItinerary(Long memberId, Long id) {
+        UserItineraryDO itinerary = userItineraryMapper.selectByIdAndMemberId(id, memberId);
+        if (itinerary == null) {
+            throw exception(USER_ITINERARY_NOT_EXISTS);
+        }
+        return itinerary;
+    }
+
+    @Override
     public PageResult<UserItineraryDO> getUserItineraryPage(UserItineraryPageReqVO pageReqVO) {
         return userItineraryMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public PageResult<UserItineraryDO> getUserItineraryExportPage(UserItineraryPageReqVO pageReqVO) {
+        return userItineraryMapper.selectExportPage(pageReqVO);
     }
 
     @Override

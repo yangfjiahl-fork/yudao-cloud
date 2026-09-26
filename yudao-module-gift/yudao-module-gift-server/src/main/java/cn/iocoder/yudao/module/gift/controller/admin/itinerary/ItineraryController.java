@@ -26,6 +26,7 @@ import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.*;
 
 import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
+import cn.iocoder.yudao.module.gift.controller.common.vo.ItineraryPageRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryService;
 import org.dromara.core.trans.anno.TransMethodResult;
@@ -86,9 +87,9 @@ public class ItineraryController {
     @Operation(summary = "获得行程分页")
     @PreAuthorize("@ss.hasPermission('gift:itinerary:query')")
     @TransMethodResult
-    public CommonResult<PageResult<ItineraryRespVO>> getItineraryPage(@Valid ItineraryPageReqVO pageReqVO) {
+    public CommonResult<PageResult<ItineraryPageRespVO>> getItineraryPage(@Valid ItineraryPageReqVO pageReqVO) {
         PageResult<ItineraryDO> pageResult = itineraryService.getItineraryPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, ItineraryRespVO.class));
+        return success(BeanUtils.toBean(pageResult, ItineraryPageRespVO.class));
     }
 
     @GetMapping("/export-excel")
@@ -98,7 +99,7 @@ public class ItineraryController {
     public void exportItineraryExcel(@Valid ItineraryPageReqVO pageReqVO,
               HttpServletResponse response) throws IOException {
         pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
-        List<ItineraryDO> list = itineraryService.getItineraryPage(pageReqVO).getList();
+        List<ItineraryDO> list = itineraryService.getItineraryExportPage(pageReqVO).getList();
         // 导出 Excel
         ExcelUtils.write(response, "行程.xls", "数据", ItineraryRespVO.class,
                         BeanUtils.toBean(list, ItineraryRespVO.class));

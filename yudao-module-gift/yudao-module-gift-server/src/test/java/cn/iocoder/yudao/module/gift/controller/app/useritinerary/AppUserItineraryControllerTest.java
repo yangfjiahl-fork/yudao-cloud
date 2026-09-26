@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
 import cn.iocoder.yudao.module.gift.controller.app.useritinerary.vo.AppUserItineraryRespVO;
+import cn.iocoder.yudao.module.gift.controller.common.vo.UserItineraryPageRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.service.useritinerary.UserItineraryService;
 import jakarta.annotation.security.PermitAll;
@@ -49,21 +50,45 @@ class AppUserItineraryControllerTest extends BaseMockitoUnitTest {
         try (MockedStatic<SecurityFrameworkUtils> securityMock = mockStatic(SecurityFrameworkUtils.class)) {
             securityMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
 
-            CommonResult<PageResult<AppUserItineraryRespVO>> result = controller.getUserItineraryPage(pageReqVO);
+            CommonResult<PageResult<UserItineraryPageRespVO>> result = controller.getUserItineraryPage(pageReqVO);
 
             assertEquals(0, result.getCode());
             assertEquals(1L, result.getData().getTotal());
             assertEquals(1024L, result.getData().getList().get(0).getId());
+            assertEquals(memberId, result.getData().getList().get(0).getMemberId());
             assertEquals("云南亲子六日游", result.getData().getList().get(0).getTitle());
             verify(userItineraryService).getUserItineraryPage(memberId, pageReqVO);
         }
     }
 
     @Test
-    void getUserItineraryPage_shouldRequireLogin() throws NoSuchMethodException {
-        Method method = AppUserItineraryController.class.getMethod("getUserItineraryPage", PageParam.class);
+    void getUserItinerary_shouldUseCurrentMemberAndReturnDetail() {
+        Long memberId = 288L;
+        UserItineraryDO itinerary = UserItineraryDO.builder()
+                .id(1024L).memberId(memberId).title("云南亲子六日游")
+                .travelerCount(4).budget(20_000).hotelBudget(5_000).build();
+        when(userItineraryService.getUserItinerary(memberId, 1024L)).thenReturn(itinerary);
 
-        assertFalse(method.isAnnotationPresent(PermitAll.class));
+        try (MockedStatic<SecurityFrameworkUtils> securityMock = mockStatic(SecurityFrameworkUtils.class)) {
+            securityMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
+
+            CommonResult<AppUserItineraryRespVO> result = controller.getUserItinerary(1024L);
+
+            assertEquals(0, result.getCode());
+            assertEquals("云南亲子六日游", result.getData().getTitle());
+            assertEquals(4, result.getData().getTravelerCount());
+            assertEquals(20_000, result.getData().getBudget());
+            verify(userItineraryService).getUserItinerary(memberId, 1024L);
+        }
+    }
+
+    @Test
+    void getUserItineraryPage_shouldRequireLogin() throws NoSuchMethodException {
+        Method pageMethod = AppUserItineraryController.class.getMethod("getUserItineraryPage", PageParam.class);
+        Method detailMethod = AppUserItineraryController.class.getMethod("getUserItinerary", Long.class);
+
+        assertFalse(pageMethod.isAnnotationPresent(PermitAll.class));
+        assertFalse(detailMethod.isAnnotationPresent(PermitAll.class));
     }
 
     @Test

@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPage
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryRespVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerarycategory.AppItineraryCategoryController;
 import cn.iocoder.yudao.module.gift.controller.app.itinerarycategory.vo.AppItineraryCategoryRespVO;
+import cn.iocoder.yudao.module.gift.controller.common.vo.ItineraryPageRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerarycategory.ItineraryCategoryDO;
 import cn.iocoder.yudao.module.gift.service.itinerary.ItineraryService;
@@ -71,7 +72,7 @@ class AppItineraryControllerTest extends BaseMockitoUnitTest {
         when(itineraryService.getItineraryPage(reqVO))
                 .thenReturn(new PageResult<>(List.of(itinerary), 11L));
 
-        CommonResult<PageResult<AppItineraryRespVO>> result = itineraryController.getItineraryPage(reqVO);
+        CommonResult<PageResult<ItineraryPageRespVO>> result = itineraryController.getItineraryPage(reqVO);
 
         assertEquals(0, result.getCode());
         assertEquals(11L, result.getData().getTotal());
@@ -96,13 +97,28 @@ class AppItineraryControllerTest extends BaseMockitoUnitTest {
         try (MockedStatic<SecurityFrameworkUtils> securityMock = mockStatic(SecurityFrameworkUtils.class)) {
             securityMock.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(memberId);
 
-            CommonResult<PageResult<AppItineraryRespVO>> result = itineraryController.getItineraryCityPage(reqVO);
+            CommonResult<PageResult<ItineraryPageRespVO>> result = itineraryController.getItineraryCityPage(reqVO);
 
             assertEquals(0, result.getCode());
             assertEquals(1L, result.getData().getTotal());
             assertEquals(310100, result.getData().getList().get(0).getCityId());
             verify(itineraryService).getItineraryCityPage(memberId, reqVO);
         }
+    }
+
+    @Test
+    void getItinerary_shouldReturnFullDetail() {
+        ItineraryDO itinerary = ItineraryDO.builder()
+                .id(11L).title("上海亲子游").description("适合亲子家庭").picUrls("[\"cover.jpg\"]").build();
+        when(itineraryService.getItinerary(11L)).thenReturn(itinerary);
+
+        CommonResult<AppItineraryRespVO> result = itineraryController.getItinerary(11L);
+
+        assertEquals(0, result.getCode());
+        assertEquals("上海亲子游", result.getData().getTitle());
+        assertEquals("适合亲子家庭", result.getData().getDescription());
+        assertEquals("[\"cover.jpg\"]", result.getData().getPicUrls());
+        verify(itineraryService).getItinerary(11L);
     }
 
     @Test
@@ -113,11 +129,13 @@ class AppItineraryControllerTest extends BaseMockitoUnitTest {
                 .getMethod("getItineraryPage", AppItineraryPageReqVO.class);
         Method itineraryCityPageMethod = AppItineraryController.class
                 .getMethod("getItineraryCityPage", AppItineraryCityPageReqVO.class);
+        Method itineraryDetailMethod = AppItineraryController.class.getMethod("getItinerary", Long.class);
 
         assertNotNull(categoryListMethod.getAnnotation(PermitAll.class));
         assertTrue(categoryListMethod.isAnnotationPresent(PermitAll.class));
         assertFalse(itineraryPageMethod.isAnnotationPresent(PermitAll.class));
         assertFalse(itineraryCityPageMethod.isAnnotationPresent(PermitAll.class));
+        assertFalse(itineraryDetailMethod.isAnnotationPresent(PermitAll.class));
     }
 
 }

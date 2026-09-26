@@ -38,7 +38,17 @@ public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
     }
 
     default PageResult<UserItineraryDO> selectPage(UserItineraryPageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<UserItineraryDO>()
+        LambdaQueryWrapperX<UserItineraryDO> query = buildPageQuery(reqVO);
+        selectPageFields(query);
+        return selectPage(reqVO, query.orderByDesc(UserItineraryDO::getId));
+    }
+
+    default PageResult<UserItineraryDO> selectExportPage(UserItineraryPageReqVO reqVO) {
+        return selectPage(reqVO, buildPageQuery(reqVO).orderByDesc(UserItineraryDO::getId));
+    }
+
+    private static LambdaQueryWrapperX<UserItineraryDO> buildPageQuery(UserItineraryPageReqVO reqVO) {
+        return new LambdaQueryWrapperX<UserItineraryDO>()
                 .eqIfPresent(UserItineraryDO::getConversationId, reqVO.getConversationId())
                 .eqIfPresent(UserItineraryDO::getMemberId, reqVO.getMemberId())
                 .eqIfPresent(UserItineraryDO::getStatus, reqVO.getStatus())
@@ -50,14 +60,30 @@ public interface UserItineraryMapper extends BaseMapperX<UserItineraryDO> {
                 .betweenIfPresent(UserItineraryDO::getEndDate, reqVO.getEndDate())
                 .eqIfPresent(UserItineraryDO::getDayCnt, reqVO.getDayCnt())
                 .eqIfPresent(UserItineraryDO::getDestination, reqVO.getDestination())
-                .betweenIfPresent(UserItineraryDO::getCreateTime, reqVO.getCreateTime())
-                .orderByDesc(UserItineraryDO::getId));
+                .betweenIfPresent(UserItineraryDO::getCreateTime, reqVO.getCreateTime());
     }
 
     default PageResult<UserItineraryDO> selectPageByMemberId(PageParam pageParam, Long memberId) {
-        return selectPage(pageParam, new LambdaQueryWrapperX<UserItineraryDO>()
-                .eq(UserItineraryDO::getMemberId, memberId)
+        LambdaQueryWrapperX<UserItineraryDO> query = new LambdaQueryWrapperX<UserItineraryDO>()
+                .eq(UserItineraryDO::getMemberId, memberId);
+        selectPageFields(query);
+        return selectPage(pageParam, query
                 .orderByDesc(UserItineraryDO::getId));
+    }
+
+    private static void selectPageFields(LambdaQueryWrapperX<UserItineraryDO> query) {
+        query.select(UserItineraryDO::getId, UserItineraryDO::getConversationId, UserItineraryDO::getMemberId,
+                UserItineraryDO::getStatus,
+                UserItineraryDO::getTitle, UserItineraryDO::getCoverUrl, UserItineraryDO::getCoverWidth,
+                UserItineraryDO::getCoverHeight, UserItineraryDO::getStartDate, UserItineraryDO::getEndDate,
+                UserItineraryDO::getDayCnt, UserItineraryDO::getDeparture, UserItineraryDO::getDestination,
+                UserItineraryDO::getCreateTime);
+    }
+
+    default UserItineraryDO selectByIdAndMemberId(Long id, Long memberId) {
+        return selectOne(new LambdaQueryWrapperX<UserItineraryDO>()
+                .eq(UserItineraryDO::getId, id)
+                .eq(UserItineraryDO::getMemberId, memberId));
     }
 
     default int deleteByIdAndMemberId(Long id, Long memberId) {

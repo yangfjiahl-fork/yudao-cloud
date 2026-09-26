@@ -88,6 +88,11 @@ public class ItineraryServiceImpl implements ItineraryService {
     }
 
     @Override
+    public PageResult<ItineraryDO> getItineraryExportPage(ItineraryPageReqVO pageReqVO) {
+        return itineraryMapper.selectExportPage(pageReqVO);
+    }
+
+    @Override
     public PageResult<ItineraryDO> getItineraryPage(AppItineraryPageReqVO pageReqVO) {
         return getAppItineraryPage(pageReqVO, null, pageReqVO.getCategoryId());
     }

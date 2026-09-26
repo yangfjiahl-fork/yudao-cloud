@@ -62,6 +62,14 @@ public interface ItineraryService {
     PageResult<ItineraryDO> getItineraryPage(ItineraryPageReqVO pageReqVO);
 
     /**
+     * 获得行程导出分页
+     *
+     * @param pageReqVO 分页查询
+     * @return 完整字段的行程分页
+     */
+    PageResult<ItineraryDO> getItineraryExportPage(ItineraryPageReqVO pageReqVO);
+
+    /**
      * 获得 C 端通用行程分页
      *
      * @param pageReqVO 分页查询

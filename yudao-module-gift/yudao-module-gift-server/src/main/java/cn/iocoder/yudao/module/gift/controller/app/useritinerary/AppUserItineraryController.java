@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.gift.controller.app.useritinerary.vo.AppUserItineraryRespVO;
+import cn.iocoder.yudao.module.gift.controller.common.vo.UserItineraryPageRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.service.useritinerary.UserItineraryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,10 +34,18 @@ public class AppUserItineraryController {
 
     @GetMapping("/page")
     @Operation(summary = "获得我的行程分页")
-    public CommonResult<PageResult<AppUserItineraryRespVO>> getUserItineraryPage(@Valid PageParam pageReqVO) {
+    public CommonResult<PageResult<UserItineraryPageRespVO>> getUserItineraryPage(@Valid PageParam pageReqVO) {
         PageResult<UserItineraryDO> pageResult = userItineraryService
                 .getUserItineraryPage(getLoginUserId(), pageReqVO);
-        return success(BeanUtils.toBean(pageResult, AppUserItineraryRespVO.class));
+        return success(BeanUtils.toBean(pageResult, UserItineraryPageRespVO.class));
+    }
+
+    @GetMapping("/get")
+    @Operation(summary = "获得我的行程详情")
+    @Parameter(name = "id", description = "用户行程编号", required = true, example = "1024")
+    public CommonResult<AppUserItineraryRespVO> getUserItinerary(@RequestParam("id") Long id) {
+        UserItineraryDO itinerary = userItineraryService.getUserItinerary(getLoginUserId(), id);
+        return success(BeanUtils.toBean(itinerary, AppUserItineraryRespVO.class));
     }
 
     @DeleteMapping("/delete")

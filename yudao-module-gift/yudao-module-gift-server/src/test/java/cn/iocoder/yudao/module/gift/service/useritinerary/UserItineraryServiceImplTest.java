@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.useritinerary;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.module.gift.controller.admin.useritinerary.vo.UserItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.dal.mysql.useritinerary.UserItineraryMapper;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,38 @@ class UserItineraryServiceImplTest extends BaseMockitoUnitTest {
 
         assertEquals(expected, result);
         verify(userItineraryMapper).selectPageByMemberId(pageReqVO, memberId);
+    }
+
+    @Test
+    void getUserItineraryExportPage_shouldUseFullFieldQuery() {
+        UserItineraryPageReqVO pageReqVO = new UserItineraryPageReqVO();
+        PageResult<UserItineraryDO> expected = new PageResult<>(
+                List.of(UserItineraryDO.builder().id(1024L).memberId(288L).build()), 1L);
+        when(userItineraryMapper.selectExportPage(pageReqVO)).thenReturn(expected);
+
+        PageResult<UserItineraryDO> result = userItineraryService.getUserItineraryExportPage(pageReqVO);
+
+        assertEquals(expected, result);
+        verify(userItineraryMapper).selectExportPage(pageReqVO);
+    }
+
+    @Test
+    void getUserItinerary_shouldFilterByMemberId() {
+        UserItineraryDO expected = UserItineraryDO.builder().id(1024L).memberId(288L).build();
+        when(userItineraryMapper.selectByIdAndMemberId(1024L, 288L)).thenReturn(expected);
+
+        UserItineraryDO result = userItineraryService.getUserItinerary(288L, 1024L);
+
+        assertEquals(expected, result);
+        verify(userItineraryMapper).selectByIdAndMemberId(1024L, 288L);
+    }
+
+    @Test
+    void getUserItinerary_shouldRejectMissingOrForeignItinerary() {
+        when(userItineraryMapper.selectByIdAndMemberId(1024L, 288L)).thenReturn(null);
+
+        assertServiceException(() -> userItineraryService.getUserItinerary(288L, 1024L),
+                USER_ITINERARY_NOT_EXISTS);
     }
 
     @Test

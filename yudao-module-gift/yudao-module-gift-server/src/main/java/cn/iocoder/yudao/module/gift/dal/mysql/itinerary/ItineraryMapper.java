@@ -19,7 +19,17 @@ import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.*;
 public interface ItineraryMapper extends BaseMapperX<ItineraryDO> {
 
     default PageResult<ItineraryDO> selectPage(ItineraryPageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<ItineraryDO>()
+        LambdaQueryWrapperX<ItineraryDO> query = buildPageQuery(reqVO);
+        selectPageFields(query);
+        return selectPage(reqVO, query.orderByDesc(ItineraryDO::getId));
+    }
+
+    default PageResult<ItineraryDO> selectExportPage(ItineraryPageReqVO reqVO) {
+        return selectPage(reqVO, buildPageQuery(reqVO).orderByDesc(ItineraryDO::getId));
+    }
+
+    private static LambdaQueryWrapperX<ItineraryDO> buildPageQuery(ItineraryPageReqVO reqVO) {
+        return new LambdaQueryWrapperX<ItineraryDO>()
                 .eqIfPresent(ItineraryDO::getCityId, reqVO.getCityId())
                 .eqIfPresent(ItineraryDO::getCategoryId, reqVO.getCategoryId())
                 .likeIfPresent(ItineraryDO::getTitle, reqVO.getTitle())
@@ -36,16 +46,24 @@ public interface ItineraryMapper extends BaseMapperX<ItineraryDO> {
                 .eqIfPresent(ItineraryDO::getViewCnt, reqVO.getViewCnt())
                 .eqIfPresent(ItineraryDO::getLikeCnt, reqVO.getLikeCnt())
                 .eqIfPresent(ItineraryDO::getSort, reqVO.getSort())
-                .betweenIfPresent(ItineraryDO::getCreateTime, reqVO.getCreateTime())
-                .orderByDesc(ItineraryDO::getId));
+                .betweenIfPresent(ItineraryDO::getCreateTime, reqVO.getCreateTime());
     }
 
     default PageResult<ItineraryDO> selectPage(PageParam pageParam, Integer cityId, Long categoryId) {
-        return selectPage(pageParam, new LambdaQueryWrapperX<ItineraryDO>()
+        LambdaQueryWrapperX<ItineraryDO> query = new LambdaQueryWrapperX<ItineraryDO>()
                 .eqIfPresent(ItineraryDO::getCityId, cityId)
-                .eq(ItineraryDO::getCategoryId, categoryId)
+                .eq(ItineraryDO::getCategoryId, categoryId);
+        selectPageFields(query);
+        return selectPage(pageParam, query
                 .orderByDesc(ItineraryDO::getSort)
                 .orderByDesc(ItineraryDO::getId));
+    }
+
+    private static void selectPageFields(LambdaQueryWrapperX<ItineraryDO> query) {
+        query.select(ItineraryDO::getId, ItineraryDO::getCityId, ItineraryDO::getCategoryId,
+                ItineraryDO::getTitle, ItineraryDO::getSubTitle, ItineraryDO::getTags,
+                ItineraryDO::getCoverUrl, ItineraryDO::getCoverWidth, ItineraryDO::getCoverHeight,
+                ItineraryDO::getViewCnt, ItineraryDO::getLikeCnt);
     }
 
 }

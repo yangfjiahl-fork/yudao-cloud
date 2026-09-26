@@ -17,8 +17,13 @@ public interface UserItineraryConversationMapper extends BaseMapperX<UserItinera
     }
 
     default PageResult<UserItineraryConversationDO> selectPageByMemberId(PageParam pageReqVO, Long memberId) {
-        return selectPage(pageReqVO, new LambdaQueryWrapperX<UserItineraryConversationDO>()
-                .eq(UserItineraryConversationDO::getMemberId, memberId)
+        LambdaQueryWrapperX<UserItineraryConversationDO> query = new LambdaQueryWrapperX<UserItineraryConversationDO>()
+                .eq(UserItineraryConversationDO::getMemberId, memberId);
+        query.select(UserItineraryConversationDO::getId, UserItineraryConversationDO::getTitle,
+                UserItineraryConversationDO::getPinned, UserItineraryConversationDO::getProvinceId,
+                UserItineraryConversationDO::getCityId, UserItineraryConversationDO::getDistrictId,
+                UserItineraryConversationDO::getCreateTime);
+        return selectPage(pageReqVO, query
                 .orderByDesc(UserItineraryConversationDO::getPinned)
                 .orderByDesc(UserItineraryConversationDO::getUpdateTime));
     }

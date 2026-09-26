@@ -26,6 +26,7 @@ import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.*;
 
 import cn.iocoder.yudao.module.gift.controller.admin.useritinerary.vo.*;
+import cn.iocoder.yudao.module.gift.controller.common.vo.UserItineraryPageRespVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.useritinerary.UserItineraryDO;
 import cn.iocoder.yudao.module.gift.service.useritinerary.UserItineraryService;
 
@@ -83,9 +84,10 @@ public class UserItineraryController {
     @GetMapping("/page")
     @Operation(summary = "获得用户行程分页")
     @PreAuthorize("@ss.hasPermission('gift:user-itinerary:query')")
-    public CommonResult<PageResult<UserItineraryRespVO>> getUserItineraryPage(@Valid UserItineraryPageReqVO pageReqVO) {
+    public CommonResult<PageResult<UserItineraryPageRespVO>> getUserItineraryPage(
+            @Valid UserItineraryPageReqVO pageReqVO) {
         PageResult<UserItineraryDO> pageResult = userItineraryService.getUserItineraryPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, UserItineraryRespVO.class));
+        return success(BeanUtils.toBean(pageResult, UserItineraryPageRespVO.class));
     }
 
     @GetMapping("/export-excel")
@@ -95,7 +97,7 @@ public class UserItineraryController {
     public void exportUserItineraryExcel(@Valid UserItineraryPageReqVO pageReqVO,
               HttpServletResponse response) throws IOException {
         pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
-        List<UserItineraryDO> list = userItineraryService.getUserItineraryPage(pageReqVO).getList();
+        List<UserItineraryDO> list = userItineraryService.getUserItineraryExportPage(pageReqVO).getList();
         // 导出 Excel
         ExcelUtils.write(response, "用户行程.xls", "数据", UserItineraryRespVO.class,
                         BeanUtils.toBean(list, UserItineraryRespVO.class));

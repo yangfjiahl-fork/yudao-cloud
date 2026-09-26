@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.gift.service.itinerary;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
+import cn.iocoder.yudao.module.gift.controller.admin.itinerary.vo.ItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryCityPageReqVO;
 import cn.iocoder.yudao.module.gift.controller.app.itinerary.vo.AppItineraryPageReqVO;
 import cn.iocoder.yudao.module.gift.dal.dataobject.itinerary.ItineraryDO;
@@ -45,6 +46,18 @@ class ItineraryServiceImplTest extends BaseMockitoUnitTest {
 
         assertEquals(expected, result);
         verify(itineraryMapper).selectPage(reqVO, null, reqVO.getCategoryId());
+    }
+
+    @Test
+    void getItineraryExportPage_shouldUseFullFieldQuery() {
+        ItineraryPageReqVO reqVO = new ItineraryPageReqVO();
+        PageResult<ItineraryDO> expected = new PageResult<>(List.of(createItinerary()), 1L);
+        when(itineraryMapper.selectExportPage(reqVO)).thenReturn(expected);
+
+        PageResult<ItineraryDO> result = itineraryService.getItineraryExportPage(reqVO);
+
+        assertEquals(expected, result);
+        verify(itineraryMapper).selectExportPage(reqVO);
     }
 
     @Test
